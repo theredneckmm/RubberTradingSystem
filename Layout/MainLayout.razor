@@ -133,10 +133,13 @@
     }
 
     private void NavigateToComplete(string batchId)
-    {
-        _isSmokingMenuOpen = false; // Menu ပိတ်မည်
-        Navigation.NavigateTo($"/rubber-smoking/complete/{batchId}");
-    }
+{
+    _isSmokingMenuOpen = false;
+
+    Navigation.NavigateTo(
+        $"{Navigation.BaseUri}rubber-smoking/complete/{batchId}"
+    );
+}
 
     protected override async Task OnInitializedAsync()
     {
@@ -211,7 +214,10 @@
     private async Task LogoutAsync()
     {
         await JSRuntime.InvokeVoidAsync("localStorage.removeItem", "supabase-auth-token");
-        Navigation.NavigateTo("/login", forceLoad: true);
+        Navigation.NavigateTo(
+    $"{Navigation.BaseUri}login",
+    forceLoad: true
+);
     }
 
     private async Task SetLanguageAsync(Language lang) { LangService.SetLanguage(lang); await JSRuntime.InvokeVoidAsync("localStorage.setItem", "app_language", lang.ToString()); }
