@@ -1,0 +1,135 @@
+﻿@using MudBlazor
+@using RubberTradingSystem.Models
+@using RubberTradingSystem.Services
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject LanguageService LangService
+@inject UserContextService UserContext
+@implements IDisposable
+
+<MudDialog>
+    <DialogContent>
+        <EditForm Model="@Model" OnValidSubmit="SaveAsync">
+            <DataAnnotationsValidator />
+
+            <!-- ခြံရှင်အမည် / Supplier Name -->
+            <MudTextField T="string" @bind-Value="Model.supplier_name"
+                          Label="@LangService.GetString("Buy_Farmer")"
+                          Variant="Variant.Outlined"
+                          Class="mb-3"
+                          Required="true" />
+
+            <!-- ရာဘာအမျိုးအစား / Rubber Type -->
+            <MudTextField T="string" @bind-Value="Model.rubber_type"
+                          Label="@LangService.GetString("Buy_RubberType")"
+                          Variant="Variant.Outlined"
+                          Class="mb-3"
+                          Required="true" />
+
+            <!-- အလေးချိန် / Weight -->
+            <MudNumericField T="decimal" @bind-Value="Model.weight"
+                             Label="@LangService.GetString("Buy_Weight")"
+                             Variant="Variant.Outlined"
+                             Class="mb-3"
+                             Min="0" />
+
+            <!-- ပေါက်ဈေး / Price Per Unit -->
+            <MudNumericField T="decimal" @bind-Value="Model.price_per_unit"
+                             Label="@LangService.GetString("Buy_BasePrice")"
+                             Variant="Variant.Outlined"
+                             Class="mb-3"
+                             Min="0" />
+
+            <!-- ဝန်ဆောင်မှုကုန်ကျစရိတ် / Service Cost -->
+            <MudNumericField T="decimal" @bind-Value="Model.service_cost"
+                             Label="@LangService.GetString("Buy_ServiceCost")"
+                             Variant="Variant.Outlined"
+                             Class="mb-3"
+                             Min="0" />
+
+            <!-- အလျော့ရာခိုင်နှုန်း (%) / Deduction % -->
+            <MudNumericField T="decimal" @bind-Value="Model.deduction_percent"
+                             Label="@LangService.GetString("Buy_DeductionPct")"
+                             Variant="Variant.Outlined"
+                             Class="mb-3"
+                             Min="0" Max="30" />
+
+            <!-- တွက်ချက်ပြီးသား ဝယ်ယူမည့်ဈေးနှုန်း (Read-Only) -->
+            <MudTextField T="string" Value="@Model.agreed_price.ToString("N2")" ReadOnly="true"
+                          Label="@LangService.GetString("Buy_FinalPrice")"
+                          Variant="Variant.Outlined"
+                          Class="mb-3" />
+
+            <!-- ကျသင့်ငွေ (Read-Only) -->
+            <MudNumericField T="decimal" Value="@Model.total_amount" ReadOnly="true"
+                             Label="@LangService.GetString("Buy_TotalAmount")"
+                             Variant="Variant.Outlined"
+                             Class="mb-4" />
+
+            <div class="d-flex justify-end">
+                <MudButton OnClick="Cancel" Variant="Variant.Text" Class="mr-2">
+                    @LangService.GetString("Rubber_Cancel")
+                </MudButton>
+                <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary">
+                    @(IsNew ? LangService.GetString("Buy_SaveButton") : LangService.GetString("Rubber_Update"))
+                </MudButton>
+            </div>
+        </EditForm>
+    </DialogContent>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public RubberPurchaseModel Model { get; set; } = new();
+    [Parameter] public bool IsNew { get; set; } = true;
+
+    protected override void OnInitialized() => LangService.OnLanguageChanged += StateHasChanged;
+    public void Dispose() => LangService.OnLanguageChanged -= StateHasChanged;
+
+    private async Task SaveAsync()
+    {
+        try
+        {
+            var ownerId = await UserContext.GetCurrentOwnerIdAsync();
+            var staffId = await UserContext.GetCurrentStaffIdAsync();
+
+            Model.owner_id = ownerId;
+            Model.staff_id = staffId;
+
+            if (IsNew)
+            {
+                var response = await Http.PostAsJsonAsync("rest/v1/transactions", Model);
+                if (response.IsSuccessStatusCode)
+                {
+                    Snackbar.Add(LangService.GetString("Buy_SaveSuccess"), Severity.Success);
+                    MudDialog.Close(DialogResult.Ok(true));
+                }
+                else
+                {
+                    var err = await response.Content.ReadAsStringAsync();
+                    Snackbar.Add($"Failed to save: {err}", Severity.Error);
+                }
+            }
+            else
+            {
+                var response = await Http.PatchAsync($"rest/v1/transactions?id=eq.{Model.id}", JsonContent.Create(Model));
+                if (response.IsSuccessStatusCode)
+                {
+                    Snackbar.Add("Updated successfully.", Severity.Success);
+                    MudDialog.Close(DialogResult.Ok(true));
+                }
+                else
+                {
+                    var err = await response.Content.ReadAsStringAsync();
+                    Snackbar.Add($"Failed to update: {err}", Severity.Error);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Exception: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

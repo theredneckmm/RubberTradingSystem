@@ -1,0 +1,113 @@
+﻿@using MudBlazor
+@using RubberTradingSystem.Models
+@using RubberTradingSystem.Services
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject LanguageService LangService
+@inject UserContextService UserContext
+@implements IDisposable
+
+<MudDialog>
+    <DialogContent>
+        <EditForm Model="@Model" OnValidSubmit="SaveAsync">
+            <DataAnnotationsValidator />
+
+            <MudTextField @bind-Value="Model.name"
+                          Label="@LangService.GetString("Rubber_NameLabel")"
+                          Variant="Variant.Outlined"
+                          Class="mb-4"
+                          Required="true" />
+
+            <MudTextField @bind-Value="Model.grade"
+                          Label="@LangService.GetString("Rubber_GradeLabel")"
+                          Variant="Variant.Outlined"
+                          Class="mb-4"
+                          Required="true" />
+
+            <MudTextField @bind-Value="Model.description"
+                          Label="@LangService.GetString("Rubber_DescLabel")"
+                          Variant="Variant.Outlined"
+                          Lines="3"
+                          Class="mb-4" />
+
+            <div class="d-flex justify-end">
+                <MudButton OnClick="Cancel" Variant="Variant.Text" Class="mr-2">
+                    @LangService.GetString("Rubber_Cancel")
+                </MudButton>
+                <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary">
+                    @(IsNew ? LangService.GetString("Rubber_Save") : LangService.GetString("Rubber_Update"))
+                </MudButton>
+            </div>
+        </EditForm>
+    </DialogContent>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public RubberTypeModel Model { get; set; } = new();
+    [Parameter] public bool IsNew { get; set; }
+
+    protected override void OnInitialized() => LangService.OnLanguageChanged += StateHasChanged;
+    public void Dispose() => LangService.OnLanguageChanged -= StateHasChanged;
+
+    private async Task SaveAsync()
+    {
+        try
+        {
+            if (IsNew)
+            {
+                // Login ဝင်ထားသော Owner ID နှင့် Staff ID ကို ရယူခြင်း
+                var ownerId = await UserContext.GetCurrentOwnerIdAsync();
+                var staffId = await UserContext.GetCurrentStaffIdAsync();
+
+                var newRecord = new
+                {
+                    owner_id = ownerId,
+                    staff_id = staffId,
+                    name = Model.name,
+                    grade = Model.grade,
+                    description = Model.description
+                };
+
+                var response = await Http.PostAsJsonAsync("rest/v1/rubber_types", newRecord);
+                if (response.IsSuccessStatusCode)
+                {
+                    Snackbar.Add(LangService.GetString("Rubber_SaveSuccess"), Severity.Success);
+                    MudDialog.Close(DialogResult.Ok(true));
+                }
+                else
+                {
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    Snackbar.Add($"Supabase Error: {errorContent}", Severity.Error);
+                }
+            }
+            else
+            {
+                var updateRecord = new
+                {
+                    name = Model.name,
+                    grade = Model.grade,
+                    description = Model.description
+                };
+
+                var response = await Http.PatchAsync($"rest/v1/rubber_types?id=eq.{Model.id}", JsonContent.Create(updateRecord));
+                if (response.IsSuccessStatusCode)
+                {
+                    Snackbar.Add(LangService.GetString("Rubber_UpdateSuccess"), Severity.Success);
+                    MudDialog.Close(DialogResult.Ok(true));
+                }
+                else
+                {
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    Snackbar.Add($"Supabase Error: {errorContent}", Severity.Error);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Exception: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

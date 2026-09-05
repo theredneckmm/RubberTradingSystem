@@ -1,0 +1,345 @@
+is_global = true
+build_property.EnableAotAnalyzer = 
+build_property.EnableSingleFileAnalyzer = 
+build_property.EnableTrimAnalyzer = false
+build_property.IncludeAllContentForSelfExtract = 
+build_property.VerifyReferenceTrimCompatibility = 
+build_property.VerifyReferenceAotCompatibility = 
+build_property.MudDebugAnalyzer = 
+build_property.MudAllowedAttributePattern = 
+build_property.MudAllowedAttributeList = 
+build_property.TargetFramework = net10.0
+build_property.TargetFrameworkIdentifier = .NETCoreApp
+build_property.TargetFrameworkVersion = v10.0
+build_property.TargetPlatformMinVersion = 
+build_property.UsingMicrosoftNETSdkWeb = 
+build_property.ProjectTypeGuids = 
+build_property.InvariantGlobalization = false
+build_property.PlatformNeutralAssembly = 
+build_property.EnforceExtendedAnalyzerRules = 
+build_property.EntryPointFilePath = 
+build_property._SupportedPlatformList = browser
+build_property.RootNamespace = RubberTradingSystem
+build_property.RootNamespace = RubberTradingSystem
+build_property.ProjectDir = D:\05092026\RubberTradingSystem\RubberTradingSystem\
+build_property.EnableComHosting = 
+build_property.EnableGeneratedComInterfaceComImportInterop = false
+build_property.RazorLangVersion = 10.0
+build_property.SupportLocalizedComponentNames = 
+build_property.GenerateRazorMetadataSourceChecksumAttributes = 
+build_property.MSBuildProjectDirectory = D:\05092026\RubberTradingSystem\RubberTradingSystem
+build_property._RazorSourceGeneratorDebug = 
+build_property.EffectiveAnalysisLevelStyle = 10.0
+build_property.EnableCodeStyleSeverity = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/App.razor]
+build_metadata.AdditionalFiles.TargetPath = QXBwLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Components/ContactsTable.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xDb250YWN0c1RhYmxlLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Components/DailyNoteDialog.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xEYWlseU5vdGVEaWFsb2cucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Components/DailyPriceDialog.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xEYWlseVByaWNlRGlhbG9nLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Components/EmployeeDialog.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xFbXBsb3llZURpYWxvZy5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Components/ExpenseDialog.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xFeHBlbnNlRGlhbG9nLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Components/ExpenseSettingDialog.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xFeHBlbnNlU2V0dGluZ0RpYWxvZy5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Components/FundTransferDialog.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xGdW5kVHJhbnNmZXJEaWFsb2cucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Components/OtherIncomeDialog.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xPdGhlckluY29tZURpYWxvZy5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Components/PaymentDialog.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYXltZW50RGlhbG9nLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Components/PaymentMethodDialog.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYXltZW50TWV0aG9kRGlhbG9nLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Components/RedirectToLogin.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xSZWRpcmVjdFRvTG9naW4ucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Components/RubberPurchaseDialog.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xSdWJiZXJQdXJjaGFzZURpYWxvZy5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Components/RubberSaleDialog.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xSdWJiZXJTYWxlRGlhbG9nLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Components/RubberSmokingCompleteDialog.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xSdWJiZXJTbW9raW5nQ29tcGxldGVEaWFsb2cucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Components/RubberSmokingDialog.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xSdWJiZXJTbW9raW5nRGlhbG9nLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Components/RubberTypeDialog.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xSdWJiZXJUeXBlRGlhbG9nLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Components/SmokingBatchDialog.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xTbW9raW5nQmF0Y2hEaWFsb2cucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Components/StockAdjustmentDialog.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xTdG9ja0FkanVzdG1lbnREaWFsb2cucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Components/StockTransferDialog.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xTdG9ja1RyYW5zZmVyRGlhbG9nLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Components/TruckExpenseDialog.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xUcnVja0V4cGVuc2VEaWFsb2cucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Components/TruckStockDialog.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xUcnVja1N0b2NrRGlhbG9nLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Components/WalletDialog.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xXYWxsZXREaWFsb2cucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Components/WarehouseDialog.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xXYXJlaG91c2VEaWFsb2cucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Pages/AddContact.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcQWRkQ29udGFjdC5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Pages/AddFarmOwner.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcQWRkRmFybU93bmVyLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Pages/AddStaff.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcQWRkU3RhZmYucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Pages/AdvanceIn.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcQWR2YW5jZUluLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Pages/AdvanceOut.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcQWR2YW5jZU91dC5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Pages/BusinessSettings.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcQnVzaW5lc3NTZXR0aW5ncy5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Pages/Contacts.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcQ29udGFjdHMucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Pages/ContactsBalance.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcQ29udGFjdHNCYWxhbmNlLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Pages/Counter.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcQ291bnRlci5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Pages/DailyNotesList.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcRGFpbHlOb3Rlc0xpc3QucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Pages/DailyPricesList.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcRGFpbHlQcmljZXNMaXN0LnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Pages/EditContact.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcRWRpdENvbnRhY3QucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Pages/EditFarmOwner.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcRWRpdEZhcm1Pd25lci5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Pages/EditStaff.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcRWRpdFN0YWZmLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Pages/EmployeeDetail.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcRW1wbG95ZWVEZXRhaWwucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Pages/EmployeesList.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcRW1wbG95ZWVzTGlzdC5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Pages/ExpenseSettingsPage.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcRXhwZW5zZVNldHRpbmdzUGFnZS5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Pages/ExpensesList.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcRXhwZW5zZXNMaXN0LnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Pages/FarmAccounts.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcRmFybUFjY291bnRzLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Pages/FarmOwnersList.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcRmFybU93bmVyc0xpc3QucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Pages/FinancialReport.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcRmluYW5jaWFsUmVwb3J0LnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Pages/FundTransfers.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcRnVuZFRyYW5zZmVycy5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Pages/Home.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcSG9tZS5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Pages/Login.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcTG9naW4ucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Pages/NotFound.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcTm90Rm91bmQucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Pages/OtherIncomesList.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcT3RoZXJJbmNvbWVzTGlzdC5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Pages/PaymentMethodsList.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcUGF5bWVudE1ldGhvZHNMaXN0LnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Pages/ReceivedAdvanceFromBuyer.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcUmVjZWl2ZWRBZHZhbmNlRnJvbUJ1eWVyLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Pages/RepaymentAdvanceToBuyer.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcUmVwYXltZW50QWR2YW5jZVRvQnV5ZXIucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Pages/RubberPurchase.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcUnViYmVyUHVyY2hhc2UucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Pages/RubberPurchasesList.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcUnViYmVyUHVyY2hhc2VzTGlzdC5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Pages/RubberSales.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcUnViYmVyU2FsZXMucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Pages/RubberSalesList.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcUnViYmVyU2FsZXNMaXN0LnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Pages/RubberSmokingBatches.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcUnViYmVyU21va2luZ0JhdGNoZXMucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Pages/RubberSmokingCompletePage.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcUnViYmVyU21va2luZ0NvbXBsZXRlUGFnZS5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Pages/RubberSmokingCreatePage.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcUnViYmVyU21va2luZ0NyZWF0ZVBhZ2UucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Pages/RubberTypesList.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcUnViYmVyVHlwZXNMaXN0LnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Pages/SmokingAnalyticsPage.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcU21va2luZ0FuYWx5dGljc1BhZ2UucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Pages/SmokingBatchesList.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcU21va2luZ0JhdGNoZXNMaXN0LnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Pages/StaffList.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcU3RhZmZMaXN0LnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Pages/StockAdjustmentsList.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcU3RvY2tBZGp1c3RtZW50c0xpc3QucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Pages/StockBalance.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcU3RvY2tCYWxhbmNlLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Pages/StockTransfersList.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcU3RvY2tUcmFuc2ZlcnNMaXN0LnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Pages/TruckExpensesList.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcVHJ1Y2tFeHBlbnNlc0xpc3QucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Pages/TruckStockList.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcVHJ1Y2tTdG9ja0xpc3QucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Pages/UserProfileDialog.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcVXNlclByb2ZpbGVEaWFsb2cucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Pages/WalletsList.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcV2FsbGV0c0xpc3QucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Pages/WarehouseList.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcV2FyZWhvdXNlTGlzdC5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Pages/WarehouseStock.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcV2FyZWhvdXNlU3RvY2sucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Pages/WarehouseTransfer.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcV2FyZWhvdXNlVHJhbnNmZXIucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Pages/Weather.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcV2VhdGhlci5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/_Imports.razor]
+build_metadata.AdditionalFiles.TargetPath = X0ltcG9ydHMucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Layout/MainLayout.razor]
+build_metadata.AdditionalFiles.TargetPath = TGF5b3V0XE1haW5MYXlvdXQucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = b-i765g0qohu
+
+[D:/05092026/RubberTradingSystem/RubberTradingSystem/Layout/NavMenu.razor]
+build_metadata.AdditionalFiles.TargetPath = TGF5b3V0XE5hdk1lbnUucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = b-btbtmrirk2

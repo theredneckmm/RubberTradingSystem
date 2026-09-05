@@ -1,0 +1,241 @@
+﻿@page "/rubber-smoking/create"
+@using MudBlazor
+@using RubberTradingSystem.Models
+@using RubberTradingSystem.Services
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+@inject LanguageService LangService
+@inject UserContextService UserContext
+
+<MudContainer MaxWidth="MaxWidth.Medium" Class="mt-4 mb-6">
+    <MudPaper Class="pa-6" Elevation="3">
+        <MudText Typo="Typo.h5" Color="Color.Primary" Class="mb-4 font-weight-bold">
+            @LangService.GetString("Smoking_AddTitle")
+        </MudText>
+
+        <EditForm Model="@_model" OnValidSubmit="SaveAsync">
+            <DataAnnotationsValidator />
+
+            <!-- Batch Number with Edit Toggle -->
+            <div class="d-flex align-center mb-4 pa-3 bg-light rounded gap-2">
+                <MudTextField @bind-Value="_model.batch_number"
+                              Label="Batch No"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              Disabled="@_isBatchNoLocked"
+                              Class="flex-grow-1"
+                              Required="true" />
+
+                @if (_isBatchNoLocked)
+                {
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                   Color="Color.Primary"
+                                   Title="Batch Number ကို ပြင်ဆင်ရန်"
+                                   OnClick="() => _isBatchNoLocked = false" />
+                }
+                else
+                {
+                    <MudIconButton Icon="@Icons.Material.Filled.Check"
+                                   Color="Color.Success"
+                                   Title="အတည်ပြုမည်"
+                                   OnClick="() => _isBatchNoLocked = true" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Refresh"
+                                   Color="Color.Warning"
+                                   Title="အလိုအလျောက် အသစ်ဖန်တီးရန်"
+                                   OnClick="RegenerateBatchNo" />
+                }
+            </div>
+
+            <MudDatePicker @bind-Date="_startDate" Label="@LangService.GetString("Smoking_ColStartDate")" Variant="Variant.Outlined" Class="mb-4" />
+            <MudTextField @bind-Value="_model.note" Label="@LangService.GetString("Expense_NoteLabel")" Variant="Variant.Outlined" Lines="2" Class="mb-4" />
+
+            <MudDivider Class="my-4" />
+            <MudText Typo="Typo.subtitle2" Class="mb-3 font-weight-bold" Color="Color.Primary">ဂိုဒေါင်မှ ကုန်ကြမ်း Batch များ ရွေးချယ်ရန်</MudText>
+
+            <MudSelect T="string" Value="@_selectedWarehouseId" ValueChanged="OnWarehouseChanged" Label="ဂိုဒေါင် (Warehouse) ရွေးရန်" Variant="Variant.Outlined" Class="mb-4" Required="true">
+                @foreach (var wh in _warehouses)
+                {
+                    <MudSelectItem Value="@wh.id">@wh.warehouse_name</MudSelectItem>
+                }
+            </MudSelect>
+
+            @if (!string.IsNullOrEmpty(_selectedWarehouseId))
+            {
+                @foreach (var allocation in _selectedAllocations)
+                {
+                    <MudGrid Class="mb-2 align-center">
+                        <MudItem xs="5">
+                            <MudSelect T="string" Value="@allocation.warehouse_batch_id" ValueChanged="@((val) => OnBatchSelected(allocation, val))" Label="Warehouse Batch" Variant="Variant.Outlined" Margin="Margin.Dense">
+                                @foreach (var b in _availableBatches)
+                                {
+                                    <MudSelectItem Value="@b.id">@b.batch_number (လက်ကျန်: @b.total_weight lbs - လျော့: @b.estimated_loss_percent.ToString("N2")%)</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </MudItem>
+                        <MudItem xs="3">
+                            <MudTextField Value="@allocation.estimated_loss_percent" Label="ခန့်မှန်းလျော့ %" Variant="Variant.Outlined" Margin="Margin.Dense" ReadOnly="true" />
+                        </MudItem>
+                        <MudItem xs="3">
+                            <MudNumericField @bind-Value="allocation.input_weight" Label="သုံးမည့်အလေးချိန် (ပေါင်)" Variant="Variant.Outlined" Margin="Margin.Dense" Min="0" Required="true" />
+                        </MudItem>
+                        <MudItem xs="1">
+                            <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" OnClick="() => RemoveAllocation(allocation)" />
+                        </MudItem>
+                    </MudGrid>
+                }
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="AddAllocation" Class="mb-4">Batch ထပ်ထည့်ရန်</MudButton>
+            }
+
+            <div class="d-flex justify-end gap-2 mt-6">
+                <MudButton OnClick="Cancel" Variant="Variant.Text">@LangService.GetString("Btn_Cancel")</MudButton>
+                <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Disabled="_isSaving">@LangService.GetString("Btn_Save")</MudButton>
+            </div>
+        </EditForm>
+    </MudPaper>
+</MudContainer>
+
+@code {
+    private RubberSmokingBatchModel _model = new();
+    private bool _isSaving = false;
+    private bool _isBatchNoLocked = true;
+    private string _selectedWarehouseId = string.Empty;
+    private List<WarehouseModel> _warehouses = new();
+    private List<WarehouseBatchModel> _availableBatches = new();
+    private List<BatchAllocationItem> _selectedAllocations = new();
+
+    private DateTime? _startDate { get => _model.start_date; set => _model.start_date = value ?? DateTime.Today; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        GenerateNewBatchNumber();
+        _warehouses = await Http.GetFromJsonAsync<List<WarehouseModel>>("rest/v1/warehouses?select=*") ?? new();
+    }
+
+    private void GenerateNewBatchNumber()
+    {
+        _model.batch_number = $"SMK-{DateTime.Now:yyyyMMdd}-{Guid.NewGuid().ToString().Substring(0, 4).ToUpper()}";
+    }
+
+    private void RegenerateBatchNo()
+    {
+        GenerateNewBatchNumber();
+        _isBatchNoLocked = true;
+    }
+
+    private async Task OnWarehouseChanged(string warehouseId)
+    {
+        _selectedWarehouseId = warehouseId;
+        _selectedAllocations.Clear();
+
+        // warehouse_batches နှင့်အတူ warehouse_batch_items (သို့မဟုတ် transactions) မှတဆင့် deduction_percent / moisture_percent ကိုပါ ဆွဲထုတ်မည်
+        _availableBatches = await Http.GetFromJsonAsync<List<WarehouseBatchModel>>($"rest/v1/warehouse_batches?warehouse_id=eq.{warehouseId}&status=eq.Active&select=id,batch_number,total_weight,warehouse_batch_items(moisture_percent)") ?? new();
+        AddAllocation();
+    }
+
+    private void AddAllocation() => _selectedAllocations.Add(new BatchAllocationItem());
+    private void RemoveAllocation(BatchAllocationItem item) { if (_selectedAllocations.Count > 1) _selectedAllocations.Remove(item); }
+
+    private void OnBatchSelected(BatchAllocationItem allocation, string batchId)
+    {
+        allocation.warehouse_batch_id = batchId;
+        var batch = _availableBatches.FirstOrDefault(x => x.id == batchId);
+        if (batch != null)
+        {
+            allocation.input_weight = batch.total_weight;
+            allocation.estimated_loss_percent = batch.estimated_loss_percent;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_model.batch_number))
+        {
+            Snackbar.Add("ကျေးဇူးပြု၍ Batch Number ထည့်သွင်းပါ။", Severity.Warning);
+            return;
+        }
+
+        if (!_selectedAllocations.Any() || _selectedAllocations.Any(x => string.IsNullOrEmpty(x.warehouse_batch_id) || x.input_weight <= 0))
+        {
+            Snackbar.Add("ကျေးဇူးပြု၍ Warehouse Batch နှင့် အလေးချိန်များကို မှန်ကန်စွာ ဖြည့်သွင်းပါ။", Severity.Warning);
+            return;
+        }
+
+        _isSaving = true;
+        try
+        {
+            string ownerId = await UserContext.GetCurrentOwnerIdAsync();
+            string staffId = await UserContext.GetCurrentStaffIdAsync();
+            decimal totalInput = _selectedAllocations.Sum(x => x.input_weight);
+
+            // ပျမ်းမျှ ခန့်မှန်းလျော့ရာခိုင်နှုန်း (Weighted Average Estimated Loss %) တွက်ချက်ခြင်း
+            decimal avgEstimatedLoss = totalInput > 0
+                ? _selectedAllocations.Sum(x => x.input_weight * x.estimated_loss_percent) / totalInput
+                : 0m;
+
+            // avg_moisture ကော်လံထဲသို့ တွက်ချက်ထားသော avgEstimatedLoss ကို ထည့်သွင်းသိမ်းဆည်းမည်
+            var batchPayload = new
+            {
+                owner_id = ownerId,
+                staff_id = string.IsNullOrEmpty(staffId) ? null : staffId,
+                batch_number = _model.batch_number,
+                start_date = _model.start_date.ToString("yyyy-MM-dd"),
+                status = "Processing",
+                total_input_weight = totalInput,
+                avg_moisture = avgEstimatedLoss, // <-- ဤနေရာတွင် သိမ်းဆည်းပေးမည်
+                note = _model.note
+            };
+
+            var reqMsg = new HttpRequestMessage(HttpMethod.Post, "rest/v1/rubber_smoking_batches") { Content = JsonContent.Create(batchPayload) };
+            reqMsg.Headers.Add("Prefer", "return=representation");
+            var resp = await Http.SendAsync(reqMsg);
+
+            if (resp.IsSuccessStatusCode)
+            {
+                var createdBatchList = await resp.Content.ReadFromJsonAsync<List<RubberSmokingBatchModel>>();
+                string? batchId = createdBatchList?.FirstOrDefault()?.id;
+
+                if (!string.IsNullOrEmpty(batchId))
+                {
+                    foreach (var alloc in _selectedAllocations)
+                    {
+                        var matchedBatch = _availableBatches.FirstOrDefault(x => x.id == alloc.warehouse_batch_id);
+                        var itemPayload = new { owner_id = ownerId, staff_id = string.IsNullOrEmpty(staffId) ? null : staffId, batch_id = batchId, warehouse_batch_id = alloc.warehouse_batch_id, supplier_name = matchedBatch?.batch_number ?? "Stock", input_weight = alloc.input_weight };
+                        await Http.PostAsJsonAsync("rest/v1/rubber_smoking_items", itemPayload);
+
+                        decimal newWeight = matchedBatch!.total_weight - alloc.input_weight;
+                        await Http.PatchAsync($"rest/v1/warehouse_batches?id=eq.{alloc.warehouse_batch_id}", JsonContent.Create(new { total_weight = newWeight, status = newWeight <= 0 ? "Closed" : "Active" }));
+                    }
+                }
+                Snackbar.Add("မှိုင်းခံဖို အသုတ်ကို အောင်မြင်စွာ စတင်လိုက်ပါပြီ။", Severity.Success);
+                Navigation.NavigateTo("/rubber-smoking");
+            }
+        }
+        catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Error); }
+        finally { _isSaving = false; }
+    }
+
+    private void Cancel() => Navigation.NavigateTo("/rubber-smoking");
+
+    private class WarehouseModel { public string id { get; set; } = string.Empty; public string warehouse_name { get; set; } = string.Empty; }
+
+    private class WarehouseBatchModel
+    {
+        public string id { get; set; } = string.Empty;
+        public string batch_number { get; set; } = string.Empty;
+        public decimal total_weight { get; set; }
+        public List<BatchItemDetail> warehouse_batch_items { get; set; } = new();
+
+        // batch ထဲရှိ item များမှ moisture_percent ကို ယူ၍ estimated_loss_percent အဖြစ် သတ်မှတ်မည်
+        public decimal estimated_loss_percent => warehouse_batch_items.Any() ? warehouse_batch_items.Average(x => x.moisture_percent) : 0m;
+    }
+
+    private class BatchItemDetail { public decimal moisture_percent { get; set; } }
+
+    private class BatchAllocationItem
+    {
+        public string warehouse_batch_id { get; set; } = string.Empty;
+        public decimal input_weight { get; set; }
+        public decimal estimated_loss_percent { get; set; }
+    }
+}

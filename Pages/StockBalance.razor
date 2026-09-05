@@ -1,0 +1,172 @@
+﻿@page "/stock-balance"
+@using MudBlazor
+@using RubberTradingSystem.Models
+@using RubberTradingSystem.Services
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject LanguageService LangService
+@implements IDisposable
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4 mb-6">
+    <MudText Typo="Typo.h5" Color="Color.Primary" Class="mb-4 font-weight-bold">
+        @LangService.GetString("Title_StockBalance") (@_weightUnit)
+    </MudText>
+
+    <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-6" Color="Color.Primary">
+
+        <!-- 1. Warehouse Stocks Tab -->
+        <MudTabPanel Text="@LangService.GetString("Tab_Warehouse")" Icon="@Icons.Material.Filled.Warehouse">
+            <MudTable Items="@_warehouseStocks" Dense="true" Hover="true" Bordered="true" Striped="true" Elevation="1">
+                <HeaderContent>
+                    <MudTh>@LangService.GetString("Th_WarehouseName")</MudTh>
+                    <MudTh>@LangService.GetString("Th_RubberType")</MudTh>
+                    <MudTh>@LangService.GetString("Th_Quantity") (@_weightUnit)</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd><b>@context.warehouse_name</b></MudTd>
+                    <MudTd>@context.rubber_type_name</MudTd>
+                    <MudTd>@context.total_weight.ToString("N2") @_weightUnit</MudTd>
+                </RowTemplate>
+            </MudTable>
+        </MudTabPanel>
+
+        <!-- 2. Temp Stocks Tab -->
+        <MudTabPanel Text="@LangService.GetString("Tab_TempStock")" Icon="@Icons.Material.Filled.Timer">
+            <MudTable Items="@_tempStocks" Dense="true" Hover="true" Bordered="true" Striped="true" Elevation="1">
+                <HeaderContent>
+                    <MudTh>@LangService.GetString("Th_Supplier")</MudTh>
+                    <MudTh>@LangService.GetString("Th_RubberType")</MudTh>
+                    <MudTh>@LangService.GetString("Th_Quantity") (@_weightUnit)</MudTh>
+                    <MudTh>အစိုဓာတ် %</MudTh>
+                    <MudTh>@LangService.GetString("Th_Status")</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd>@context.contact_name</MudTd>
+                    <MudTd>@context.rubber_type_name</MudTd>
+                    <MudTd>@context.net_weight.ToString("N2") @_weightUnit</MudTd>
+                    <MudTd>@context.moisture_percent %</MudTd>
+                    <MudTd>
+                        <MudChip T="string" Color="Color.Warning" Size="Size.Small">@context.status</MudChip>
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+        </MudTabPanel>
+
+        <!-- 3. Truck Stocks Tab -->
+        <MudTabPanel Text="@LangService.GetString("Tab_TruckStock")" Icon="@Icons.Material.Filled.LocalShipping">
+            <MudTable Items="@_truckStocks" Dense="true" Hover="true" Bordered="true" Striped="true" Elevation="1">
+                <HeaderContent>
+                    <MudTh>@LangService.GetString("Th_TruckNumber")</MudTh>
+                    <MudTh>@LangService.GetString("Th_RubberType")</MudTh>
+                    <MudTh>@LangService.GetString("Th_Quantity") (@_weightUnit)</MudTh>
+                    <MudTh>@LangService.GetString("Th_Status")</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd><b>@context.truck_number</b></MudTd>
+                    <MudTd>@context.rubber_type_name</MudTd>
+                    <MudTd>@context.quantity.ToString("N2") @_weightUnit</MudTd>
+                    <MudTd>
+                        <MudChip T="string" Color="Color.Success" Size="Size.Small">@context.status</MudChip>
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+        </MudTabPanel>
+
+    </MudTabs>
+</MudContainer>
+
+@code {
+    private string _weightUnit = "Vis (ပိဿာ)"; // Default fallback
+    private List<WarehouseStockSummaryModel> _warehouseStocks = new();
+    private List<TempStockBalanceModel> _tempStocks = new();
+    private List<TruckStockBalanceModel> _truckStocks = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        LangService.OnLanguageChanged += StateHasChanged;
+        await LoadBusinessSettingsAsync();
+        await LoadAllStockDataAsync();
+    }
+
+    public void Dispose()
+    {
+        LangService.OnLanguageChanged -= StateHasChanged;
+    }
+
+    private async Task LoadBusinessSettingsAsync()
+    {
+        try
+        {
+            var settings = await Http.GetFromJsonAsync<List<BusinessSettingModel>>("rest/v1/business_settings?select=default_weight_unit&limit=1");
+            if (settings != null && settings.Any())
+            {
+                _weightUnit = settings.First().default_weight_unit;
+            }
+        }
+        catch
+        {
+            _weightUnit = "Vis (ပိဿာ)";
+        }
+    }
+
+    private async Task LoadAllStockDataAsync()
+    {
+        try
+        {
+            // 1. Warehouse Batches
+            string whQuery = "rest/v1/warehouse_batches?status=eq.Active&select=total_weight,warehouses(warehouse_name),rubber_types(name,grade)";
+            var whRawList = await Http.GetFromJsonAsync<List<WhBatchRawModel>>(whQuery) ?? new();
+
+            _warehouseStocks = whRawList.Select(x => new WarehouseStockSummaryModel
+            {
+                warehouse_name = x.warehouses?.warehouse_name ?? "N/A",
+                rubber_type_name = x.rubber_types != null ? $"{x.rubber_types.name} ({x.rubber_types.grade})" : "N/A",
+                total_weight = x.total_weight
+            }).ToList();
+
+            // 2. Temp Stocks
+            string tempQuery = "rest/v1/temp_stocks?status=eq.Pending&select=net_weight,moisture_percent,status,contacts(name),rubber_types(name,grade)";
+            var tempRawList = await Http.GetFromJsonAsync<List<TempRawModel>>(tempQuery) ?? new();
+
+            _tempStocks = tempRawList.Select(x => new TempStockBalanceModel
+            {
+                contact_name = x.contacts?.name ?? "N/A",
+                rubber_type_name = x.rubber_types != null ? $"{x.rubber_types.name} ({x.rubber_types.grade})" : "N/A",
+                net_weight = x.net_weight,
+                moisture_percent = x.moisture_percent,
+                status = x.status
+            }).ToList();
+
+            // 3. Truck Stocks
+            string truckQuery = "rest/v1/truck_stocks?status=eq.Active&select=quantity,status,trucks(truck_number),rubber_types(name,grade)";
+            var truckRawList = await Http.GetFromJsonAsync<List<TruckRawModel>>(truckQuery) ?? new();
+
+            _truckStocks = truckRawList.Select(x => new TruckStockBalanceModel
+            {
+                truck_number = x.trucks?.truck_number ?? "N/A",
+                rubber_type_name = x.rubber_types != null ? $"{x.rubber_types.name} ({x.rubber_types.grade})" : "N/A",
+                quantity = x.quantity,
+                status = x.status
+            }).ToList();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading stock balances: {ex.Message}", Severity.Error);
+        }
+    }
+
+    // --- Models ---
+    public class BusinessSettingModel { public string default_weight_unit { get; set; } = "Vis (ပိဿာ)"; }
+    public class WarehouseStockSummaryModel { public string warehouse_name { get; set; } = string.Empty; public string rubber_type_name { get; set; } = string.Empty; public decimal total_weight { get; set; } }
+    public class TempStockBalanceModel { public string contact_name { get; set; } = string.Empty; public string rubber_type_name { get; set; } = string.Empty; public decimal net_weight { get; set; } public decimal moisture_percent { get; set; } public string status { get; set; } = string.Empty; }
+    public class TruckStockBalanceModel { public string truck_number { get; set; } = string.Empty; public string rubber_type_name { get; set; } = string.Empty; public decimal quantity { get; set; } public string status { get; set; } = string.Empty; }
+
+    private class WhBatchRawModel { public decimal total_weight { get; set; } public WhObj? warehouses { get; set; } public RubberObj? rubber_types { get; set; } }
+    private class TempRawModel { public decimal net_weight { get; set; } public decimal moisture_percent { get; set; } public string status { get; set; } = string.Empty; public ContactObj? contacts { get; set; } public RubberObj? rubber_types { get; set; } }
+    private class TruckRawModel { public decimal quantity { get; set; } public string status { get; set; } = string.Empty; public TruckObj? trucks { get; set; } public RubberObj? rubber_types { get; set; } }
+
+    private class WhObj { public string warehouse_name { get; set; } = string.Empty; }
+    private class ContactObj { public string name { get; set; } = string.Empty; }
+    private class TruckObj { public string truck_number { get; set; } = string.Empty; }
+    private class RubberObj { public string name { get; set; } = string.Empty; public string grade { get; set; } = string.Empty; }
+}

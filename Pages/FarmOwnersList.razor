@@ -1,0 +1,173 @@
+﻿@page "/farm-owners"
+@using MudBlazor
+@using RubberTradingSystem.Models
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+@inject IDialogService DialogService
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+    <MudText Typo="Typo.h5" Color="Color.Primary" Class="mb-4">ခြံရှင်များ စာရင်း</MudText>
+
+    @if (_isLoading)
+    {
+        <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="mb-4" />
+    }
+
+    <!-- Farm Owner Table -->
+    <MudTable Items="@_farmOwners"
+              Dense="true"
+              Hover="true"
+              Bordered="true"
+              Striped="true"
+              Filter="new Func<FarmOwner,bool>(FilterFunc)"
+              @bind-SelectedItem="_selectedFarmOwner"
+              RowClass="cursor-pointer"
+              RowClassFunc="@SelectedRowClassFunc"
+              Elevation="2">
+
+        <ToolBarContent>
+            <MudSpacer />
+
+            <MudTextField T="string" @bind-Value="_searchString"
+                          Placeholder="အမည် (သို့) ဖုန်းနံပါတ်ဖြင့် ရှာဖွေရန်..."
+                          Immediate="true"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search"
+                          IconSize="Size.Medium"
+                          Class="mt-0"
+                          Clearable="true">
+            </MudTextField>
+        </ToolBarContent>
+
+        <HeaderContent>
+            <MudTh>ခြံရှင်အမည်</MudTh>
+            <MudTh>ဖုန်းနံပါတ်</MudTh>
+            <MudTh>နေရပ်လိပ်စာ</MudTh>
+        </HeaderContent>
+
+        <RowTemplate>
+            <MudTd DataLabel="ခြံရှင်အမည်">@context.name</MudTd>
+            <MudTd DataLabel="ဖုန်းနံပါတ်">@context.phone</MudTd>
+            <MudTd DataLabel="နေရပ်လိပ်စာ">@context.address</MudTd>
+        </RowTemplate>
+
+        <PagerContent>
+            <MudTablePager PageSizeOptions="new int[] { 10, 25, 50, 100 }" />
+        </PagerContent>
+    </MudTable>
+
+    <!-- Action Buttons -->
+    <MudPaper Class="d-flex justify-end pa-4 mt-4" Elevation="2">
+        <MudButton Variant="Variant.Filled" Color="Color.Success" StartIcon="@Icons.Material.Filled.Add"
+                   OnClick="GoToAddPage" Class="mr-2">အသစ်ထည့်မည်</MudButton>
+
+        <MudButton Variant="Variant.Filled" Color="Color.Warning" StartIcon="@Icons.Material.Filled.Edit"
+                   Disabled="@(_selectedFarmOwner == null)" OnClick="GoToEditPage" Class="mr-2">ပြင်ဆင်မည်</MudButton>
+
+        <MudButton Variant="Variant.Filled" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete"
+                   Disabled="@(_selectedFarmOwner == null)" OnClick="DeleteFarmOwnerAsync">ဖျက်မည်</MudButton>
+    </MudPaper>
+</MudContainer>
+
+<style>
+    .selected-row-color {
+        background-color: #e3f2fd !important;
+    }
+</style>
+
+@code {
+    private bool _isLoading = true;
+    private List<FarmOwner> _farmOwners = new();
+    private FarmOwner? _selectedFarmOwner;
+    private string _searchString = "";
+
+    protected override async Task OnInitializedAsync() => await LoadFarmOwnersAsync();
+
+    private async Task LoadFarmOwnersAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            var result = await Http.GetFromJsonAsync<List<FarmOwner>>("rest/v1/farm_owners?select=*");
+            _farmOwners = result ?? new();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"ဒေတာရယူရာတွင် အမှားအယွင်းရှိပါသည်: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private bool FilterFunc(FarmOwner owner)
+    {
+        if (string.IsNullOrWhiteSpace(_searchString)) return true;
+        return owner.name.Contains(_searchString, StringComparison.OrdinalIgnoreCase) ||
+               owner.phone.Contains(_searchString, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private string SelectedRowClassFunc(FarmOwner owner, int rowNumber)
+    {
+        if (_selectedFarmOwner != null && _selectedFarmOwner.id == owner.id)
+            return "selected-row-color";
+        return string.Empty;
+    }
+
+    private void GoToAddPage() => Navigation.NavigateTo("/farm-owners/add");
+
+    private void GoToEditPage()
+    {
+        if (_selectedFarmOwner != null)
+            Navigation.NavigateTo($"/farm-owners/edit/{_selectedFarmOwner.id}");
+    }
+
+    private async Task DeleteFarmOwnerAsync()
+    {
+        if (_selectedFarmOwner == null) return;
+
+        bool? result = await DialogService.ShowMessageBoxAsync(
+            "သတိပေးချက်",
+            $"{_selectedFarmOwner.name} ၏ မှတ်တမ်းကို ဖျက်ပစ်ရန် သေချာပါသလား?",
+            yesText: "ဖျက်မည်",
+            cancelText: "မဖျက်ပါ"
+        );
+
+        if (result == true)
+        {
+            try
+            {
+                var response = await Http.DeleteAsync(
+                    $"rest/v1/farm_owners?id=eq.{_selectedFarmOwner.id}"
+                );
+
+                if (response.IsSuccessStatusCode)
+                {
+                    Snackbar.Add(
+                        "မှတ်တမ်းကို အောင်မြင်စွာ ဖျက်ပစ်လိုက်ပါပြီ။",
+                        Severity.Success
+                    );
+
+                    _farmOwners.Remove(_selectedFarmOwner);
+                    _selectedFarmOwner = null;
+                }
+                else
+                {
+                    Snackbar.Add(
+                        "ဖျက်သိမ်းရာတွင် အမှားအယွင်းရှိပါသည်။",
+                        Severity.Error
+                    );
+                }
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add(
+                    $"ကွန်ရက်ချိတ်ဆက်မှု အမှားအယွင်း: {ex.Message}",
+                    Severity.Error
+                );
+            }
+        }
+    }
+}

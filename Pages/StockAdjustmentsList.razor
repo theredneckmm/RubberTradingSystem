@@ -1,0 +1,80 @@
+﻿@page "/stock-adjustments"
+@using MudBlazor
+@using RubberTradingSystem.Models
+@using RubberTradingSystem.Services
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@inject LanguageService LangService
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+    <MudText Typo="Typo.h5" Color="Color.Primary" Class="mb-4">Stock Adjustments (ကုန်လက်ကျန် ညှိနှိုင်းမှုများ)</MudText>
+
+    <MudTable Items="@_items" Dense="true" Hover="true" Bordered="true" Striped="true" Elevation="2">
+        <ToolBarContent>
+            <MudSpacer />
+            <MudButton Variant="Variant.Filled" Color="Color.Success" StartIcon="@Icons.Material.Filled.Add"
+                       OnClick="OpenAddDialog">
+                New Stock Adjustment
+            </MudButton>
+        </ToolBarContent>
+        <HeaderContent>
+            <MudTh>Voucher No</MudTh>
+            <MudTh>Warehouse</MudTh>
+            <MudTh>Rubber Type</MudTh>
+            <MudTh>System Qty</MudTh>
+            <MudTh>Actual Qty</MudTh>
+            <MudTh>Difference</MudTh>
+            <MudTh>Reason</MudTh>
+            <MudTh>Date</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd><b>@context.adjustment_no</b></MudTd>
+            <MudTd>@context.warehouse_name</MudTd>
+            <MudTd>@context.rubber_type</MudTd>
+            <MudTd>@context.system_qty_kg.ToString("N2") kg</MudTd>
+            <MudTd><b>@context.actual_qty_kg.ToString("N2") kg</b></MudTd>
+            <MudTd>
+                <MudChip T="string" Color="@(context.difference_kg >= 0 ? Color.Success : Color.Error)" Size="Size.Small">
+                    @(context.difference_kg >= 0 ? "+" : "")@context.difference_kg.ToString("N2") kg
+                </MudChip>
+            </MudTd>
+            <MudTd>@context.reason</MudTd>
+            <MudTd>@context.adjustment_date.ToString("dd/MM/yyyy")</MudTd>
+        </RowTemplate>
+        <PagerContent>
+            <MudTablePager PageSizeOptions="new int[] { 10, 25, 50 }" />
+        </PagerContent>
+    </MudTable>
+</MudContainer>
+
+@code {
+    private List<StockAdjustmentModel> _items = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        try
+        {
+            _items = await Http.GetFromJsonAsync<List<StockAdjustmentModel>>("rest/v1/stock_adjustments?select=*&order=adjustment_date.desc") ?? new();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task OpenAddDialog()
+    {
+        var parameters = new DialogParameters { ["Model"] = new StockAdjustmentModel() };
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Medium, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<StockAdjustmentDialog>("New Stock Adjustment", parameters, options);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled) await LoadDataAsync();
+    }
+}

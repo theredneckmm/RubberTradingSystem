@@ -1,0 +1,228 @@
+﻿@page "/rubber-purchases-list"
+@using MudBlazor
+@using RubberTradingSystem.Models
+@using RubberTradingSystem.Services
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@inject NavigationManager Navigation
+@inject LanguageService LangService
+@implements IDisposable
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4 mb-6">
+    <MudText Typo="Typo.h5" Color="Color.Primary" Class="mb-4">@LangService.GetString("Purchase_ListTitle")</MudText>
+
+    <!-- ရက်စွဲအလိုက် Filter လုပ်ရန် Search Bar နှင့် Date Pickers များ -->
+    <MudPaper Class="pa-4 mb-4" Elevation="2">
+        <MudGrid AlignItems="Center">
+            <MudItem xs="12" sm="4" md="3">
+                <MudDatePicker Label="ဘယ်ရက်မှ (From Date)" @bind-Date="_fromDate" Variant="Variant.Outlined" Dense="true" Clearable="true" />
+            </MudItem>
+            <MudItem xs="12" sm="4" md="3">
+                <MudDatePicker Label="ဘယ်ရက်အထိ (To Date)" @bind-Date="_toDate" Variant="Variant.Outlined" Dense="true" Clearable="true" />
+            </MudItem>
+            <MudItem xs="12" sm="4" md="4">
+                <MudTextField T="string" @bind-Value="_searchString"
+                              Placeholder="@LangService.GetString("Purchase_SearchPlaceholder")"
+                              Immediate="true"
+                              Variant="Variant.Outlined"
+                              Dense="true"
+                              Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Filled.Search"
+                              Clearable="true">
+                </MudTextField>
+            </MudItem>
+            <MudItem xs="12" sm="12" md="2" class="d-flex gap-2">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" OnClick="LoadDataAsync">ရှာမည်</MudButton>
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
+
+    <!-- စာရင်းဇယား Table -->
+    <MudTable Items="@_items"
+              Dense="true"
+              Hover="true"
+              Bordered="true"
+              Striped="true"
+              Filter="new Func<RubberPurchaseModel, bool>(item => FilterFunc(item))"
+              @bind-SelectedItem="_selectedItem"
+              RowStyleFunc="@SelectedRowStyle"
+              RowClass="cursor-pointer"
+              Elevation="2">
+
+        <HeaderContent>
+            <MudTh>ဘောင်ချာနံပါတ်</MudTh>
+            <MudTh>@LangService.GetString("Purchase_ColSupplier")</MudTh>
+            <MudTh>@LangService.GetString("Purchase_ColType")</MudTh>
+            <MudTh>@LangService.GetString("Purchase_ColWeight")</MudTh>
+            <MudTh>@LangService.GetString("Purchase_ColPrice")</MudTh>
+            <MudTh>@LangService.GetString("Purchase_ColTotal")</MudTh>
+            <MudTh>@LangService.GetString("Purchase_ColDate")</MudTh>
+        </HeaderContent>
+
+        <RowTemplate>
+            <MudTd DataLabel="Voucher"><b>@context.voucher_number</b></MudTd>
+            <MudTd DataLabel="Supplier"><b>@context.supplier_name</b></MudTd>
+            <MudTd DataLabel="Type"><MudChip T="string" Color="Color.Primary" Size="Size.Small">@context.rubber_type</MudChip></MudTd>
+            <MudTd DataLabel="Weight">@context.weight.ToString("N2")</MudTd>
+            <MudTd DataLabel="Price">@context.price_per_unit.ToString("N0")</MudTd>
+            <MudTd DataLabel="Total"><b>@context.total_amount.ToString("N0")</b></MudTd>
+            <MudTd DataLabel="Date">@context.purchase_date.ToLocalTime().ToString("dd/MM/yyyy")</MudTd>
+        </RowTemplate>
+
+        <PagerContent>
+            <MudTablePager PageSizeOptions="new int[] { 10, 25, 50, 100 }" />
+        </PagerContent>
+    </MudTable>
+
+    <!-- အောက်ခြေ ခလုတ်များ (Add, Edit, Delete) -->
+    <MudPaper Class="d-flex justify-end pa-4 mt-4" Elevation="2">
+        <MudButton Variant="Variant.Filled" Color="Color.Success" StartIcon="@Icons.Material.Filled.Add"
+                   OnClick="OpenAddPage" Class="mr-2">
+            @LangService.GetString("Purchase_AddButton")
+        </MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Warning" StartIcon="@Icons.Material.Filled.Edit"
+                   Disabled="@(_selectedItem == null)" OnClick="OpenEditPage" Class="mr-2">
+            @LangService.GetString("Purchase_EditButton")
+        </MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete"
+                   Disabled="@(_selectedItem == null)" OnClick="DeleteAsync">
+            @LangService.GetString("Purchase_DeleteButton")
+        </MudButton>
+    </MudPaper>
+</MudContainer>
+
+@code {
+    private List<RubberPurchaseModel> _items = new();
+    private RubberPurchaseModel? _selectedItem;
+    private string _searchString = "";
+
+    private DateTime? _fromDate = DateTime.Today.AddDays(-30);
+    private DateTime? _toDate = DateTime.Today;
+
+    protected override async Task OnInitializedAsync()
+    {
+        LangService.OnLanguageChanged += StateHasChanged;
+        await LoadDataAsync();
+    }
+
+    public void Dispose() => LangService.OnLanguageChanged -= StateHasChanged;
+
+    private async Task LoadDataAsync()
+    {
+        try
+        {
+            string query = "rest/v1/rubber_purchases?select=*";
+
+            if (_fromDate.HasValue)
+            {
+                query += $"&purchase_date=gte.{_fromDate.Value:yyyy-MM-dd}";
+            }
+            if (_toDate.HasValue)
+            {
+                query += $"&purchase_date=lte.{_toDate.Value.AddDays(1):yyyy-MM-dd}";
+            }
+
+            query += "&order=purchase_date.desc";
+
+            _items = await Http.GetFromJsonAsync<List<RubberPurchaseModel>>(query) ?? new();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private bool FilterFunc(RubberPurchaseModel item)
+    {
+        if (string.IsNullOrWhiteSpace(_searchString)) return true;
+
+        bool matchSupplier = item.supplier_name != null && item.supplier_name.Contains(_searchString, StringComparison.OrdinalIgnoreCase);
+        bool matchType = item.rubber_type != null && item.rubber_type.Contains(_searchString, StringComparison.OrdinalIgnoreCase);
+        bool matchVoucher = item.voucher_number != null && item.voucher_number.Contains(_searchString, StringComparison.OrdinalIgnoreCase);
+
+        return matchSupplier || matchType || matchVoucher;
+    }
+
+    private string SelectedRowStyle(RubberPurchaseModel item, int rowNumber)
+    {
+        if (_selectedItem != null && _selectedItem.id == item.id)
+        {
+            return "background-color: #d4edda !important; font-weight: bold;";
+        }
+        return string.Empty;
+    }
+
+    private void OpenAddPage()
+    {
+        Navigation.NavigateTo("/rubber-purchase");
+    }
+
+    private void OpenEditPage()
+    {
+        if (_selectedItem == null) return;
+        Navigation.NavigateTo($"/rubber-purchase?id={_selectedItem.id}");
+    }
+
+    private async Task DeleteAsync()
+    {
+        if (_selectedItem == null) return;
+
+        var confirmed = await DialogService.ShowMessageBoxAsync(
+            "Confirm",
+            LangService.GetString("Purchase_DeleteConfirm"),
+            yesText: "Yes", cancelText: "Cancel");
+
+        if (confirmed == true)
+        {
+            try
+            {
+                string transactionId = _selectedItem.id;
+
+                var txList = await Http.GetFromJsonAsync<List<TransactionDetailModel>>($"rest/v1/transactions?id=eq.{transactionId}&select=wallet_id,paid_amount");
+                if (txList != null && txList.Any())
+                {
+                    var tx = txList.First();
+                    if (!string.IsNullOrEmpty(tx.wallet_id) && tx.paid_amount > 0)
+                    {
+                        var wallets = await Http.GetFromJsonAsync<List<WalletModel>>($"rest/v1/wallets?id=eq.{tx.wallet_id}");
+                        if (wallets != null && wallets.Any())
+                        {
+                            var wallet = wallets.First();
+                            decimal restoredBalance = wallet.Balance + tx.paid_amount;
+                            await Http.PatchAsync($"rest/v1/wallets?id=eq.{tx.wallet_id}", JsonContent.Create(new { balance = restoredBalance }));
+                        }
+                    }
+                }
+
+                await Http.DeleteAsync($"rest/v1/ledgers?transaction_id=eq.{transactionId}");
+                await Http.DeleteAsync($"rest/v1/vouchers?reference_id=eq.{transactionId}");
+                await Http.DeleteAsync($"rest/v1/truck_stocks?transaction_id=eq.{transactionId}");
+                await Http.DeleteAsync($"rest/v1/temp_stocks?reference_id=eq.{transactionId}");
+
+                var response = await Http.DeleteAsync($"rest/v1/transactions?id=eq.{transactionId}");
+
+                if (response.IsSuccessStatusCode)
+                {
+                    Snackbar.Add(LangService.GetString("Purchase_DeleteSuccess"), Severity.Success);
+                    await LoadDataAsync();
+                    _selectedItem = null;
+                }
+                else
+                {
+                    Snackbar.Add("Failed to delete related transaction records.", Severity.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+
+    private class TransactionDetailModel
+    {
+        public string? wallet_id { get; set; }
+        public decimal paid_amount { get; set; }
+    }
+}

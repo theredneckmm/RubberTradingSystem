@@ -1,0 +1,188 @@
+﻿@page "/staff-list"
+@using MudBlazor
+@using RubberTradingSystem.Models
+@using RubberTradingSystem.Services
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+@inject IDialogService DialogService
+@inject LanguageService LangService
+@implements IDisposable
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+    <MudText Typo="Typo.h5" Color="Color.Primary" Class="mb-4">@LangService.GetString("Staff_ListTitle")</MudText>
+
+    @if (_isLoading)
+    {
+        <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="mb-4" />
+    }
+
+    <!-- Staff Table -->
+    <MudTable Items="@_staffList"
+              Dense="true"
+              Hover="true"
+              Bordered="true"
+              Striped="true"
+              Filter="new Func<StaffModel,bool>(FilterFunc)"
+              @bind-SelectedItem="_selectedStaff"
+              RowClass="cursor-pointer"
+              RowClassFunc="@SelectedRowClassFunc"
+              Elevation="2">
+
+        <ToolBarContent>
+            <MudSpacer />
+            <!-- Real-time Search Box -->
+            <MudTextField @bind-Value="_searchString"
+                          Placeholder="@LangService.GetString("Staff_SearchPlaceholder")"
+                          Immediate="true"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search"
+                          IconSize="Size.Medium"
+                          Class="mt-0"
+                          Clearable="true">
+            </MudTextField>
+        </ToolBarContent>
+
+        <HeaderContent>
+            <MudTh>@LangService.GetString("Staff_TableColName")</MudTh>
+            <MudTh>@LangService.GetString("Staff_TableColEmail")</MudTh>
+            <MudTh>@LangService.GetString("Staff_TableColRole")</MudTh>
+        </HeaderContent>
+
+        <!-- RowTemplate အပိုင်း -->
+        <RowTemplate>
+            <MudTd DataLabel="ဝန်ထမ်းအမည်">@(context.full_name ?? "-")</MudTd>
+            <MudTd DataLabel="အီးမေးလ်">@context.email</MudTd>
+            <MudTd DataLabel="ရာထူး">
+                <MudChip T="string" Color="Color.Info" Size="Size.Small">@(context.role ?? "Staff")</MudChip>
+            </MudTd>
+        </RowTemplate>
+
+        <PagerContent>
+            <MudTablePager PageSizeOptions="new int[] { 10, 25, 50 }" />
+        </PagerContent>
+    </MudTable>
+
+    <!-- Action Buttons -->
+    <MudPaper Class="d-flex justify-end pa-4 mt-4" Elevation="2">
+        <MudButton Variant="Variant.Filled" Color="Color.Success" StartIcon="@Icons.Material.Filled.Add"
+                   OnClick="GoToAddPage" Class="mr-2">
+            @LangService.GetString("Btn_AddNew")
+        </MudButton>
+
+        <MudButton Variant="Variant.Filled" Color="Color.Warning" StartIcon="@Icons.Material.Filled.Edit"
+                   Disabled="@(_selectedStaff == null)" OnClick="GoToEditPage" Class="mr-2">
+            @LangService.GetString("Btn_Edit")
+        </MudButton>
+
+        <MudButton Variant="Variant.Filled" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete"
+                   Disabled="@(_selectedStaff == null)" OnClick="DeleteStaffAsync">
+            @LangService.GetString("Btn_Delete")
+        </MudButton>
+    </MudPaper>
+</MudContainer>
+
+<style>
+    /* Selected Row Highlight Color */
+    .selected-row-color {
+        background-color: #e3f2fd !important;
+    }
+</style>
+
+@code {
+    private bool _isLoading = true;
+    private List<StaffModel> _staffList = new();
+    private StaffModel? _selectedStaff;
+    private string _searchString = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        LangService.OnLanguageChanged += StateHasChanged;
+        await LoadStaffAsync();
+    }
+
+    public void Dispose()
+    {
+        LangService.OnLanguageChanged -= StateHasChanged;
+    }
+
+    private async Task LoadStaffAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            // Supabase တွင် Staff များကို သိမ်းထားသော Table (သို့မဟုတ် View) မှ လှမ်းခေါ်ခြင်း
+            var result = await Http.GetFromJsonAsync<List<StaffModel>>("rest/v1/profiles?select=*");
+            _staffList = result ?? new();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"{LangService.GetString("Staff_LoadError")}{ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private bool FilterFunc(StaffModel staff)
+    {
+        if (string.IsNullOrWhiteSpace(_searchString)) return true;
+
+        // name အစား full_name ကို သုံးခြင်း
+        return (!string.IsNullOrEmpty(staff.full_name) && staff.full_name.Contains(_searchString, StringComparison.OrdinalIgnoreCase)) ||
+               staff.email.Contains(_searchString, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private string SelectedRowClassFunc(StaffModel staff, int rowNumber)
+    {
+        if (_selectedStaff != null && _selectedStaff.id == staff.id)
+            return "selected-row-color";
+        return string.Empty;
+    }
+
+    private void GoToAddPage() => Navigation.NavigateTo("/staff/add");
+
+    private void GoToEditPage()
+    {
+        if (_selectedStaff != null)
+        {
+            Navigation.NavigateTo($"/staff/edit/{_selectedStaff.id}");
+        }
+    }
+
+    private async Task DeleteStaffAsync()
+    {
+        if (_selectedStaff == null) return;
+
+        bool? result = await DialogService.ShowMessageBoxAsync(
+            "သတိပေးချက်",
+            $"{_selectedStaff.full_name ?? _selectedStaff.email} ၏ အကောင့်ကို ဖျက်ပစ်ရန် သေချာပါသလား?",
+            yesText: "ဖျက်မည်",
+            cancelText: "ပယ်ဖျက်မည်");
+
+        if (result == true)
+        {
+            try
+            {
+                var response = await Http.DeleteAsync($"rest/v1/profiles?id=eq.{_selectedStaff.id}");
+
+                if (response.IsSuccessStatusCode)
+                {
+                    Snackbar.Add("ဝန်ထမ်းအကောင့်ကို အောင်မြင်စွာ ဖျက်ပစ်လိုက်ပါပြီ။", Severity.Success);
+                    _staffList.Remove(_selectedStaff);
+                    _selectedStaff = null;
+                }
+                else
+                {
+                    var errorMsg = await response.Content.ReadAsStringAsync();
+                    Snackbar.Add($"ဖျက်သိမ်းရာတွင် အမှားရှိသည်: {errorMsg}", Severity.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"အမှားအယွင်းရှိပါသည်: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+}

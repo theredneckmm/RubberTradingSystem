@@ -1,0 +1,423 @@
+﻿@using MudBlazor
+@using RubberTradingSystem.Models
+@using RubberTradingSystem.Services
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject LanguageService LangService
+@inject UserContextService UserContext
+@implements IDisposable
+
+<MudDialog>
+    <DialogContent>
+        <EditForm Model="@Model" OnValidSubmit="SaveAsync">
+            <DataAnnotationsValidator />
+
+            <!-- ဘောင်ချာအမှတ်စဉ်ပြသရန် -->
+            <div class="d-flex justify-space-between align-center mb-4">
+                <MudText Typo="Typo.subtitle1"><b>Voucher: @_currentVoucherNumber</b></MudText>
+            </div>
+
+            <!-- ၁။ ကားနံပါတ် ရွေးချယ်ရန် (MudAutocomplete ဖြင့် စာရိုက်၍လည်းရ၊ ရွေးချယ်၍လည်းရသည်) -->
+            <MudAutocomplete T="string" @bind-Value="Model.truck_number"
+                             SearchFunc="@SearchTrucks"
+                             Label="@LangService.GetString("TruckExp_TruckLabel")"
+                             Variant="Variant.Outlined"
+                             Class="mb-4"
+                             Required="true"
+                             Disabled="_isSuccessCompleted"
+                             ResetValueOnEmptyText="true"
+                             CoerceText="true"
+                             CoerceValue="true"
+                             AdornmentIcon="@Icons.Material.Filled.ArrowDropDown"
+                             HelperText="စာရင်းထဲမရှိလျှင် ကားနံပါတ်အသစ် ရိုက်ထည့်နိုင်ပါသည်။" />
+
+            <!-- ၂။ အသုံးစရိတ် အမျိုးအစား ရွေးချယ်ရန် (MudAutocomplete ဖြင့် စာရိုက်၍လည်းရသည်) -->
+            <MudAutocomplete T="string" @bind-Value="Model.expense_type"
+                             SearchFunc="@SearchExpenseTypes"
+                             Label="@LangService.GetString("TruckExp_TypeLabel")"
+                             Variant="Variant.Outlined"
+                             Class="mb-4"
+                             Required="true"
+                             Disabled="_isSuccessCompleted"
+                             ResetValueOnEmptyText="true"
+                             CoerceText="true"
+                             CoerceValue="true"
+                             AdornmentIcon="@Icons.Material.Filled.ArrowDropDown"
+                             HelperText="အမျိုးအစားအသစ် ကိုယ်တိုင်ရိုက်ထည့်နိုင်ပါသည်။" />
+
+            <MudNumericField @bind-Value="Model.amount"
+                             Label="@LangService.GetString("Expense_AmountLabel")"
+                             Variant="Variant.Outlined"
+                             Class="mb-4"
+                             Min="0"
+                             Disabled="_isSuccessCompleted" />
+
+            <!-- ငွေပေးချေမှု နည်းလမ်း ရွေးချယ်ရန် -->
+            <MudSelect T="string" @bind-Value="Model.payment_method"
+                       Label="@LangService.GetString("Expense_PaymentMethodLabel")"
+                       Variant="Variant.Outlined"
+                       Class="mb-4"
+                       Required="true"
+                       Disabled="_isSuccessCompleted">
+                @foreach (var method in _paymentMethods)
+                {
+                    <MudSelectItem Value="@method">@method</MudSelectItem>
+                }
+            </MudSelect>
+
+            <MudDatePicker @bind-Date="_expenseDate"
+                           Label="@LangService.GetString("Expense_DateLabel")"
+                           Variant="Variant.Outlined"
+                           Class="mb-4"
+                           Disabled="_isSuccessCompleted" />
+
+            <MudTextField @bind-Value="Model.note"
+                          Label="@LangService.GetString("Expense_NoteLabel")"
+                          Variant="Variant.Outlined"
+                          Lines="2"
+                          Class="mb-4"
+                          Disabled="_isSuccessCompleted" />
+
+            <!-- ခလုတ်များ (Save, Print, Finish) -->
+            <div class="d-flex justify-end gap-2">
+                @if (!_isSuccessCompleted)
+                {
+                    <MudButton OnClick="Cancel" Variant="Variant.Text" Class="mr-2">
+                        @LangService.GetString("Rubber_Cancel")
+                    </MudButton>
+                    <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Disabled="_isSaving">
+                        @(IsNew ? LangService.GetString("Rubber_Save") : LangService.GetString("Rubber_Update"))
+                    </MudButton>
+                }
+                else
+                {
+                    <MudButton Variant="Variant.Outlined" Color="Color.Secondary" OnClick="PrintVoucher">
+                        Print Voucher
+                    </MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Success" OnClick="FinishTransaction">
+                        Finish
+                    </MudButton>
+                }
+            </div>
+        </EditForm>
+    </DialogContent>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public TruckExpenseModel Model { get; set; } = new();
+    [Parameter] public bool IsNew { get; set; }
+
+    private string _currentVoucherNumber = string.Empty;
+    private bool _isSaving = false;
+    private bool _isSuccessCompleted = false;
+
+    private List<string> _truckList = new();
+    private List<string> _expenseTypeList = new() { "Fuel", "Maintenance" }; // Default တွေအပြင် အသစ်ထည့်နိုင်မည်
+    private List<string> _paymentMethods = new();
+    private decimal _originalAmount = 0;
+
+    private DateTime? _expenseDate
+    {
+        get => Model.expense_date;
+        set => Model.expense_date = value ?? DateTime.Today;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        LangService.OnLanguageChanged += StateHasChanged;
+        await LoadDropdownDataAsync();
+
+        if (IsNew)
+        {
+            _currentVoucherNumber = await GenerateVoucherNumberAsync("TEXP");
+        }
+        else
+        {
+            _originalAmount = Model.amount;
+            var existingTxs = await Http.GetFromJsonAsync<List<TransactionResponseModel>>(
+                $"rest/v1/transactions?description=like.*{Model.truck_number}*&select=voucher_number");
+            if (existingTxs != null && existingTxs.Any())
+            {
+                _currentVoucherNumber = existingTxs.First().voucher_number ?? "TEXP-EDIT";
+            }
+            else
+            {
+                _currentVoucherNumber = "TEXP-EDIT";
+            }
+        }
+    }
+
+    public void Dispose() => LangService.OnLanguageChanged -= StateHasChanged;
+
+    private async Task LoadDropdownDataAsync()
+    {
+        try
+        {
+            var trucks = await Http.GetFromJsonAsync<List<TruckModel>>("rest/v1/trucks?select=truck_number");
+            if (trucks != null) _truckList = trucks.Select(x => x.truck_number).ToList();
+
+            var wallets = await Http.GetFromJsonAsync<List<WalletNameModel>>("rest/v1/wallets?select=wallet_name");
+            if (wallets != null && wallets.Any())
+            {
+                _paymentMethods = wallets.Select(x => x.wallet_name).Distinct().ToList();
+            }
+            else
+            {
+                _paymentMethods = new List<string> { "Cash" };
+            }
+        }
+        catch
+        {
+            _paymentMethods = new List<string> { "Cash" };
+        }
+    }
+
+    private Task<IEnumerable<string>> SearchTrucks(string value, CancellationToken token)
+    {
+        if (string.IsNullOrEmpty(value))
+            return Task.FromResult<IEnumerable<string>>(_truckList);
+
+        return Task.FromResult<IEnumerable<string>>(_truckList.Where(x => x.Contains(value, StringComparison.InvariantCultureIgnoreCase)));
+    }
+
+    private Task<IEnumerable<string>> SearchExpenseTypes(string value, CancellationToken token)
+    {
+        if (string.IsNullOrEmpty(value))
+            return Task.FromResult<IEnumerable<string>>(_expenseTypeList);
+
+        return Task.FromResult<IEnumerable<string>>(_expenseTypeList.Where(x => x.Contains(value, StringComparison.InvariantCultureIgnoreCase)));
+    }
+
+    private class WalletNameModel { public string wallet_name { get; set; } = string.Empty; }
+
+    private async Task SaveAsync()
+    {
+        _isSaving = true;
+        try
+        {
+            string ownerId = await UserContext.GetCurrentOwnerIdAsync();
+            string staffId = await UserContext.GetCurrentStaffIdAsync();
+
+            if (string.IsNullOrEmpty(ownerId))
+            {
+                Snackbar.Add("User Session not found. Please login again.", Severity.Error);
+                return;
+            }
+
+            // အကယ်၍ ကားနံပါတ်အသစ်ဖြစ်နေပြီး trucks ဇယားထဲမှာ မရှိသေးရင် အလိုအလျောက် သွားထည့်ပေးမည်
+            if (!string.IsNullOrWhiteSpace(Model.truck_number))
+            {
+                bool truckExists = _truckList.Any(x => x.Equals(Model.truck_number, StringComparison.OrdinalIgnoreCase));
+                if (!truckExists)
+                {
+                    var newTruckPayload = new
+                    {
+                        owner_id = ownerId,
+                        staff_id = string.IsNullOrEmpty(staffId) ? null : staffId,
+                        truck_number = Model.truck_number
+                    };
+                    await Http.PostAsJsonAsync("rest/v1/trucks", newTruckPayload);
+                }
+            }
+
+            string? walletId = null;
+            if (!string.IsNullOrEmpty(Model.payment_method))
+            {
+                var wallets = await Http.GetFromJsonAsync<List<WalletFullModel>>($"rest/v1/wallets?wallet_name=eq.{Uri.EscapeDataString(Model.payment_method)}&select=id,balance");
+                if (wallets != null && wallets.Any())
+                {
+                    walletId = wallets.First().id;
+                }
+            }
+
+            if (IsNew)
+            {
+                var expensePayload = new
+                {
+                    owner_id = ownerId,
+                    staff_id = string.IsNullOrEmpty(staffId) ? null : staffId,
+                    truck_number = Model.truck_number,
+                    expense_type = Model.expense_type,
+                    amount = Model.amount,
+                    payment_method = Model.payment_method,
+                    expense_date = Model.expense_date.ToString("yyyy-MM-dd"),
+                    note = Model.note
+                };
+
+                var response = await Http.PostAsJsonAsync("rest/v1/truck_expenses", expensePayload);
+                if (!response.IsSuccessStatusCode)
+                {
+                    var err = await response.Content.ReadAsStringAsync();
+                    Snackbar.Add($"Failed to save truck expense: {err}", Severity.Error);
+                    return;
+                }
+
+                var txPayload = new
+                {
+                    owner_id = ownerId,
+                    staff_id = string.IsNullOrEmpty(staffId) ? null : staffId,
+                    transaction_type = "TruckExpense",
+                    wallet_id = string.IsNullOrEmpty(walletId) ? null : walletId,
+                    voucher_number = _currentVoucherNumber,
+                    total_amount = Model.amount,
+                    paid_amount = Model.amount,
+                    description = $"Truck Expense: {Model.expense_type} ({Model.truck_number})"
+                };
+
+                var txReq = new HttpRequestMessage(HttpMethod.Post, "rest/v1/transactions")
+                {
+                    Content = JsonContent.Create(txPayload)
+                };
+                txReq.Headers.Add("Prefer", "return=representation");
+                var txResp = await Http.SendAsync(txReq);
+
+                if (txResp.IsSuccessStatusCode)
+                {
+                    var txList = await txResp.Content.ReadFromJsonAsync<List<TransactionResponseModel>>();
+                    string? txId = txList?.FirstOrDefault()?.id;
+
+                    var voucherPayload = new
+                    {
+                        owner_id = ownerId,
+                        staff_id = string.IsNullOrEmpty(staffId) ? null : staffId,
+                        voucher_number = _currentVoucherNumber,
+                        voucher_type = "TruckExpense",
+                        reference_id = string.IsNullOrEmpty(txId) ? null : txId
+                    };
+                    await Http.PostAsJsonAsync("rest/v1/vouchers", voucherPayload);
+
+                    var ledgerPayload = new
+                    {
+                        owner_id = ownerId,
+                        staff_id = string.IsNullOrEmpty(staffId) ? null : staffId,
+                        transaction_id = string.IsNullOrEmpty(txId) ? null : txId,
+                        voucher_number = _currentVoucherNumber,
+                        entry_type = "Credit",
+                        debit_amount = 0.00m,
+                        credit_amount = Model.amount,
+                        ref_type = "TruckExpense",
+                        description = $"Truck Expense: {Model.expense_type} ({Model.truck_number})"
+                    };
+                    await Http.PostAsJsonAsync("rest/v1/ledgers", ledgerPayload);
+
+                    if (!string.IsNullOrEmpty(walletId) && Model.amount > 0)
+                    {
+                        var targetWallets = await Http.GetFromJsonAsync<List<WalletFullModel>>($"rest/v1/wallets?id=eq.{walletId}&select=balance");
+                        if (targetWallets != null && targetWallets.Any())
+                        {
+                            decimal currentBalance = targetWallets.First().balance;
+                            decimal newBalance = currentBalance - Model.amount;
+                            await Http.PatchAsync($"rest/v1/wallets?id=eq.{walletId}", JsonContent.Create(new { balance = newBalance }));
+                        }
+                    }
+                }
+
+                Snackbar.Add(LangService.GetString("TruckExp_SaveSuccess"), Severity.Success);
+                _isSuccessCompleted = true;
+            }
+            else
+            {
+                var response = await Http.PatchAsync($"rest/v1/truck_expenses?id=eq.{Model.id}", JsonContent.Create(new
+                {
+                    truck_number = Model.truck_number,
+                    expense_type = Model.expense_type,
+                    amount = Model.amount,
+                    payment_method = Model.payment_method,
+                    expense_date = Model.expense_date.ToString("yyyy-MM-dd"),
+                    note = Model.note
+                }));
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var existingTxs = await Http.GetFromJsonAsync<List<TransactionUpdateModel>>(
+                        $"rest/v1/transactions?voucher_number=eq.{_currentVoucherNumber}&select=id,wallet_id,total_amount");
+
+                    if (existingTxs != null && existingTxs.Any())
+                    {
+                        var tx = existingTxs.First();
+                        decimal amountDiff = Model.amount - _originalAmount;
+
+                        if (!string.IsNullOrEmpty(tx.wallet_id))
+                        {
+                            var wallets = await Http.GetFromJsonAsync<List<WalletFullModel>>($"rest/v1/wallets?id=eq.{tx.wallet_id}&select=balance");
+                            if (wallets != null && wallets.Any())
+                            {
+                                decimal currentBal = wallets.First().balance;
+                                decimal adjustedBal = currentBal - amountDiff;
+                                await Http.PatchAsync($"rest/v1/wallets?id=eq.{tx.wallet_id}", JsonContent.Create(new { balance = adjustedBal }));
+                            }
+                        }
+
+                        await Http.PatchAsync($"rest/v1/transactions?id=eq.{tx.id}", JsonContent.Create(new
+                        {
+                            total_amount = Model.amount,
+                            paid_amount = Model.amount,
+                            description = $"Truck Expense: {Model.expense_type} ({Model.truck_number})"
+                        }));
+
+                        await Http.PatchAsync($"rest/v1/ledgers?transaction_id=eq.{tx.id}", JsonContent.Create(new
+                        {
+                            credit_amount = Model.amount,
+                            description = $"Truck Expense: {Model.expense_type} ({Model.truck_number})"
+                        }));
+                    }
+
+                    Snackbar.Add(LangService.GetString("TruckExp_UpdateSuccess"), Severity.Success);
+                    MudDialog.Close(DialogResult.Ok(true));
+                }
+                else
+                {
+                    Snackbar.Add("Failed to update truck expense.", Severity.Error);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private class WalletFullModel { public string id { get; set; } = string.Empty; public decimal balance { get; set; } }
+    private class TransactionUpdateModel { public string id { get; set; } = string.Empty; public string? wallet_id { get; set; } public decimal total_amount { get; set; } }
+
+    private void PrintVoucher() => Snackbar.Add($"ဘောင်ချာအမှတ် {_currentVoucherNumber} ကို Print ထုတ်နေပါပြီ...", Severity.Info);
+    private void FinishTransaction() => MudDialog.Close(DialogResult.Ok(true));
+    private void Cancel() => MudDialog.Cancel();
+
+    private async Task<string> GenerateVoucherNumberAsync(string prefix)
+    {
+        string dateStr = DateTime.Now.ToString("yyyyMMdd");
+        string searchPattern = $"{prefix}-{dateStr}-";
+        try
+        {
+            var transactions = await Http.GetFromJsonAsync<List<TransactionResponseModel>>(
+                $"rest/v1/transactions?voucher_number=like.{searchPattern}*&select=voucher_number");
+            int nextSeq = 1;
+            if (transactions != null && transactions.Any())
+            {
+                var maxSeq = transactions
+                    .Where(t => !string.IsNullOrEmpty(t.voucher_number) && t.voucher_number.Contains("-"))
+                    .Select(t =>
+                    {
+                        string part = t.voucher_number!.Substring(t.voucher_number.LastIndexOf('-') + 1);
+                        return int.TryParse(part, out int val) ? val : 0;
+                    })
+                    .DefaultIfEmpty(0)
+                    .Max();
+                nextSeq = maxSeq + 1;
+            }
+            return $"{prefix}-{dateStr}-{nextSeq:D3}";
+        }
+        catch
+        {
+            return $"{prefix}-{dateStr}-001";
+        }
+    }
+
+    private class TransactionResponseModel { public string id { get; set; } = string.Empty; public string? voucher_number { get; set; } }
+}

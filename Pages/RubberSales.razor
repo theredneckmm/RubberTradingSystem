@@ -1,0 +1,697 @@
+﻿@page "/rubber-sales"
+@using MudBlazor
+@using RubberTradingSystem.Models
+@using RubberTradingSystem.Services
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@inject NavigationManager Navigation
+@inject LanguageService LangService
+@inject UserContextService UserContext
+@implements IDisposable
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4 mb-6">
+
+    <div class="d-flex justify-space-between align-center mb-4">
+        <MudText Typo="Typo.h5" Color="Color.Primary" Class="font-weight-bold">
+            @LangService.GetString("Sale_Title") @(!string.IsNullOrEmpty(id) ? "(ပြင်ဆင်ခြင်း - Edit)" : "")
+        </MudText>
+        <!-- ဘောင်ချာအမှတ်စဉ် -->
+        <MudChip T="string" Color="Color.Primary" Variant="Variant.Filled" Size="Size.Large">
+            <b>Voucher: @_currentVoucherNumber</b>
+        </MudChip>
+    </div>
+
+    <MudPaper Class="pa-6" Elevation="3">
+
+        <EditForm Model="@_model" OnValidSubmit="HandleValidSubmitAsync">
+
+            <DataAnnotationsValidator />
+
+            <!-- 1. Stock Source Selection (Warehouse, Truck, Temp) -->
+            <MudGrid Spacing="3" AlignItems="Center">
+                <MudItem xs="12" md="4">
+                    <MudSelect T="string" @bind-Value="_model.source_type" Label="@LangService.GetString("Sale_SourceType")"
+                               Variant="Variant.Outlined" Dense="true" Required="true" Disabled="_isSuccessCompleted" SelectedValuesChanged="OnSourceTypeChanged">
+                        <MudSelectItem Value="@("Warehouse")">ဂိုဒေါင် (Warehouse)</MudSelectItem>
+                        <MudSelectItem Value="@("TruckStock")">ကားစတော့ခ် (Truck Stock)</MudSelectItem>
+                        <MudSelectItem Value="@("TempStock")">ယာယီစတော့ခ် (Temp Stock)</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+
+                <MudItem xs="12" md="8">
+                    <div class="d-flex align-center gap-2">
+                        <MudSelect T="string" @bind-Value="_model.source_id" SelectedValuesChanged="OnSourceItemChanged"
+                                   Label="@LangService.GetString("Sale_SelectSource")" Variant="Variant.Outlined" Dense="true" Required="true" Clearable="true" Class="flex-grow-1"
+                                   Disabled="_isSuccessCompleted">
+                            @if (_sourceItems != null)
+                            {
+                                @foreach (var item in _sourceItems)
+                                {
+                                    <MudSelectItem Value="@item.Id">@item.DisplayName</MudSelectItem>
+                                }
+                            }
+                        </MudSelect>
+                    </div>
+                </MudItem>
+            </MudGrid>
+
+            <MudDivider Class="my-4" />
+
+            <!-- 2. Buyer & Rubber Type -->
+            <MudGrid Spacing="3">
+                <MudItem xs="12" md="6">
+                    <MudSelect T="string" @bind-Value="_model.buyer_id" Label="@LangService.GetString("Sale_Buyer")"
+                               Variant="Variant.Outlined" Dense="true" Required="true" Clearable="true" Disabled="_isSuccessCompleted">
+                        @if (_buyers != null)
+                        {
+                            @foreach (var buyer in _buyers)
+                            {
+                                <MudSelectItem Value="@buyer.Id">@buyer.Name</MudSelectItem>
+                            }
+                        }
+                    </MudSelect>
+                </MudItem>
+
+                <MudItem xs="12" md="6">
+                    <MudSelect T="string" @bind-Value="_model.rubber_type_id" SelectedValuesChanged="OnRubberTypeSelected"
+                               Label="@LangService.GetString("Sale_RubberType")" Variant="Variant.Outlined" Dense="true" Required="true" Clearable="true" Disabled="_isSuccessCompleted">
+                        @if (_rubberTypes != null)
+                        {
+                            @foreach (var type in _rubberTypes)
+                            {
+                                <MudSelectItem Value="@type.id">@type.name (@type.grade)</MudSelectItem>
+                            }
+                        }
+                    </MudSelect>
+                </MudItem>
+            </MudGrid>
+
+            <MudDivider Class="my-4" />
+
+            <!-- 3. Available Quantity, Weight & Price -->
+            <MudGrid Spacing="3">
+                <MudItem xs="12" sm="6" md="4">
+                    <MudTextField T="string" Value="@_availableQuantity.ToString("N2")" ReadOnly="true" Disabled="true"
+                                  Label="@LangService.GetString("Sale_AvailableQty")" Variant="Variant.Outlined" Dense="true" />
+                </MudItem>
+
+                <MudItem xs="12" sm="6" md="4">
+                    <MudNumericField T="decimal" Value="@_model.weight" ValueChanged="OnWeightChanged" Immediate="true"
+                                     Label="@LangService.GetString("Sale_Weight")" Variant="Variant.Outlined" Dense="true" Min="0" HideSpinButtons="true" Disabled="_isSuccessCompleted" />
+                </MudItem>
+
+                <MudItem xs="12" sm="12" md="4">
+                    <MudNumericField T="decimal" Value="@_model.price_per_unit" ValueChanged="OnPriceChanged" Immediate="true"
+                                     Label="@LangService.GetString("Sale_Price")" Variant="Variant.Outlined" Dense="true" Min="0" HideSpinButtons="true" Disabled="_isSuccessCompleted" />
+                </MudItem>
+            </MudGrid>
+
+            <MudDivider Class="my-4" />
+
+            <!-- 4. Total Amount, Wallet & Actual Paid -->
+            <MudGrid Spacing="3" AlignItems="Center">
+                <MudItem xs="12" md="4">
+                    <MudTextField T="string" Value="@_calculatedTotalAmount.ToString("N2")" ReadOnly="true" Disabled="true"
+                                  Label="@LangService.GetString("Sale_TotalAmount")" Variant="Variant.Outlined" Dense="true" />
+                </MudItem>
+
+                <MudItem xs="12" md="4">
+                    <MudSelect T="string" @bind-Value="_model.wallet_id" Label="@LangService.GetString("Sale_Wallet")"
+                               Variant="Variant.Outlined" Dense="true" Required="true" Clearable="true" Disabled="_isSuccessCompleted">
+                        @if (_wallets != null)
+                        {
+                            @foreach (var wallet in _wallets)
+                            {
+                                <MudSelectItem Value="@wallet.Id">@wallet.WalletName (@wallet.WalletType) - ကျန်ငွေ: @wallet.Balance.ToString("N0")</MudSelectItem>
+                            }
+                        }
+                    </MudSelect>
+                </MudItem>
+
+                <MudItem xs="12" md="4">
+                    <MudNumericField T="decimal" @bind-Value="_model.actual_paid" Immediate="true" Format="N0"
+                                     Label="@LangService.GetString("Sale_ActualPaid")" Variant="Variant.Outlined" Dense="true" Min="0" Disabled="_isSuccessCompleted" />
+                </MudItem>
+            </MudGrid>
+
+            <!-- BUTTONS -->
+            <div class="d-flex justify-end gap-3 mt-6">
+                @if (!_isSuccessCompleted)
+                {
+                    <MudButton ButtonType="ButtonType.Button" Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" Class="px-6"
+                               Disabled="@_isSaving" OnClick="HandleValidSubmitAsync">
+                        @if (_isSaving)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+                        }
+                        else
+                        {
+                            <text>@(!string.IsNullOrEmpty(id) ? "Update Sale" : LangService.GetString("Sale_SaveButton"))</text>
+                        }
+                    </MudButton>
+                }
+                else
+                {
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" Disabled="true" Size="Size.Large" Class="px-6">
+                        @LangService.GetString("Sale_SaveButton")
+                    </MudButton>
+                }
+
+                <MudButton Variant="Variant.Outlined" Color="Color.Secondary" Size="Size.Large" OnClick="PrintVoucher"
+                           Disabled="!_isSuccessCompleted">
+                    Print Voucher
+                </MudButton>
+
+                <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Large" OnClick="FinishTransaction"
+                           Disabled="!_isSuccessCompleted" Class="px-6">
+                    Finish
+                </MudButton>
+            </div>
+
+        </EditForm>
+    </MudPaper>
+</MudContainer>
+
+@code {
+    [Parameter][SupplyParameterFromQuery] public string? id { get; set; }
+
+    private string _currentVoucherNumber = string.Empty;
+    private bool _isSaving = false;
+    private bool _isSuccessCompleted = false;
+
+    private RubberSaleModel _model = new()
+    {
+        source_type = "Warehouse"
+    };
+
+    private List<StockSourceItem> _sourceItems = new();
+    private decimal _availableQuantity = 0m;
+    private List<Contact> _buyers = new();
+    private List<RubberTypeModel> _rubberTypes = new();
+    private List<WalletModel> _wallets = new();
+
+    private decimal _calculatedTotalAmount => _model.price_per_unit * _model.weight;
+
+    protected override async Task OnInitializedAsync()
+    {
+        LangService.OnLanguageChanged += StateHasChanged;
+        await LoadInitialDataAsync();
+    }
+
+    public void Dispose() => LangService.OnLanguageChanged -= StateHasChanged;
+
+    private async Task LoadInitialDataAsync()
+    {
+        await LoadDropdownsAsync();
+
+        if (!string.IsNullOrEmpty(id))
+        {
+            // Edit လုပ်ရန် ဝင်လာပါက မူလဒေတာများကို ဆွဲထုတ်ပြီး Form တွင် ဖြည့်မည်
+            await LoadExistingSaleDataAsync(id);
+        }
+        else
+        {
+            _currentVoucherNumber = await GenerateVoucherNumberAsync("SAL");
+        }
+    }
+
+    private async Task LoadExistingSaleDataAsync(string saleId)
+    {
+        try
+        {
+            var txList = await Http.GetFromJsonAsync<List<TransactionFullModel>>($"rest/v1/transactions?id=eq.{saleId}&select=*");
+            if (txList != null && txList.Any())
+            {
+                var tx = txList.First();
+                _currentVoucherNumber = tx.voucher_number ?? "SAL-VOUCHER";
+                _model.buyer_id = tx.contact_id;
+                _model.rubber_type_id = tx.rubber_type_id;
+                _model.wallet_id = tx.wallet_id ?? "";
+                _model.weight = tx.quantity;
+                _model.price_per_unit = tx.agreed_price;
+                _model.actual_paid = tx.paid_amount;
+
+                // Description မှ source_type ကို ခန့်မှန်းဖတ်ရှုခြင်း (သို့မဟုတ် Default Warehouse)
+                if (!string.IsNullOrEmpty(tx.description) && tx.description.Contains("TruckStock"))
+                    _model.source_type = "TruckStock";
+                else if (!string.IsNullOrEmpty(tx.description) && tx.description.Contains("TempStock"))
+                    _model.source_type = "TempStock";
+                else
+                    _model.source_type = "Warehouse";
+
+                await LoadSourceItemsAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading sale for edit: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task LoadDropdownsAsync()
+    {
+        try
+        {
+            var allContacts = await Http.GetFromJsonAsync<List<Contact>>("rest/v1/contacts?select=*") ?? new();
+            _buyers = allContacts.Where(c => c.ContactType == "Buyer").ToList();
+
+            _rubberTypes = await Http.GetFromJsonAsync<List<RubberTypeModel>>("rest/v1/rubber_types?select=*") ?? new();
+            _wallets = await Http.GetFromJsonAsync<List<WalletModel>>("rest/v1/wallets?select=*") ?? new();
+
+            if (string.IsNullOrEmpty(id))
+            {
+                await LoadSourceItemsAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading data: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task LoadSourceItemsAsync()
+    {
+        _sourceItems.Clear();
+        if (string.IsNullOrEmpty(id))
+        {
+            _availableQuantity = 0m;
+            _model.source_id = string.Empty;
+            _model.rubber_type_id = string.Empty;
+        }
+
+        try
+        {
+            if (_model.source_type == "Warehouse")
+            {
+                var batches = await Http.GetFromJsonAsync<List<WarehouseBatchStockModel>>("rest/v1/warehouse_batches?status=eq.Active&select=id,batch_number,total_weight,rubber_type_id") ?? new();
+                foreach (var b in batches)
+                {
+                    _sourceItems.Add(new StockSourceItem { Id = b.id, DisplayName = $"Batch: {b.batch_number}", AvailableQuantity = b.total_weight, RubberTypeId = b.rubber_type_id });
+                }
+            }
+            else if (_model.source_type == "TruckStock")
+            {
+                var trucks = await Http.GetFromJsonAsync<List<TruckStockModel>>("rest/v1/truck_stocks?select=id,quantity,rubber_type_id,vehicle_id&status=eq.Active") ?? new();
+                foreach (var t in trucks)
+                {
+                    _sourceItems.Add(new StockSourceItem { Id = t.id, DisplayName = $"Truck ID: {t.vehicle_id}", AvailableQuantity = t.quantity, RubberTypeId = t.rubber_type_id });
+                }
+            }
+            else if (_model.source_type == "TempStock")
+            {
+                var temps = await Http.GetFromJsonAsync<List<TempStockModel>>("rest/v1/temp_stocks?select=id,net_weight,rubber_type_id,source_type&status=eq.Pending") ?? new();
+                foreach (var tp in temps)
+                {
+                    _sourceItems.Add(new StockSourceItem { Id = tp.id, DisplayName = $"Temp Stock ({tp.source_type})", AvailableQuantity = tp.net_weight, RubberTypeId = tp.rubber_type_id });
+                }
+            }
+
+            // အကယ်၍ Edit ဖြစ်နေလျှင် source_id နှင့် available quantity ကို ချိန်ညှိပေးမည်
+            if (!string.IsNullOrEmpty(id) && _sourceItems.Any() && string.IsNullOrEmpty(_model.source_id))
+            {
+                var match = _sourceItems.FirstOrDefault(s => s.RubberTypeId == _model.rubber_type_id);
+                if (match != null)
+                {
+                    _model.source_id = match.Id;
+                    _availableQuantity = match.AvailableQuantity;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading stock source: {ex.Message}", Severity.Warning);
+        }
+    }
+
+    private async void OnSourceTypeChanged()
+    {
+        await LoadSourceItemsAsync();
+        StateHasChanged();
+    }
+
+    private void OnSourceItemChanged(IEnumerable<string> values)
+    {
+        var selectedSourceId = values.FirstOrDefault();
+        if (!string.IsNullOrEmpty(selectedSourceId))
+        {
+            _model.source_id = selectedSourceId;
+            var matchedItem = _sourceItems.FirstOrDefault(s => s.Id == selectedSourceId);
+            if (matchedItem != null)
+            {
+                _availableQuantity = matchedItem.AvailableQuantity;
+                if (string.IsNullOrEmpty(_model.rubber_type_id))
+                {
+                    _model.rubber_type_id = matchedItem.RubberTypeId;
+                }
+            }
+        }
+        else
+        {
+            _availableQuantity = 0m;
+        }
+        StateHasChanged();
+    }
+
+    private void OnRubberTypeSelected(IEnumerable<string> values)
+    {
+        var selectedRubberTypeId = values.FirstOrDefault();
+        if (!string.IsNullOrEmpty(selectedRubberTypeId))
+        {
+            _model.rubber_type_id = selectedRubberTypeId;
+            var matchedItem = _sourceItems.FirstOrDefault(s => s.Id == _model.source_id && s.RubberTypeId == selectedRubberTypeId);
+            if (matchedItem != null)
+            {
+                _availableQuantity = matchedItem.AvailableQuantity;
+            }
+            else
+            {
+                _availableQuantity = 0m;
+            }
+        }
+        else
+        {
+            _availableQuantity = 0m;
+        }
+        StateHasChanged();
+    }
+
+    private void OnWeightChanged(decimal value)
+    {
+        _model.weight = value;
+        _model.actual_paid = _calculatedTotalAmount;
+        StateHasChanged();
+    }
+
+    private void OnPriceChanged(decimal value)
+    {
+        _model.price_per_unit = value;
+        _model.actual_paid = _calculatedTotalAmount;
+        StateHasChanged();
+    }
+
+    private async Task HandleValidSubmitAsync()
+    {
+        if (_model.weight > _availableQuantity)
+        {
+            bool? result = await DialogService.ShowMessageBoxAsync(
+                LangService.GetString("Sale_QtyWarningTitle"),
+                LangService.GetString("Sale_QtyWarningMsg"),
+                yesText: "သေချာပါသည် (Confirm)", cancelText: "မလုပ်ပါ (Cancel)");
+
+            if (result != true) return;
+        }
+
+        await SaveSaleAsync();
+    }
+
+    private async Task SaveSaleAsync()
+    {
+        _isSaving = true;
+        try
+        {
+            // အကယ်၍ Edit ဖြစ်နေလျှင် မူလဟောင်းကို ဖျက်ဆီးပြီးမှ အသစ်ပြန်သွင်းမည် (Delete old first if editing)
+            if (!string.IsNullOrEmpty(id))
+            {
+                await DeleteOldTransactionEffectsAsync(id);
+            }
+
+            var ownerId = await UserContext.GetCurrentOwnerIdAsync();
+            var staffId = await UserContext.GetCurrentStaffIdAsync();
+
+            var salePayload = new
+            {
+                owner_id = ownerId,
+                staff_id = staffId,
+                contact_id = _model.buyer_id,
+                rubber_type_id = _model.rubber_type_id,
+                wallet_id = _model.wallet_id,
+                transaction_type = "Sale",
+                voucher_number = _currentVoucherNumber,
+                total_amount = _calculatedTotalAmount,
+                agreed_price = _model.price_per_unit,
+                quantity = _model.weight,
+                paid_amount = _model.actual_paid,
+                description = $"Rubber Sale from {_model.source_type} (Voucher: {_currentVoucherNumber})"
+            };
+
+            var requestMessage = new HttpRequestMessage(HttpMethod.Post, "rest/v1/transactions")
+            {
+                Content = JsonContent.Create(salePayload)
+            };
+            requestMessage.Headers.Add("Prefer", "return=representation");
+
+            var txResponse = await Http.SendAsync(requestMessage);
+
+            if (txResponse.IsSuccessStatusCode)
+            {
+                var createdTransactions = await txResponse.Content.ReadFromJsonAsync<List<TransactionResponseModel>>();
+                string? generatedTransactionId = createdTransactions?.FirstOrDefault()?.id;
+
+                var voucherPayload = new
+                {
+                    owner_id = ownerId,
+                    staff_id = staffId,
+                    voucher_number = _currentVoucherNumber,
+                    voucher_type = "Sale",
+                    reference_id = generatedTransactionId
+                };
+                await Http.PostAsJsonAsync("rest/v1/vouchers", voucherPayload);
+
+                // Ledger Entry
+                if (!string.IsNullOrEmpty(_model.buyer_id))
+                {
+                    decimal previousBalance = await GetLatestBalanceForContactAsync(_model.buyer_id);
+                    decimal debitVal = _calculatedTotalAmount;
+                    decimal creditVal = _model.actual_paid;
+                    decimal currentRunningBalance = previousBalance + debitVal - creditVal;
+                    string entryType = debitVal >= creditVal ? "Debit" : "Credit";
+
+                    var ledgerPayload = new
+                    {
+                        owner_id = ownerId,
+                        staff_id = string.IsNullOrEmpty(staffId) ? null : staffId,
+                        contact_id = _model.buyer_id,
+                        transaction_id = generatedTransactionId,
+                        voucher_number = _currentVoucherNumber,
+                        entry_type = entryType,
+                        debit_amount = debitVal,
+                        credit_amount = creditVal,
+                        balance_after = currentRunningBalance,
+                        balance_impact = debitVal >= creditVal ? "Increase" : "Decrease",
+                        ref_type = "RubberSale",
+                        description = $"Voucher {_currentVoucherNumber} - ရာဘာအရောင်း (တန်ဖိုး: {debitVal:N0}, လက်ခံငွေ: {creditVal:N0})"
+                    };
+
+                    await Http.PostAsJsonAsync("rest/v1/ledgers", ledgerPayload);
+                }
+
+                // Wallet Balance Update
+                if (!string.IsNullOrEmpty(_model.wallet_id) && _model.actual_paid > 0)
+                {
+                    var selectedWallet = _wallets.FirstOrDefault(w => w.Id == _model.wallet_id);
+                    if (selectedWallet != null)
+                    {
+                        decimal newBalance = selectedWallet.Balance + _model.actual_paid;
+                        await Http.PatchAsync($"rest/v1/wallets?id=eq.{_model.wallet_id}", JsonContent.Create(new { balance = newBalance }));
+                    }
+                }
+
+                // Deduct Stock
+                await DeductStockSourceAsync();
+
+                Snackbar.Add(!string.IsNullOrEmpty(id) ? "Sale updated successfully." : LangService.GetString("Sale_SaveSuccess"), Severity.Success);
+                _isSuccessCompleted = true;
+
+                if (!string.IsNullOrEmpty(id))
+                {
+                    Navigation.NavigateTo("/rubber-sales-list");
+                }
+            }
+            else
+            {
+                var err = await txResponse.Content.ReadAsStringAsync();
+                Snackbar.Add($"Failed to save sale: {err}", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Exception: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private async Task DeleteOldTransactionEffectsAsync(string oldTxId)
+    {
+        try
+        {
+            // 1. Wallet Balance Restore (ရောင်းငွေဖြစ်므로 နှုတ်ပေးမည်)
+            var txList = await Http.GetFromJsonAsync<List<TransactionDetailModel>>($"rest/v1/transactions?id=eq.{oldTxId}&select=wallet_id,paid_amount");
+            if (txList != null && txList.Any())
+            {
+                var tx = txList.First();
+                if (!string.IsNullOrEmpty(tx.wallet_id) && tx.paid_amount > 0)
+                {
+                    var wallets = await Http.GetFromJsonAsync<List<WalletModel>>($"rest/v1/wallets?id=eq.{tx.wallet_id}");
+                    if (wallets != null && wallets.Any())
+                    {
+                        var wallet = wallets.First();
+                        decimal restoredBalance = wallet.Balance - tx.paid_amount;
+                        await Http.PatchAsync($"rest/v1/wallets?id=eq.{tx.wallet_id}", JsonContent.Create(new { balance = restoredBalance }));
+                    }
+                }
+            }
+
+            // 2. Delete old related records
+            await Http.DeleteAsync($"rest/v1/ledgers?transaction_id=eq.{oldTxId}");
+            await Http.DeleteAsync($"rest/v1/vouchers?reference_id=eq.{oldTxId}");
+            await Http.DeleteAsync($"rest/v1/transactions?id=eq.{oldTxId}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error cleaning old tx: {ex.Message}");
+        }
+    }
+
+    private async Task DeductStockSourceAsync()
+    {
+        if (_model.source_type == "Warehouse")
+        {
+            var batch = await Http.GetFromJsonAsync<List<WarehouseBatchStockModel>>($"rest/v1/warehouse_batches?id=eq.{_model.source_id}&select=total_weight");
+            if (batch != null && batch.Any())
+            {
+                decimal currentWeight = batch.First().total_weight;
+                decimal remainingWeight = Math.Max(0m, currentWeight - _model.weight);
+                string newStatus = remainingWeight <= 0 ? "Completed" : "Active";
+
+                await Http.PatchAsync($"rest/v1/warehouse_batches?id=eq.{_model.source_id}",
+                    JsonContent.Create(new { total_weight = remainingWeight, status = newStatus }));
+            }
+        }
+        else if (_model.source_type == "TruckStock")
+        {
+            var truck = await Http.GetFromJsonAsync<List<TruckStockModel>>($"rest/v1/truck_stocks?id=eq.{_model.source_id}&select=quantity");
+            if (truck != null && truck.Any())
+            {
+                decimal currentQty = truck.First().quantity;
+                decimal remainingQty = Math.Max(0m, currentQty - _model.weight);
+                string newStatus = remainingQty <= 0 ? "Completed" : "Active";
+
+                await Http.PatchAsync($"rest/v1/truck_stocks?id=eq.{_model.source_id}",
+                    JsonContent.Create(new { quantity = remainingQty, status = newStatus }));
+            }
+        }
+        else if (_model.source_type == "TempStock")
+        {
+            var temp = await Http.GetFromJsonAsync<List<TempStockModel>>($"rest/v1/temp_stocks?id=eq.{_model.source_id}&select=net_weight");
+            if (temp != null && temp.Any())
+            {
+                decimal currentWeight = temp.First().net_weight;
+                decimal remainingWeight = Math.Max(0m, currentWeight - _model.weight);
+                string newStatus = remainingWeight <= 0 ? "Completed" : "Pending";
+
+                await Http.PatchAsync($"rest/v1/temp_stocks?id=eq.{_model.source_id}",
+                    JsonContent.Create(new { net_weight = remainingWeight, status = newStatus }));
+            }
+        }
+    }
+
+    private async Task<decimal> GetLatestBalanceForContactAsync(string contactId)
+    {
+        try
+        {
+            var response = await Http.GetFromJsonAsync<List<LedgerItemModel>>(
+                $"rest/v1/ledgers?contact_id=eq.{contactId}&select=balance_after&order=created_at.desc&limit=1");
+            if (response != null && response.Any()) return response.First().balance_after;
+        }
+        catch { }
+        return 0m;
+    }
+
+    private void PrintVoucher() => Snackbar.Add($"ဘောင်ချာအမှတ် {_currentVoucherNumber} ကို Print ထုတ်နေပါပြီ...", Severity.Info);
+
+    private async Task FinishTransaction()
+    {
+        _model = new RubberSaleModel { source_type = _model.source_type };
+        _availableQuantity = 0m;
+        _isSuccessCompleted = false;
+        _isSaving = false;
+        _currentVoucherNumber = await GenerateVoucherNumberAsync("SAL");
+        StateHasChanged();
+        Snackbar.Add("ဘောင်ချာအသစ်သို့ ပြောင်းလဲပြီးပါပြီ။", Severity.Info);
+    }
+
+    private async Task<string> GenerateVoucherNumberAsync(string prefix)
+    {
+        string dateStr = DateTime.Now.ToString("yyyyMMdd");
+        string searchPattern = $"{prefix}-{dateStr}-";
+        try
+        {
+            var transactions = await Http.GetFromJsonAsync<List<TransactionResponseModel>>(
+                $"rest/v1/transactions?voucher_number=like.{searchPattern}*&select=voucher_number");
+            int nextSeq = 1;
+            if (transactions != null && transactions.Any())
+            {
+                var maxSeq = transactions
+                    .Where(t => !string.IsNullOrEmpty(t.voucher_number) && t.voucher_number.Contains("-"))
+                    .Select(t =>
+                    {
+                        string part = t.voucher_number!.Substring(t.voucher_number.LastIndexOf('-') + 1);
+                        return int.TryParse(part, out int val) ? val : 0;
+                    })
+                    .DefaultIfEmpty(0)
+                    .Max();
+                nextSeq = maxSeq + 1;
+            }
+            return $"{prefix}-{dateStr}-{nextSeq:D3}";
+        }
+        catch
+        {
+            return $"{prefix}-{dateStr}-001";
+        }
+    }
+
+    // --- Models ---
+    private class RubberSaleModel
+    {
+        public string source_type { get; set; } = "Warehouse";
+        public string source_id { get; set; } = string.Empty;
+        public string buyer_id { get; set; } = string.Empty;
+        public string rubber_type_id { get; set; } = string.Empty;
+        public decimal price_per_unit { get; set; }
+        public decimal weight { get; set; }
+        public string wallet_id { get; set; } = string.Empty;
+        public decimal actual_paid { get; set; }
+    }
+
+    private class StockSourceItem
+    {
+        public string Id { get; set; } = string.Empty;
+        public string DisplayName { get; set; } = string.Empty;
+        public decimal AvailableQuantity { get; set; }
+        public string RubberTypeId { get; set; } = string.Empty;
+    }
+
+    private class TransactionFullModel
+    {
+        public string id { get; set; } = string.Empty;
+        public string? voucher_number { get; set; }
+        public string contact_id { get; set; } = string.Empty;
+        public string rubber_type_id { get; set; } = string.Empty;
+        public string? wallet_id { get; set; }
+        public decimal quantity { get; set; }
+        public decimal agreed_price { get; set; }
+        public decimal paid_amount { get; set; }
+        public string? description { get; set; }
+    }
+
+    private class WarehouseBatchStockModel { public string id { get; set; } = string.Empty; public string batch_number { get; set; } = string.Empty; public decimal total_weight { get; set; } public string rubber_type_id { get; set; } = string.Empty; }
+    private class TruckStockModel { public string id { get; set; } = string.Empty; public string vehicle_id { get; set; } = string.Empty; public decimal quantity { get; set; } public string rubber_type_id { get; set; } = string.Empty; }
+    private class TempStockModel { public string id { get; set; } = string.Empty; public string source_type { get; set; } = string.Empty; public decimal net_weight { get; set; } public string rubber_type_id { get; set; } = string.Empty; }
+    private class TransactionResponseModel { public string id { get; set; } = string.Empty; public string? voucher_number { get; set; } }
+    private class TransactionDetailModel { public string? wallet_id { get; set; } public decimal paid_amount { get; set; } }
+    private class LedgerItemModel { public decimal balance_after { get; set; } }
+}

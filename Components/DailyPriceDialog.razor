@@ -1,0 +1,149 @@
+﻿@using MudBlazor
+@using RubberTradingSystem.Models
+@using RubberTradingSystem.Services
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject LanguageService LangService
+@inject Services.UserContextService UserContext
+@implements IDisposable
+
+
+<MudDialog>
+    <DialogContent>
+        <EditForm Model="@Model" OnValidSubmit="SaveAsync">
+            <DataAnnotationsValidator />
+
+            <!-- ရာဘာအမျိုးအစားများကို Dropdown ဖြင့် ရွေးချယ်ရန် MudSelect သုံးခြင်း -->
+            <MudSelect T="string"
+                       @bind-Value="Model.rubber_type_id"
+                       Label="@LangService.GetString("Price_TypeLabel")"
+                       Variant="Variant.Outlined"
+                       Class="mb-4"
+                       Required="true">
+                @if (_rubberTypes != null)
+                {
+                    @foreach (var type in _rubberTypes)
+                    {
+                        <!-- Value သည် type.id (Guid/String) ဖြစ်ရပါမည် -->
+                        <MudSelectItem Value="@type.id">@type.name (@type.grade)</MudSelectItem>
+                    }
+                }
+            </MudSelect>
+
+            <MudNumericField @bind-Value="Model.price_per_unit"
+                             Label="@LangService.GetString("Price_ValueLabel")"
+                             Variant="Variant.Outlined"
+                             Class="mb-4"
+                             Min="0" />
+
+            <MudDatePicker @bind-Date="_effectiveDate"
+                           Label="@LangService.GetString("Price_DateLabel")"
+                           Variant="Variant.Outlined"
+                           Class="mb-4" />
+
+            <div class="d-flex justify-end">
+                <MudButton OnClick="Cancel" Variant="Variant.Text" Class="mr-2">
+                    @LangService.GetString("Rubber_Cancel")
+                </MudButton>
+                <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary">
+                    @(IsNew ? LangService.GetString("Rubber_Save") : LangService.GetString("Rubber_Update"))
+                </MudButton>
+            </div>
+        </EditForm>
+    </DialogContent>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public DailyPriceModel Model { get; set; } = new();
+    [Parameter] public bool IsNew { get; set; }
+
+    private List<RubberTypeModel> _rubberTypes = new();
+
+    private DateTime? _effectiveDate
+    {
+        get => Model.effective_date;
+        set => Model.effective_date = value ?? DateTime.Today;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        LangService.OnLanguageChanged += StateHasChanged;
+        await LoadRubberTypesAsync();
+    }
+
+    public void Dispose() => LangService.OnLanguageChanged -= StateHasChanged;
+
+    // Supabase မှ rubber_types စာရင်းများကို ဆွဲထုတ်ခြင်း
+    private async Task LoadRubberTypesAsync()
+    {
+        try
+        {
+            _rubberTypes = await Http.GetFromJsonAsync<List<RubberTypeModel>>("rest/v1/rubber_types?select=*") ?? new();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading rubber types: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        try
+        {
+            var ownerId = await UserContext.GetCurrentOwnerIdAsync();
+            var staffId = await UserContext.GetCurrentStaffIdAsync();
+
+            if (IsNew)
+            {
+                var newRecord = new
+                {
+                    owner_id = ownerId,
+                    staff_id = staffId,
+                    rubber_type_id = Model.rubber_type_id, // 👈 ID ကို ထည့်ပို့ရန်
+                    price_per_unit = Model.price_per_unit,
+                    effective_date = Model.effective_date.ToString("yyyy-MM-dd")
+                };
+
+                var response = await Http.PostAsJsonAsync("rest/v1/daily_prices", newRecord);
+                if (response.IsSuccessStatusCode)
+                {
+                    Snackbar.Add(LangService.GetString("Price_SaveSuccess"), Severity.Success);
+                    MudDialog.Close(DialogResult.Ok(true));
+                }
+                else
+                {
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    Snackbar.Add(@"Supabase Error: {errorContent}", Severity.Error);
+                }
+            }
+            else
+            {
+                var updateRecord = new
+                {
+                    rubber_type_id = Model.rubber_type_id,
+                    price_per_unit = Model.price_per_unit,
+                    effective_date = Model.effective_date.ToString("yyyy-MM-dd")
+                };
+
+                var response = await Http.PatchAsync($"rest/v1/daily_prices?id=eq.{Model.id}", JsonContent.Create(updateRecord));
+                if (response.IsSuccessStatusCode)
+                {
+                    Snackbar.Add(LangService.GetString("Price_UpdateSuccess"), Severity.Success);
+                    MudDialog.Close(DialogResult.Ok(true));
+                }
+                else
+                {
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    Snackbar.Add($"Supabase Error: {errorContent}", Severity.Error);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Exception: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

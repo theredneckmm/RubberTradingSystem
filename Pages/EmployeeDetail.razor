@@ -1,0 +1,118 @@
+﻿@page "/employee/{Id}"
+@using MudBlazor
+@using RubberTradingSystem.Models
+@using RubberTradingSystem.Services
+@inject HttpClient Http
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+@inject LanguageService LangService
+@implements IDisposable
+
+<MudContainer MaxWidth="MaxWidth.Medium" Class="mt-4">
+    <!-- Back Button -->
+    <MudButton Variant="Variant.Outlined"
+               StartIcon="@Icons.Material.Filled.ArrowBack"
+               Color="Color.Primary"
+               OnClick="GoBack"
+               Class="mb-4">
+        @LangService.GetString("Emp_BackToList")
+    </MudButton>
+
+    @if (_isLoading)
+    {
+        <div class="d-flex justify-center align-center" style="height: 300px;">
+            <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
+        </div>
+    }
+    else if (_employee == null)
+    {
+        <MudAlert Severity="Severity.Warning">@LangService.GetString("Emp_NotFound")</MudAlert>
+    }
+    else
+    {
+        <MudPaper Elevation="3" Class="pa-6">
+            <!-- Profile Header -->
+            <div class="d-flex align-center mb-6">
+                <MudAvatar Color="Color.Primary" Size="Size.Large" Class="mr-4">
+                    <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Large" />
+                </MudAvatar>
+                <div>
+                    <MudText Typo="Typo.h5"><b>@_employee.full_name</b></MudText>
+                    <MudText Typo="Typo.subtitle1" Color="Color.Secondary">@_employee.position</MudText>
+                </div>
+                <MudSpacer />
+                <MudChip T="string" Color="@(_employee.status == "Active" ? Color.Success : Color.Error)" Size="Size.Medium">
+                    @_employee.status
+                </MudChip>
+            </div>
+
+            <MudDivider Class="mb-4" />
+
+            <!-- Profile Details Grid -->
+            <MudGrid Spacing="3">
+                <MudItem xs="12" sm="6">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">@LangService.GetString("Emp_DetailSalary")</MudText>
+                    <MudText Typo="Typo.body1"><b>@_employee.salary.ToString("N0") MMK</b></MudText>
+                </MudItem>
+
+                <MudItem xs="12" sm="6">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">@LangService.GetString("Emp_DetailPhone")</MudText>
+                    <MudText Typo="Typo.body1"><b>@(string.IsNullOrEmpty(_employee.phone) ? "-" : _employee.phone)</b></MudText>
+                </MudItem>
+
+                <MudItem xs="12" sm="6">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">@LangService.GetString("Emp_DetailHireDate")</MudText>
+                    <MudText Typo="Typo.body1"><b>@_employee.hire_date.ToString("dd/MM/yyyy")</b></MudText>
+                </MudItem>
+
+                <MudItem xs="12" sm="6">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">@LangService.GetString("Emp_DetailStatus")</MudText>
+                    <MudText Typo="Typo.body1"><b>@_employee.status</b></MudText>
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">@LangService.GetString("Emp_DetailAddress")</MudText>
+                    <MudText Typo="Typo.body1"><b>@(string.IsNullOrEmpty(_employee.address) ? "-" : _employee.address)</b></MudText>
+                </MudItem>
+            </MudGrid>
+        </MudPaper>
+    }
+</MudContainer>
+
+@code {
+    [Parameter] public string Id { get; set; } = string.Empty;
+    private EmployeeModel? _employee;
+    private bool _isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        LangService.OnLanguageChanged += StateHasChanged;
+        await LoadEmployeeDetailAsync();
+    }
+
+    public void Dispose() => LangService.OnLanguageChanged -= StateHasChanged;
+
+    private async Task LoadEmployeeDetailAsync()
+    {
+        try
+        {
+            _isLoading = true;
+            // Supabase REST API မှ id ဖြင့် ဝန်ထမ်းအချက်အလက်ကို တစ်ဦးချင်း လှမ်းယူခြင်း
+            var list = await Http.GetFromJsonAsync<List<EmployeeModel>>($"rest/v1/employees?id=eq.{Id}&select=*");
+            if (list != null && list.Count > 0)
+            {
+                _employee = list[0];
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void GoBack() => Nav.NavigateTo("/employees");
+}

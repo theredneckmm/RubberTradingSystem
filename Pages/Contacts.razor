@@ -1,0 +1,265 @@
+﻿@page "/contacts"
+@using MudBlazor
+@using RubberTradingSystem.Models
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+@inject IDialogService DialogService
+@inject RubberTradingSystem.Services.LanguageService Lang
+@implements IDisposable
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+    <MudText Typo="Typo.h5" Color="Color.Primary" Class="mb-4 fw-bold">@Lang.GetString("ContactsTitle")</MudText>
+
+    @if (_isLoading)
+    {
+        <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="mb-4" />
+    }
+
+    <!-- Contacts Table -->
+    <MudTable Items="@_contacts"
+              Dense="true"
+              Hover="true"
+              Bordered="true"
+              Striped="true"
+              Filter="new Func<Contact,bool>(FilterFunc)"
+              @bind-SelectedItem="_selectedContact"
+              RowClass="cursor-pointer"
+              RowClassFunc="@SelectedRowClassFunc"
+              Elevation="2">
+
+        <ToolBarContent>
+            <MudSpacer />
+            <MudTextField @bind-Value="_searchString"
+                          Placeholder="@Lang.GetString("SearchContact")"
+                          Immediate="true"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search"
+                          IconSize="Size.Medium"
+                          Class="mt-0"
+                          Clearable="true">
+            </MudTextField>
+        </ToolBarContent>
+
+        <HeaderContent>
+            <MudTh>@Lang.GetString("Col_Name")</MudTh>
+            <MudTh>@Lang.GetString("Col_Phone")</MudTh>
+            <MudTh>@Lang.GetString("Col_Type")</MudTh>
+            <MudTh>ဘဏ်/KPay</MudTh>
+            <MudTh Style="text-align:right">@Lang.GetString("Col_Advance")</MudTh>
+        </HeaderContent>
+
+        <RowTemplate>
+            <MudTd DataLabel="@Lang.GetString("Col_Name")">
+                <MudText Class="fw-bold">@context.Name</MudText>
+            </MudTd>
+
+            <MudTd DataLabel="@Lang.GetString("Col_Phone")">
+                @context.Phone
+            </MudTd>
+
+            <MudTd DataLabel="@Lang.GetString("Col_Type")">
+                @if (context.ContactType == "Supplier")
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Success">ခြံရှင်/ပွဲစား</MudChip>
+                }
+                else if (context.ContactType == "Buyer")
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Info">ဝယ်ယူသူ/ဒိုင်</MudChip>
+                }
+                else
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Default">အထွေထွေ</MudChip>
+                }
+            </MudTd>
+
+            <MudTd DataLabel="ဘဏ်/KPay">
+                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                    @(string.IsNullOrWhiteSpace(context.BankInfo) ? "-" : context.BankInfo)
+                </MudText>
+            </MudTd>
+
+            <MudTd DataLabel="@Lang.GetString("Col_Advance")" Style="text-align:right">
+                @if (context.ContactType == "Supplier")
+                {
+                    <MudText Color="@(context.AdvanceBalance > 0 ? Color.Error : Color.Default)" Class="fw-bold">
+                        @context.AdvanceBalance.ToString("N0")
+                    </MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">ကြိုပေးငွေ</MudText>
+                }
+                else if (context.ContactType == "Buyer")
+                {
+                    <MudText Color="@(context.ReceivableBalance > 0 ? Color.Success : Color.Default)" Class="fw-bold">
+                        @context.ReceivableBalance.ToString("N0")
+                    </MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">ရရန်ရှိငွေ</MudText>
+                }
+                else
+                {
+                    <MudText>-</MudText>
+                }
+            </MudTd>
+        </RowTemplate>
+
+        <PagerContent>
+            <MudTablePager PageSizeOptions="new int[] { 10, 25, 50, 100 }" />
+        </PagerContent>
+    </MudTable>
+
+    <!-- Bottom Actions & Filter Section -->
+    <MudPaper Class="d-flex align-center justify-space-between pa-4 mt-4" Elevation="2">
+        <!-- ဘယ်ဘက်ခြမ်းတွင် Filter (ListBox) ထည့်သွင်းထားခြင်း -->
+        <div style="width: 250px;">
+            <MudSelect T="string" @bind-Value="_selectedFilterType" Variant="Variant.Outlined" Dense="true" Margin="Margin.Dense">
+                <MudSelectItem Value="@("All")">@Lang.GetString("Filter_All")</MudSelectItem>
+                <MudSelectItem Value="@("Supplier")">@Lang.GetString("Filter_Suppliers")</MudSelectItem>
+                <MudSelectItem Value="@("Buyer")">@Lang.GetString("Filter_Buyers")</MudSelectItem>
+                <MudSelectItem Value="@("General")">@Lang.GetString("Filter_General")</MudSelectItem>
+            </MudSelect>
+        </div>
+
+        <!-- ညာဘက်ခြမ်းတွင် အဓိက Action ခလုတ်များ -->
+        <div class="d-flex">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+                       Href="/contacts/add" Class="mr-2">
+                @Lang.GetString("Btn_Add")
+            </MudButton>
+
+            <MudButton Variant="Variant.Filled" Color="Color.Warning" StartIcon="@Icons.Material.Filled.Edit"
+                       Disabled="@(_selectedContact == null)"
+                       OnClick="GoToEditPage"
+                       Class="mr-2">
+                @Lang.GetString("Btn_Edit")
+            </MudButton>
+
+            <MudButton Variant="Variant.Filled" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete"
+                       Disabled="@(_selectedContact == null)" OnClick="DeleteContactAsync">
+                @Lang.GetString("Btn_Delete")
+            </MudButton>
+        </div>
+    </MudPaper>
+</MudContainer>
+
+<style>
+    .selected-row-color {
+        background-color: var(--mud-palette-action-default-hover) !important;
+    }
+</style>
+
+@code {
+    private bool _isLoading = true;
+    private List<Contact> _contacts = new();
+    private Contact? _selectedContact;
+    private string _searchString = "";
+    private string _selectedFilterType = "All"; // Default အနေဖြင့် အားလုံးပြမည်
+
+    protected override async Task OnInitializedAsync()
+    {
+        Lang.OnLanguageChanged += HandleLanguageChanged;
+        await LoadContactsAsync();
+    }
+
+    private void HandleLanguageChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    private async Task LoadContactsAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            var result = await Http.GetFromJsonAsync<List<Contact>>("rest/v1/contacts?select=*");
+            _contacts = result ?? new List<Contact>();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"{Lang.GetString("Msg_LoadError")} {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    // Search နှင့် Filter နှစ်ခုစလုံးကို ပေါင်းစပ်စစ်ဆေးပေးသော Logic
+    private bool FilterFunc(Contact contact)
+    {
+        if (contact == null) return false;
+
+        // ၁။ Filter Type အလိုက် စစ်ဆေးခြင်း (All မဟုတ်လျှင် သက်ဆိုင်ရာ အမျိုးအစားကိုသာ စစ်မည်)
+        if (_selectedFilterType != "All" && contact.ContactType != _selectedFilterType)
+        {
+            return false;
+        }
+
+        // ၂။ Search String အလိုက် စစ်ဆေးခြင်း
+        if (string.IsNullOrWhiteSpace(_searchString)) return true;
+
+        bool nameMatch = !string.IsNullOrEmpty(contact.Name) && contact.Name.Contains(_searchString, StringComparison.OrdinalIgnoreCase);
+        bool phoneMatch = !string.IsNullOrEmpty(contact.Phone) && contact.Phone.Contains(_searchString, StringComparison.OrdinalIgnoreCase);
+
+        return nameMatch || phoneMatch;
+    }
+
+    private string SelectedRowClassFunc(Contact contact, int rowNumber)
+    {
+        if (contact == null) return string.Empty;
+        if (_selectedContact != null && _selectedContact.Id == contact.Id)
+            return "selected-row-color";
+        return string.Empty;
+    }
+
+    private void GoToEditPage()
+    {
+        if (_selectedContact != null)
+            Navigation.NavigateTo($"/contacts/edit/{_selectedContact.Id}");
+    }
+
+    private async Task DeleteContactAsync()
+    {
+        if (_selectedContact == null) return;
+
+        string confirmMsg = string.Format(Lang.GetString("Msg_DeleteConfirm"), _selectedContact.Name);
+
+        bool? result = await DialogService.ShowMessageBoxAsync(
+            Lang.GetString("Msg_Warning"),
+            confirmMsg,
+            yesText: Lang.GetString("Btn_YesDelete"),
+            cancelText: Lang.GetString("Btn_Cancel")
+        );
+
+        if (result == true)
+        {
+            try
+            {
+                var request = new HttpRequestMessage(HttpMethod.Delete, $"rest/v1/contacts?id=eq.{_selectedContact.Id}");
+                request.Headers.Add("Prefer", "return=minimal");
+
+                var response = await Http.SendAsync(request);
+
+                if (response.IsSuccessStatusCode || response.StatusCode == System.Net.HttpStatusCode.NoContent)
+                {
+                    Snackbar.Add(Lang.GetString("Msg_DelSuccess"), Severity.Success);
+                    _contacts.Remove(_selectedContact);
+                    _selectedContact = null;
+                    StateHasChanged();
+                }
+                else
+                {
+                    var error = await response.Content.ReadAsStringAsync();
+                    Snackbar.Add($"{Lang.GetString("Msg_Error")} {error}", Severity.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"{Lang.GetString("Msg_NetError")}{ex.Message}", Severity.Error);
+            }
+        }
+    }
+
+    public void Dispose()
+    {
+        Lang.OnLanguageChanged -= HandleLanguageChanged;
+    }
+}

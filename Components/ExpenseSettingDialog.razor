@@ -1,0 +1,141 @@
+﻿@using RubberTradingSystem.Models
+@using RubberTradingSystem.Services
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject LanguageService Lang
+@inject UserContextService UserContext
+
+<MudDialog>
+    <DialogContent>
+        <EditForm Model="@Model" OnValidSubmit="SaveAsync">
+            <DataAnnotationsValidator />
+
+            <!-- အမျိုးအစား ရွေးချယ်ရန် -->
+            <MudSelect T="string" @bind-Value="Model.SettingType"
+                       Label="@Lang.GetString("ExpSetting_TypeLabel")"
+                       Variant="Variant.Outlined"
+                       Class="mb-4"
+                       Required="true">
+                <MudSelectItem Value="@("Category")">@Lang.GetString("ExpSetting_CategoryOpt")</MudSelectItem>
+                <MudSelectItem Value="@("Title")">@Lang.GetString("ExpSetting_TitleOpt")</MudSelectItem>
+            </MudSelect>
+
+            <!-- အကယ်၍ Title ကို ရွေးမှသာ ဘယ် Category အောက်မှာလဲဆိုတာ ရွေးချယ်ခွင့်ပေးမည် -->
+            @if (Model.SettingType == "Title")
+            {
+                <MudSelect T="string" @bind-Value="Model.CategoryId"
+                           Label="@Lang.GetString("ExpSetting_ParentCategoryLabel")"
+                           Variant="Variant.Outlined"
+                           Class="mb-4"
+                           Required="true">
+                    @foreach (var cat in Categories)
+                    {
+                        <MudSelectItem Value="@cat.Id">@cat.SettingName</MudSelectItem>
+                    }
+                </MudSelect>
+            }
+
+            <!-- အမည်ထည့်ရန် -->
+            <MudTextField @bind-Value="Model.SettingName"
+                          Label="@Lang.GetString("ExpSetting_NameLabel")"
+                          Variant="Variant.Outlined"
+                          Class="mb-4"
+                          Required="true" />
+
+            <!-- ခလုတ်များ -->
+            <div class="d-flex justify-end gap-2">
+                <MudButton OnClick="Cancel" Variant="Variant.Text">
+                    @Lang.GetString("Btn_Cancel")
+                </MudButton>
+                <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Disabled="_isSaving">
+                    @(IsNew ? Lang.GetString("ExpSetting_AddBtn") : Lang.GetString("Btn_SaveChanges"))
+                </MudButton>
+            </div>
+        </EditForm>
+    </DialogContent>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public ExpenseSettingModel Model { get; set; } = new();
+    [Parameter] public bool IsNew { get; set; }
+    [Parameter] public List<ExpenseSettingModel> AllItems { get; set; } = new();
+
+    private List<ExpenseSettingModel> Categories => AllItems.Where(x => x.SettingType == "Category").ToList();
+    private bool _isSaving = false;
+
+    private async Task SaveAsync()
+    {
+        _isSaving = true;
+        try
+        {
+            string ownerId = await UserContext.GetCurrentOwnerIdAsync();
+            string staffId = await UserContext.GetCurrentStaffIdAsync();
+
+            if (string.IsNullOrEmpty(ownerId))
+            {
+                Snackbar.Add("User Session not found. Please login again.", Severity.Error);
+                return;
+            }
+
+            if (Model.SettingType == "Category")
+            {
+                Model.CategoryId = null;
+            }
+
+            if (IsNew)
+            {
+                var payload = new
+                {
+                    owner_id = ownerId,
+                    staff_id = string.IsNullOrEmpty(staffId) ? null : staffId,
+                    setting_type = Model.SettingType,
+                    setting_name = Model.SettingName,
+                    category_id = Model.CategoryId
+                };
+
+                var response = await Http.PostAsJsonAsync("rest/v1/expense_settings", payload);
+                if (response.IsSuccessStatusCode)
+                {
+                    Snackbar.Add(Lang.GetString("ExpSetting_SaveSuccess"), Severity.Success);
+                    MudDialog.Close(DialogResult.Ok(true));
+                }
+                else
+                {
+                    var err = await response.Content.ReadAsStringAsync();
+                    Snackbar.Add($"Failed to save: {err}", Severity.Error);
+                }
+            }
+            else
+            {
+                var payload = new
+                {
+                    setting_type = Model.SettingType,
+                    setting_name = Model.SettingName,
+                    category_id = Model.CategoryId
+                };
+
+                var response = await Http.PatchAsync($"rest/v1/expense_settings?id=eq.{Model.Id}", JsonContent.Create(payload));
+                if (response.IsSuccessStatusCode)
+                {
+                    Snackbar.Add(Lang.GetString("ExpSetting_UpdateSuccess"), Severity.Success);
+                    MudDialog.Close(DialogResult.Ok(true));
+                }
+                else
+                {
+                    Snackbar.Add("Failed to update.", Severity.Error);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

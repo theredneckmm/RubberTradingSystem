@@ -1,0 +1,146 @@
+﻿@page "/smoking-batches"
+@using MudBlazor
+@using RubberTradingSystem.Models
+@using RubberTradingSystem.Services
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@inject LanguageService LangService
+@implements IDisposable
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+    <div class="d-flex justify-between align-center mb-4">
+        <MudText Typo="Typo.h5" Color="Color.Primary">@LangService.GetString("Smoking_Title")</MudText>
+        <MudButton Variant="Variant.Filled" Color="Color.Success" StartIcon="@Icons.Material.Filled.Add"
+                   OnClick="OpenAddDialog">
+            @LangService.GetString("Smoking_NewBatch")
+        </MudButton>
+    </div>
+
+    <MudTable Items="@_items" Dense="true" Hover="true" Bordered="true" Striped="true" Elevation="2">
+        <HeaderContent>
+            <MudTh>@LangService.GetString("Smoking_BatchNo")</MudTh>
+            <MudTh>@LangService.GetString("Smoking_Status")</MudTh>
+            <MudTh>@LangService.GetString("Smoking_Warehouse")</MudTh>
+            <MudTh>@LangService.GetString("Smoking_Input")</MudTh>
+            <MudTh>@LangService.GetString("Smoking_Output")</MudTh>
+            <MudTh>@LangService.GetString("Smoking_Shrinkage")</MudTh>
+            <MudTh>@LangService.GetString("Smoking_Dates")</MudTh>
+            <MudTh Style="text-align: right;">Actions</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd><b>@context.batch_no</b></MudTd>
+            <MudTd>
+                <MudChip T="string" Color="@(context.status == "Completed" ? Color.Success : Color.Warning)" Size="Size.Small">
+                    @context.status
+                </MudChip>
+            </MudTd>
+            <MudTd>@context.warehouse_name</MudTd>
+            <MudTd>
+                @context.rubber_type_input <br />
+                <small class="text-muted">@context.input_weight_kg.ToString("N2") kg</small>
+            </MudTd>
+            <MudTd>
+                @if (context.status == "Completed")
+                {
+                    @context.rubber_type_output
+                    <br />
+                    <small class="text-muted">@context.output_weight_kg?.ToString("N2") kg</small>
+                }
+                else
+                {
+                    <span class="text-italic text-muted">Smoking in progress...</span>
+                }
+            </MudTd>
+            <MudTd>
+                @if (context.status == "Completed")
+                {
+                    <b>@context.shrinkage_kg.ToString("N2") kg</b>
+                    <text> (@context.shrinkage_percentage.ToString("N1")%)</text>
+                }
+                else
+                {
+                    <span>-</span>
+                }
+            </MudTd>
+            <MudTd>
+                Start: @context.start_date.ToString("dd/MM/yyyy")
+                @if (context.end_date.HasValue)
+                {
+                    <br />
+                    <text>End: </text>
+                    @context.end_date.Value.ToString("dd/MM/yyyy")
+                }
+            </MudTd>
+            <MudTd Style="text-align: right;">
+                <!-- Edit / Complete လုပ်ရန် ခလုတ် -->
+                <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" Size="Size.Small"
+                               OnClick="() => OpenEditDialog(context)" Title="Edit / Complete Batch" />
+            </MudTd>
+        </RowTemplate>
+        <PagerContent>
+            <MudTablePager PageSizeOptions="new int[] { 10, 25, 50 }" />
+        </PagerContent>
+    </MudTable>
+</MudContainer>
+
+@code {
+    private List<SmokingBatchModel> _items = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        LangService.OnLanguageChanged += StateHasChanged;
+        await LoadDataAsync();
+    }
+
+    public void Dispose() => LangService.OnLanguageChanged -= StateHasChanged;
+
+    private async Task LoadDataAsync()
+    {
+        try
+        {
+            _items = await Http.GetFromJsonAsync<List<SmokingBatchModel>>("rest/v1/smoking_batches?select=*&order=start_date.desc") ?? new();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task OpenAddDialog()
+    {
+        var parameters = new DialogParameters { ["Model"] = new SmokingBatchModel() };
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Medium, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<SmokingBatchDialog>("New Smoking Batch", parameters, options);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled) await LoadDataAsync();
+    }
+
+    private async Task OpenEditDialog(SmokingBatchModel item)
+    {
+        // Existing item ကို Clone လုပ်ပြီး Edit လုပ်ရန်
+        var editModel = new SmokingBatchModel
+        {
+            id = item.id,
+            owner_id = item.owner_id,
+            batch_no = item.batch_no,
+            warehouse_name = item.warehouse_name,
+            rubber_type_input = item.rubber_type_input,
+            rubber_type_output = string.IsNullOrEmpty(item.rubber_type_output) ? item.rubber_type_input : item.rubber_type_output,
+            input_weight_kg = item.input_weight_kg,
+            output_weight_kg = item.output_weight_kg ?? item.input_weight_kg,
+            start_date = item.start_date,
+            end_date = item.end_date ?? DateTime.Today,
+            status = item.status,
+            note = item.note
+        };
+
+        var parameters = new DialogParameters { ["Model"] = editModel };
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Medium, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<SmokingBatchDialog>("Edit / Complete Smoking Batch", parameters, options);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled) await LoadDataAsync();
+    }
+}

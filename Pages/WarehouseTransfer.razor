@@ -1,0 +1,379 @@
+﻿@page "/warehouse/transfer"
+@using MudBlazor
+@using RubberTradingSystem.Models
+@using RubberTradingSystem.Services
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject LanguageService LangService
+@inject UserContextService UserContext
+@implements IDisposable
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4 mb-6">
+    <MudText Typo="Typo.h5" Color="Color.Primary" Class="mb-4 font-weight-bold">
+        @LangService.GetString("Title_WarehouseTransfer")
+    </MudText>
+
+    <MudPaper Class="pa-4 mb-4" Elevation="3">
+        <MudGrid Spacing="3" AlignItems="Center">
+            <!-- ဂိုဒေါင်ရွေးချယ်ရန် -->
+            <MudItem xs="12" md="6">
+                <MudSelect T="string" @bind-Value="_selectedWarehouseId" Label="@LangService.GetString("Lbl_SelectWarehouse")"
+                           Variant="Variant.Outlined" Dense="true" Required="true">
+                    @if (_warehouses != null)
+                    {
+                        @foreach (var wh in _warehouses)
+                        {
+                            <MudSelectItem Value="@wh.id">@wh.warehouse_name (@wh.location)</MudSelectItem>
+                        }
+                    }
+                </MudSelect>
+            </MudItem>
+
+            <MudItem xs="12" md="6" Class="d-flex justify-end">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" OnClick="TransferToWarehouseAsync" Disabled="_isSaving">
+                    @if (_isSaving)
+                    {
+                        <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+                    }
+                    else
+                    {
+                        <text>@LangService.GetString("Btn_TransferToWarehouse") (@_selectedItems.Count)</text>
+                    }
+                </MudButton>
+            </MudItem>
+        </MudGrid>
+
+        <MudDivider Class="my-4" />
+
+        <!-- Batch Number with Edit / Lock / Regenerate Options -->
+        <div class="d-flex align-center mb-4 gap-2" style="max-width: 450px;">
+            <MudTextField @bind-Value="_batchNumber"
+                          Label="Batch Number"
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          Disabled="@_isBatchNoLocked"
+                          Class="flex-grow-1"
+                          Required="true" />
+
+            @if (_isBatchNoLocked)
+            {
+                <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                               Color="Color.Primary"
+                               Title="Batch Number ကို ပြင်ဆင်ရန်"
+                               OnClick="() => _isBatchNoLocked = false" />
+            }
+            else
+            {
+                <MudIconButton Icon="@Icons.Material.Filled.Check"
+                               Color="Color.Success"
+                               Title="အတည်ပြုမည်"
+                               OnClick="() => _isBatchNoLocked = true" />
+                <MudIconButton Icon="@Icons.Material.Filled.Refresh"
+                               Color="Color.Warning"
+                               Title="အလိုအလျောက် အသစ်ဖန်တီးရန်"
+                               OnClick="RegenerateBatchNo" />
+            }
+        </div>
+
+        <!-- Temp Stocks နှင့် Truck Stocks နှစ်ခုစလုံး ပေါင်းစပ်ပြသသည့် Table (ခြံရှင် နှင့် ကားအမှတ် သီးသန့်ကော်လံများဖြင့်) -->
+        <MudTable Items="@_availableStocks" Dense="true" Hover="true" MultiSelection="true" @bind-SelectedItems="_selectedItems" Elevation="1">
+            <HeaderContent>
+                <MudTh>@LangService.GetString("Th_Source")</MudTh>
+                <MudTh>ခြံရှင် (Supplier)</MudTh>
+                <MudTh>ကားအမှတ် / မှတ်ချက် (Vehicle / Note)</MudTh>
+                <MudTh>@LangService.GetString("Th_RubberType")</MudTh>
+                <MudTh>@LangService.GetString("Th_Weight")</MudTh>
+                <MudTh>@LangService.GetString("Th_Moisture")</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd>
+                    @if (context.SourceCategory == "TempStock")
+                    {
+                        <MudChip T="string" Color="Color.Info" Size="Size.Small">Temp Stock</MudChip>
+                    }
+                    else
+                    {
+                        <MudChip T="string" Color="Color.Warning" Size="Size.Small">Truck Stock</MudChip>
+                    }
+                </MudTd>
+                <MudTd><b>@context.SupplierName</b></MudTd>
+                <MudTd>
+                    @if (string.IsNullOrEmpty(context.VehicleOrNote) || context.VehicleOrNote == "-")
+                    {
+                        <span style="color: gray; font-style: italic;">ဆိုင်လာရောင်း (Walk-in)</span>
+                    }
+                    else
+                    {
+                        @context.VehicleOrNote
+                    }
+                </MudTd>
+                <MudTd>@context.RubberTypeName</MudTd>
+                <MudTd>@context.Quantity.ToString("N2")</MudTd>
+                <MudTd>
+                    @if (context.MoistureOrDetails > 0)
+                    {
+                        <text>@context.MoistureOrDetails.ToString("N2") %</text>
+                    }
+                    else
+                    {
+                        <text>-</text>
+                    }
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    </MudPaper>
+</MudContainer>
+
+@code {
+    private string _batchNumber = string.Empty;
+    private bool _isSaving = false;
+    private bool _isBatchNoLocked = true;
+    private string _selectedWarehouseId = string.Empty;
+
+    private List<WarehouseModel> _warehouses = new();
+    private List<StockTransferItemModel> _availableStocks = new();
+    private HashSet<StockTransferItemModel> _selectedItems = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        LangService.OnLanguageChanged += StateHasChanged;
+        GenerateNewBatchNumber();
+        await LoadDataAsync();
+    }
+
+    public void Dispose()
+    {
+        LangService.OnLanguageChanged -= StateHasChanged;
+    }
+
+    private void GenerateNewBatchNumber()
+    {
+        _batchNumber = "WH-BATCH-" + DateTime.Now.ToString("yyyyMMdd-HHmm");
+    }
+
+    private void RegenerateBatchNo()
+    {
+        GenerateNewBatchNumber();
+        _isBatchNoLocked = true;
+    }
+
+    private async Task LoadDataAsync()
+    {
+        try
+        {
+            _availableStocks.Clear();
+
+            // 1. Warehouses များကို ဆွဲထုတ်ခြင်း
+            _warehouses = await Http.GetFromJsonAsync<List<WarehouseModel>>("rest/v1/warehouses?select=*") ?? new();
+            if (_warehouses.Any()) _selectedWarehouseId = _warehouses.First().id;
+
+            // 2. Pending Temp Stocks များကို ဆွဲထုတ်ခြင်း
+            string tempQuery = "rest/v1/temp_stocks?status=eq.Pending&select=id,net_weight,moisture_percent,contact_id,rubber_type_id,contacts(name),rubber_types(name,grade)";
+            var tempRawList = await Http.GetFromJsonAsync<List<TempStockRawModel>>(tempQuery) ?? new();
+
+            foreach (var item in tempRawList)
+            {
+                _availableStocks.Add(new StockTransferItemModel
+                {
+                    Id = $"temp_{item.id}",
+                    SourceCategory = "TempStock",
+                    OriginalId = item.id,
+                    SupplierName = item.contacts?.name ?? "N/A",
+                    VehicleOrNote = "-",
+                    RubberTypeName = item.rubber_types != null ? $"{item.rubber_types.name} ({item.rubber_types.grade})" : "N/A",
+                    Quantity = item.net_weight,
+                    MoistureOrDetails = item.moisture_percent,
+                    RubberTypeId = item.rubber_type_id,
+                    ContactId = item.contact_id
+                });
+            }
+            // 3. Active Truck Stocks များကို ဆွဲထုတ်ခြင်း (deduction_percent ကို transactions မှ ယူမည်)
+            string truckQuery = "rest/v1/truck_stocks?status=eq.Active&select=id,quantity,vehicle_id,rubber_type_id,transaction_id,trucks(truck_number,driver_name),rubber_types(name,grade)";
+            var truckRawList = await Http.GetFromJsonAsync<List<TruckStockRawModel>>(truckQuery) ?? new();
+
+            foreach (var item in truckRawList)
+            {
+                decimal deductionPct = 0m;
+
+                // အကယ်၍ transaction_id ရှိပါက transactions ဇယားမှ deduction_percent ကို လှမ်းယူမည်
+                if (!string.IsNullOrEmpty(item.transaction_id))
+                {
+                    var transList = await Http.GetFromJsonAsync<List<TransactionDeductionObj>>($"rest/v1/transactions?id=eq.{item.transaction_id}&select=deduction_percent");
+                    if (transList != null && transList.Count > 0)
+                    {
+                        deductionPct = transList[0].deduction_percent;
+                    }
+                }
+
+                _availableStocks.Add(new StockTransferItemModel
+                {
+                    Id = $"truck_{item.id}",
+                    SourceCategory = "TruckStock",
+                    OriginalId = item.id,
+                    SupplierName = item.trucks?.driver_name ?? "Truck Stock",
+                    VehicleOrNote = item.trucks?.truck_number ?? "ဆိုင်လာရောင်း (Walk-in)",
+                    RubberTypeName = item.rubber_types != null ? $"{item.rubber_types.name} ({item.rubber_types.grade})" : "N/A",
+                    Quantity = item.quantity,
+                    MoistureOrDetails = deductionPct, // ယာဉ်ပေါ်ပါ ရာဘာအတွက် transactions ထဲက deduction_percent %
+                    RubberTypeId = item.rubber_type_id,
+                    ContactId = null
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading stocks: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task TransferToWarehouseAsync()
+    {
+        if (string.IsNullOrEmpty(_selectedWarehouseId))
+        {
+            Snackbar.Add("ကျေးဇူးပြု၍ ဂိုဒေါင်တစ်ခု ရွေးချယ်ပါ။ / Please select a warehouse.", Severity.Warning);
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_batchNumber))
+        {
+            Snackbar.Add("ကျေးဇူးပြု၍ Batch Number ထည့်သွင်းပါ။ / Please enter a batch number.", Severity.Warning);
+            return;
+        }
+
+        if (!_selectedItems.Any())
+        {
+            Snackbar.Add(LangService.GetString("Msg_SelectStockWarning"), Severity.Warning);
+            return;
+        }
+
+        _isSaving = true;
+        try
+        {
+            var ownerId = await UserContext.GetCurrentOwnerIdAsync();
+            var staffId = await UserContext.GetCurrentStaffIdAsync();
+
+            decimal totalWeight = _selectedItems.Sum(x => x.Quantity);
+            string rubberTypeId = _selectedItems.First().RubberTypeId;
+
+            var batchPayload = new
+            {
+                owner_id = ownerId,
+                staff_id = staffId,
+                warehouse_id = _selectedWarehouseId,
+                batch_number = _batchNumber,
+                rubber_type_id = rubberTypeId,
+                total_weight = totalWeight,
+                status = "Active"
+            };
+
+            var reqMsg = new HttpRequestMessage(HttpMethod.Post, "rest/v1/warehouse_batches")
+            {
+                Content = JsonContent.Create(batchPayload)
+            };
+            reqMsg.Headers.Add("Prefer", "return=representation");
+            var response = await Http.SendAsync(reqMsg);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var createdBatch = await response.Content.ReadFromJsonAsync<List<WarehouseBatchModel>>();
+                string batchId = createdBatch?.FirstOrDefault()?.id ?? string.Empty;
+
+                foreach (var item in _selectedItems)
+                {
+                    var itemPayload = new
+                    {
+                        owner_id = ownerId,
+                        staff_id = staffId,
+                        batch_id = batchId,
+                        source_type = item.SourceCategory,
+                        source_id = item.OriginalId,
+                        contact_id = item.ContactId,
+                        weight = item.Quantity,
+                        moisture_percent = item.MoistureOrDetails
+                    };
+                    await Http.PostAsJsonAsync("rest/v1/warehouse_batch_items", itemPayload);
+
+                    if (item.SourceCategory == "TempStock")
+                    {
+                        await Http.PatchAsync($"rest/v1/temp_stocks?id=eq.{item.OriginalId}", JsonContent.Create(new { status = "Approved" }));
+                    }
+                    else if (item.SourceCategory == "TruckStock")
+                    {
+                        await Http.PatchAsync($"rest/v1/truck_stocks?id=eq.{item.OriginalId}", JsonContent.Create(new { status = "Unloaded" }));
+                    }
+                }
+
+                Snackbar.Add(LangService.GetString("Msg_TransferSuccess"), Severity.Success);
+                await LoadDataAsync();
+                _selectedItems.Clear();
+                GenerateNewBatchNumber();
+                _isBatchNoLocked = true;
+            }
+            else
+            {
+                var err = await response.Content.ReadAsStringAsync();
+                Snackbar.Add($"Transfer failed: {err}", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Exception: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    // --- Updated Models for Separate Columns ---
+    private class StockTransferItemModel
+    {
+        public string Id { get; set; } = string.Empty;
+        public string SourceCategory { get; set; } = string.Empty;
+        public string OriginalId { get; set; } = string.Empty;
+        public string SupplierName { get; set; } = string.Empty;
+        public string VehicleOrNote { get; set; } = string.Empty;
+        public string RubberTypeName { get; set; } = string.Empty;
+        public decimal Quantity { get; set; }
+        public decimal MoistureOrDetails { get; set; }
+        public string RubberTypeId { get; set; } = string.Empty;
+        public string? ContactId { get; set; }
+    }
+
+    private class TempStockRawModel
+    {
+        public string id { get; set; } = string.Empty;
+        public decimal net_weight { get; set; }
+        public decimal moisture_percent { get; set; }
+        public string? contact_id { get; set; }
+        public string rubber_type_id { get; set; } = string.Empty;
+        public ContactObj? contacts { get; set; }
+        public RubberTypeObj? rubber_types { get; set; }
+        public PurchaseObj? rubber_purchases { get; set; }
+    }
+
+    private class TruckStockRawModel
+    {
+        public string id { get; set; } = string.Empty;
+        public decimal quantity { get; set; }
+        public string vehicle_id { get; set; } = string.Empty;
+        public string rubber_type_id { get; set; } = string.Empty;
+        public string? transaction_id { get; set; }
+        public TruckObj? trucks { get; set; }
+        public RubberTypeObj? rubber_types { get; set; }
+        public TransactionObj? transactions { get; set; } 
+    }
+
+    private class TransactionObj
+    {
+        public decimal moisture_percent { get; set; }
+    }
+    private class TransactionDeductionObj
+    {
+        public decimal deduction_percent { get; set; }
+    }
+    private class TruckObj { public string truck_number { get; set; } = string.Empty; public string? driver_name { get; set; } }
+    private class ContactObj { public string name { get; set; } = string.Empty; }
+    private class RubberTypeObj { public string name { get; set; } = string.Empty; public string grade { get; set; } = string.Empty; }
+    private class PurchaseObj { public decimal moisture_percent { get; set; } }
+}

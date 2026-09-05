@@ -1,0 +1,95 @@
+﻿@using MudBlazor
+@using RubberTradingSystem.Models
+@using RubberTradingSystem.Services
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject LanguageService LangService
+@implements IDisposable
+
+<MudDialog>
+    <DialogContent>
+        <EditForm Model="@Model" OnValidSubmit="SaveAsync">
+            <DataAnnotationsValidator />
+
+            <MudTextField @bind-Value="Model.title"
+                          Label="@LangService.GetString("Note_TitleLabel")"
+                          Variant="Variant.Outlined"
+                          Class="mb-4"
+                          Required="true" />
+
+            <MudTextField @bind-Value="Model.content"
+                          Label="@LangService.GetString("Note_ContentLabel")"
+                          Variant="Variant.Outlined"
+                          Lines="4"
+                          Class="mb-4"
+                          Required="true" />
+
+            <MudDatePicker @bind-Date="_noteDate"
+                           Label="@LangService.GetString("Note_DateLabel")"
+                           Variant="Variant.Outlined"
+                           Class="mb-4" />
+
+            <div class="d-flex justify-end">
+                <MudButton OnClick="Cancel" Variant="Variant.Text" Class="mr-2">
+                    @LangService.GetString("Rubber_Cancel")
+                </MudButton>
+                <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary">
+                    @(IsNew ? LangService.GetString("Rubber_Save") : LangService.GetString("Rubber_Update"))
+                </MudButton>
+            </div>
+        </EditForm>
+    </DialogContent>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public DailyNoteModel Model { get; set; } = new();
+    [Parameter] public bool IsNew { get; set; }
+
+    private DateTime? _noteDate
+    {
+        get => Model.note_date;
+        set => Model.note_date = value ?? DateTime.Today;
+    }
+
+    protected override void OnInitialized() => LangService.OnLanguageChanged += StateHasChanged;
+    public void Dispose() => LangService.OnLanguageChanged -= StateHasChanged;
+
+    private async Task SaveAsync()
+    {
+        try
+        {
+            if (IsNew)
+            {
+                var response = await Http.PostAsJsonAsync("rest/v1/daily_notes", Model);
+                if (response.IsSuccessStatusCode)
+                {
+                    Snackbar.Add(LangService.GetString("Note_SaveSuccess"), Severity.Success);
+                    MudDialog.Close(DialogResult.Ok(true));
+                }
+                else Snackbar.Add("Failed to save note.", Severity.Error);
+            }
+            else
+            {
+                var response = await Http.PatchAsync($"rest/v1/daily_notes?id=eq.{Model.id}", JsonContent.Create(new
+                {
+                    title = Model.title,
+                    content = Model.content,
+                    note_date = Model.note_date
+                }));
+                if (response.IsSuccessStatusCode)
+                {
+                    Snackbar.Add(LangService.GetString("Note_UpdateSuccess"), Severity.Success);
+                    MudDialog.Close(DialogResult.Ok(true));
+                }
+                else Snackbar.Add("Failed to update note.", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

@@ -1,0 +1,3 @@
+D:\RubberTradingSystem\RubberTradingSystem\obj\Release\net10.0\browser-wasm\PubTmp\Out\RubberTradingSystem.runtimeconfig.json
+D:\RubberTradingSystem\RubberTradingSystem\obj\Release\net10.0\browser-wasm\PubTmp\Out\dotnet.js
+D:\RubberTradingSystem\RubberTradingSystem\obj\Release\net10.0\browser-wasm\PubTmp\Out\web.config

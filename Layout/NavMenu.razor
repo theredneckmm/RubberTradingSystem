@@ -1,0 +1,135 @@
+﻿@using RubberTradingSystem.Services
+@inject LanguageService LangService
+@implements IDisposable
+
+<MudNavMenu Class="pa-2">
+    <div class="pa-3 text-center">
+        <!-- Logo ပုံလေး -->
+        <MudIcon Icon="@Icons.Material.Filled.Agriculture" Color="Color.Primary" Size="Size.Large" />
+        <MudText Color="Color.Primary">Rubber Trading System</MudText>
+    </div>
+
+    <MudDivider Class="my-2" />
+    <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard" IconColor="Color.Primary">
+        <b>@LangService.GetString("Dashboard")</b>
+    </MudNavLink>
+
+    <MudNavGroup Title="@LangService.GetString("Menu_Trading")" Icon="@Icons.Material.Filled.Storefront" Expanded="true">
+        <MudNavLink Href="/rubber-purchase" Icon="@Icons.Material.Filled.ShoppingCart">@LangService.GetString("Menu_Purchase")</MudNavLink>
+        <MudNavLink Href="/rubber-purchases-list" Icon="@Icons.Material.Filled.ListAlt">@LangService.GetString("Menu_PurchaseList")</MudNavLink>
+        <MudNavLink Href="/rubber-sales" Icon="@Icons.Material.Filled.Sell">@LangService.GetString("Menu_Sales")</MudNavLink>
+        <MudNavLink Href="/rubber-sales-list" Icon="@Icons.Material.Filled.ListAlt" Match="NavLinkMatch.Prefix">
+            @LangService.GetString("Sale_ListTitle")
+        </MudNavLink>
+        <MudNavLink Href="/warehouse/transfer" Icon="@Icons.Material.Filled.Warehouse" Match="NavLinkMatch.Prefix">
+            @LangService.GetString("Menu_WarehouseTransfer")
+        </MudNavLink>
+        <MudNavLink Href="/daily-prices" Icon="@Icons.Material.Filled.PriceChange">@LangService.GetString("Menu_Pricing")</MudNavLink>
+    </MudNavGroup>
+
+    <MudNavGroup Title="@LangService.GetString("Menu_Production")" Icon="@Icons.Material.Filled.Factory">
+        <MudNavLink Href="/rubber-smoking" Icon="@Icons.Material.Filled.PrecisionManufacturing">@LangService.GetString("Menu_Milling")</MudNavLink>
+        <MudNavLink Href="/rubber-smoking/analytics" Icon="@Icons.Material.Filled.Analytics">
+            @LangService.GetString("Menu_SmokingAnalytics")
+        </MudNavLink>
+    </MudNavGroup>
+
+    <MudNavGroup Title="@LangService.GetString("Menu_WMS")" Icon="@Icons.Material.Filled.Warehouse">
+        <MudNavLink Href="/stock-balance" Icon="@Icons.Material.Filled.Inventory2" Match="NavLinkMatch.Prefix">
+            @LangService.GetString("Menu_StockBalance")
+        </MudNavLink>
+        <MudNavLink Href="/stock-transfers" Icon="@Icons.Material.Filled.LocalShipping">@LangService.GetString("Menu_StockTransfer")</MudNavLink>
+        <MudNavLink Href="/stock-adjustments" Icon="@Icons.Material.Filled.Balance">@LangService.GetString("Menu_StockAdj")</MudNavLink>
+    </MudNavGroup>
+
+    <MudNavGroup Title="@LangService.GetString("Menu_Finance")" Icon="@Icons.Material.Filled.AccountBalanceWallet">
+        <MudNavLink Href="/expenses" Icon="@Icons.Material.Filled.MoneyOff">@LangService.GetString("Menu_Expenses")</MudNavLink>
+        <MudNavLink Href="/other-incomes" Icon="@Icons.Material.Filled.AttachMoney">@LangService.GetString("Menu_Incomes")</MudNavLink>
+        <MudNavLink Href="/wallets" Icon="@Icons.Material.Filled.AccountBalance">@LangService.GetString("Menu_Wallets")</MudNavLink>
+        <MudNavLink Href="/fund-transfers" Icon="@Icons.Material.Filled.SwapHoriz">@LangService.GetString("Menu_Transfers")</MudNavLink>
+    </MudNavGroup>
+
+    <MudNavGroup Title="@LangService.GetString("Menu_Contacts")" Icon="@Icons.Material.Filled.Contacts">
+        <MudNavLink Href="/contacts" Icon="@Icons.Material.Filled.ContactPage">
+            @LangService.GetString("Menu_Contacts")
+        </MudNavLink>
+        <MudNavLink Href="/farm-owners" Icon="@Icons.Material.Filled.Agriculture">@LangService.GetString("Menu_Suppliers")</MudNavLink>
+        <MudNavLink Href="/contacts" Icon="@Icons.Material.Filled.Business">@LangService.GetString("Menu_Buyers")</MudNavLink>
+
+        <!-- ခြံရှင် (Supplier) Advance များ -->
+        <MudNavLink Href="/advance/out" Icon="@Icons.Material.Filled.CreditScore">@LangService.GetString("Menu_Advances")</MudNavLink>
+        <MudNavLink Href="/advance/in" Icon="@Icons.Material.Filled.CurrencyExchange">@LangService.GetString("Menu_Repayments")</MudNavLink>
+
+        <!-- ကုန်သည် (Buyer) Advance များနှင့် ပြန်ဆပ်ခြင်းများ (အသစ်ထည့်သွင်းခြင်း) -->
+        <MudNavLink Href="/advance/buyer-out" Icon="@Icons.Material.Filled.RequestQuote">@LangService.GetString("Menu_BuyerAdvanceOut")</MudNavLink>
+        <MudNavLink Href="/advance/buyer-in" Icon="@Icons.Material.Filled.Payments">@LangService.GetString("Menu_BuyerAdvanceIn")</MudNavLink>
+
+        <MudNavLink Href="/farm-accounts" Icon="@Icons.Material.Filled.AccountBalance" Match="NavLinkMatch.All">
+            @LangService.GetString("Nav_FarmAccounts")
+        </MudNavLink>
+        <MudNavLink Href="/contacts/balance" Icon="@Icons.Material.Filled.Balance" Match="NavLinkMatch.Prefix">
+            @LangService.GetString("Menu_BalanceSummary")
+        </MudNavLink>
+    </MudNavGroup>
+
+    <MudNavGroup Title="@LangService.GetString("Menu_Logistics")" Icon="@Icons.Material.Filled.LocalShipping">
+        <MudNavLink Href="/truck-stock" Icon="@Icons.Material.Filled.DirectionsCar">@LangService.GetString("Menu_Vehicles")</MudNavLink>
+        <MudNavLink Href="/truck-expenses" Icon="@Icons.Material.Filled.LocalGasStation">@LangService.GetString("Menu_Fuel")</MudNavLink>
+    </MudNavGroup>
+
+    <MudNavGroup Title="@LangService.GetString("Menu_HR")" Icon="@Icons.Material.Filled.PeopleAlt">
+        <MudNavLink Href="/process" Icon="@Icons.Material.Filled.Badge">@LangService.GetString("Menu_Staff")</MudNavLink>
+        <MudNavLink Href="/process" Icon="@Icons.Material.Filled.EventAvailable">@LangService.GetString("Menu_Attendance")</MudNavLink>
+        <MudNavLink Href="/process" Icon="@Icons.Material.Filled.Payments">@LangService.GetString("Menu_Payroll")</MudNavLink>
+    </MudNavGroup>
+
+    <MudNavGroup Title="@LangService.GetString("Menu_Assets")" Icon="@Icons.Material.Filled.Domain">
+        <MudNavLink Href="/process" Icon="@Icons.Material.Filled.Chair">@LangService.GetString("Menu_AssetList")</MudNavLink>
+        <MudNavLink Href="/process" Icon="@Icons.Material.Filled.TrendingDown">@LangService.GetString("Menu_Depreciation")</MudNavLink>
+    </MudNavGroup>
+
+    <MudNavGroup Title="@LangService.GetString("Menu_Reports")" Icon="@Icons.Material.Filled.BarChart">
+        <MudNavLink Href="/process" Icon="@Icons.Material.Filled.PieChart">@LangService.GetString("Menu_PnL")</MudNavLink>
+    </MudNavGroup>
+
+    <MudDivider Class="my-2" />
+
+    <MudNavGroup Title="@LangService.GetString("Menu_Sync")" Icon="@Icons.Material.Filled.CloudSync" IconColor="Color.Warning">
+        <MudNavLink Href="/process" Icon="@Icons.Material.Filled.CloudUpload">@LangService.GetString("Menu_Push")</MudNavLink>
+    </MudNavGroup>
+
+    <!-- Configuration Section -->
+    <MudNavGroup Title="@LangService.GetString("Nav_DataManagement")" Icon="@Icons.Material.Filled.Grass">
+        <MudNavLink Href="/rubber-types" Icon="@Icons.Material.Filled.Grass" Match="NavLinkMatch.All">
+            @LangService.GetString("Nav_RubberTypes")
+        </MudNavLink>
+        <MudNavLink Href="/warehouses" Icon="@Icons.Material.Filled.Warehouse" Match="NavLinkMatch.All">
+            @LangService.GetString("Wh_ListTitle")
+        </MudNavLink>
+        <MudNavLink Href="/payment-methods" Icon="@Icons.Material.Filled.Payment" Match="NavLinkMatch.All">
+            @LangService.GetString("Nav_PaymentMethods")
+        </MudNavLink>
+        <MudNavLink Href="/expense-settings" Icon="@Icons.Material.Filled.SettingsApplications" Match="NavLinkMatch.Prefix">
+            @LangService.GetString("Menu_ExpenseSettings")
+        </MudNavLink>
+    </MudNavGroup>
+
+    <MudNavGroup Title="@LangService.GetString("Menu_Settings")" Icon="@Icons.Material.Filled.Settings">
+        <MudNavLink Href="/process" Icon="@Icons.Material.Filled.Palette">@LangService.GetString("Menu_ThemeLang")</MudNavLink>
+        <MudNavLink Href="/business-settings" Icon="@Icons.Material.Filled.Rule">@LangService.GetString("Menu_Defaults")</MudNavLink>
+        <MudNavLink Href="/process" Icon="@Icons.Material.Filled.Print">@LangService.GetString("Menu_Print")</MudNavLink>
+        <MudNavLink Href="/staff-list" Icon="@Icons.Material.Filled.Security">@LangService.GetString("Menu_Roles")</MudNavLink>
+        <MudNavLink Href="/wallets" Icon="@Icons.Material.Filled.CreditCard">
+            @LangService.GetString("Payment_ListTitle")
+        </MudNavLink>
+        <MudNavLink Href="/process" Icon="@Icons.Material.Filled.Policy">@LangService.GetString("Menu_Audit")</MudNavLink>
+        <MudNavLink Href="/process" Icon="@Icons.Material.Filled.Save">@LangService.GetString("Menu_Backup")</MudNavLink>
+    </MudNavGroup>
+</MudNavMenu>
+
+@code {
+    private void UpdateUI() => InvokeAsync(StateHasChanged);
+
+    protected override void OnInitialized() => LangService.OnLanguageChanged += UpdateUI;
+    public void Dispose() => LangService.OnLanguageChanged -= UpdateUI;
+}

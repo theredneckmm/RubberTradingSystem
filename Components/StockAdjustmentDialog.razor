@@ -1,0 +1,204 @@
+﻿@using MudBlazor
+@using RubberTradingSystem.Models
+@using RubberTradingSystem.Services
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject LanguageService LangService
+@implements IDisposable
+
+<MudDialog>
+    <DialogContent>
+        <EditForm Model="@Model" OnValidSubmit="SaveAsync">
+            <DataAnnotationsValidator />
+            
+            <MudGrid>
+                <MudItem xs="12" sm="6">
+                    <MudTextField @bind-Value="Model.adjustment_no" 
+                                  Label="Adjustment Voucher No" 
+                                  Variant="Variant.Outlined" 
+                                  Class="mb-4" 
+                                  Required="true" />
+                </MudItem>
+                
+                <MudItem xs="12" sm="6">
+                    <MudDatePicker @bind-Date="_adjustmentDate" 
+                                   Label="Adjustment Date" 
+                                   Variant="Variant.Outlined" 
+                                   Class="mb-4" />
+                </MudItem>
+
+                <!-- Warehouse Selection -->
+                <MudItem xs="12" sm="6">
+                    <MudSelect T="string" Value="Model.rubber_type"
+                               ValueExpression="@(() => Model.rubber_type)"
+                               Label="Rubber Type"
+                               Variant="Variant.Outlined"
+                               Class="mb-4" Required="true"
+                               ValueChanged="OnWarehouseOrTypeChanged">
+                        @foreach (var type in _rubberTypeList)
+                        {
+                            <MudSelectItem Value="@type">@type</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+
+                <!-- Rubber Type Selection -->
+                <MudItem xs="12" sm="6">
+                    <MudSelect T="string" Value="Model.warehouse_name"
+                               ValueExpression="@(() => Model.warehouse_name)"
+                               Label="Warehouse"
+                               Variant="Variant.Outlined"
+                               Class="mb-4" Required="true"
+                               ValueChanged="OnWarehouseOrTypeChanged">
+                        @foreach (var wh in _warehouseList)
+                        {
+                            <MudSelectItem Value="@wh">@wh</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+
+                <!-- System Qty (Readonly auto loaded) -->
+                <MudItem xs="12" sm="4">
+                    <MudTextField Value="@Model.system_qty_kg.ToString("N2")" 
+                                  Label="System Stock (kg)" 
+                                  Variant="Variant.Outlined" 
+                                  Class="mb-4" 
+                                  ReadOnly="true" />
+                </MudItem>
+
+                <!-- Actual Physical Qty (User Input) -->
+                <MudItem xs="12" sm="4">
+                    <MudNumericField @bind-Value="Model.actual_qty_kg" 
+                                     Label="Actual Physical Qty (kg)" 
+                                     Variant="Variant.Outlined" 
+                                     Class="mb-4" Min="0" Required="true" />
+                </MudItem>
+
+                <!-- Difference (Auto calculated) -->
+                <MudItem xs="12" sm="4">
+                    <MudTextField Value="@Model.difference_kg.ToString("N2")" 
+                                  Label="Difference (+ / -)" 
+                                  Variant="Variant.Outlined" 
+                                  Class="mb-4" 
+                                  ReadOnly="true" />
+                </MudItem>
+
+                <!-- Reason Selection -->
+                <MudItem xs="12">
+                    <MudSelect T="string" @bind-Value="Model.reason" 
+                               Label="Reason for Adjustment" 
+                               Variant="Variant.Outlined" 
+                               Class="mb-4" Required="true">
+                        <MudSelectItem Value="@("Shrinkage / Weight Loss")">Shrinkage / Weight Loss (အခြောက်ခံချိန် အလေးချိန်လျော့ခြင်း)</MudSelectItem>
+                        <MudSelectItem Value="@("Physical Count Error")">Physical Count Error (စာရင်းစစ်အမှား)</MudSelectItem>
+                        <MudSelectItem Value="@("Damage / Spoiled")">Damage / Spoiled (ပျက်စီးဆုံးရှုံးခြင်း)</MudSelectItem>
+                        <MudSelectItem Value="@("Other")">Other (အခြား)</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="Model.note" 
+                                  Label="Note / Remark" 
+                                  Variant="Variant.Outlined" 
+                                  Lines="2"
+                                  Class="mb-4" />
+                </MudItem>
+            </MudGrid>
+
+            <div class="d-flex justify-end mt-2">
+                <MudButton OnClick="Cancel" Variant="Variant.Text" Class="mr-2">Cancel</MudButton>
+                <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary">Save Adjustment</MudButton>
+            </div>
+        </EditForm>
+    </DialogContent>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public StockAdjustmentModel Model { get; set; } = new();
+
+    private List<string> _warehouseList = new();
+    private List<string> _rubberTypeList = new();
+
+    private DateTime? _adjustmentDate
+    {
+        get => Model.adjustment_date;
+        set => Model.adjustment_date = value ?? DateTime.Today;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        LangService.OnLanguageChanged += StateHasChanged;
+        await LoadDropdownsAsync();
+    }
+
+    public void Dispose() => LangService.OnLanguageChanged -= StateHasChanged;
+
+    private async Task LoadDropdownsAsync()
+    {
+        try
+        {
+            var warehouses = await Http.GetFromJsonAsync<List<WarehouseModel>>("rest/v1/warehouses?select=warehouse_name");
+            if (warehouses != null) _warehouseList = warehouses.Select(x => x.warehouse_name).ToList();
+
+            var types = await Http.GetFromJsonAsync<List<RubberTypeModel>>("rest/v1/rubber_types?select=grade");
+            if (types != null) _rubberTypeList = types.Select(x => x.grade).ToList();
+        }
+        catch { }
+    }
+
+    private async void OnWarehouseOrTypeChanged(string val)
+    {
+        // ဂိုဒေါင် သို့မဟုတ် ရာဘာအမျိုးအစား ပြောင်းလဲတိုင်း Database မှ လက်ရှိ System Stock ကို ဆွဲထုတ်မည်
+        if (!string.IsNullOrEmpty(Model.warehouse_name) && !string.IsNullOrEmpty(Model.rubber_type))
+        {
+            try
+            {
+                var stocks = await Http.GetFromJsonAsync<List<StockBalanceResult>>(
+                    $"rest/v1/warehouse_stock_balance?warehouse_name=eq.{Model.warehouse_name}&rubber_type=eq.{Model.rubber_type}&select=current_stock_kg");
+                
+                if (stocks != null && stocks.Count > 0)
+                {
+                    Model.system_qty_kg = stocks[0].current_stock_kg;
+                }
+                else
+                {
+                    Model.system_qty_kg = 0;
+                }
+                StateHasChanged();
+            }
+            catch 
+            {
+                Model.system_qty_kg = 0;
+            }
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        try
+        {
+            var response = await Http.PostAsJsonAsync("rest/v1/stock_adjustments", Model);
+            if (response.IsSuccessStatusCode)
+            {
+                Snackbar.Add("Stock adjustment saved successfully.", Severity.Success);
+                MudDialog.Close(DialogResult.Ok(true));
+            }
+            else
+            {
+                Snackbar.Add("Failed to save stock adjustment.", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    public class StockBalanceResult
+    {
+        public decimal current_stock_kg { get; set; }
+    }
+}

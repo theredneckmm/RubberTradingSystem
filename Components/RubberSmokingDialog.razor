@@ -1,0 +1,265 @@
+﻿@using MudBlazor
+@using RubberTradingSystem.Models
+@using RubberTradingSystem.Services
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject LanguageService LangService
+@inject UserContextService UserContext
+
+<MudDialog MaxWidth="MaxWidth.Medium" FullWidth="true" Class="pa-2">
+    <DialogContent>
+        <EditForm Model="@Model" OnValidSubmit="SaveAsync">
+            <DataAnnotationsValidator />
+
+            <div class="d-flex justify-space-between align-center mb-4 pa-3" style="background-color: var(--mud-palette-background-grey); border-radius: 4px;">
+                <MudText Typo="Typo.subtitle1"><b>Batch No: @Model.batch_number</b></MudText>
+            </div>
+
+            <MudDatePicker @bind-Date="_startDate"
+                           Label="@LangService.GetString("Smoking_ColStartDate")"
+                           Variant="Variant.Outlined"
+                           Class="mb-4" />
+
+            <MudTextField @bind-Value="Model.note"
+                          Label="@LangService.GetString("Expense_NoteLabel")"
+                          Variant="Variant.Outlined"
+                          Lines="2"
+                          Class="mb-4" />
+
+            <MudDivider Class="my-4" />
+            <MudText Typo="Typo.subtitle2" Class="mb-3 font-weight-bold" Color="Color.Primary">ဂိုဒေါင်မှ ကုန်ကြမ်း Batch များ ရွေးချယ်ရန်</MudText>
+
+            <!-- 1. Warehouse ရွေးချယ်ရန် -->
+            <MudSelect T="string" Value="@_selectedWarehouseId" ValueChanged="OnWarehouseChanged"
+                       Label="ဂိုဒေါင် (Warehouse) ရွေးရန်"
+                       Variant="Variant.Outlined"
+                       Class="mb-4"
+                       Required="true">
+                @foreach (var wh in _warehouses)
+                {
+                    <MudSelectItem Value="@wh.id">@wh.warehouse_name</MudSelectItem>
+                }
+            </MudSelect>
+
+            <!-- 2. ရွေးချယ်ထားသော Warehouse ထဲမှ Batches များကို ရွေးချယ်ခွဲဝေခြင်း -->
+            @if (!string.IsNullOrEmpty(_selectedWarehouseId))
+            {
+                <MudText Typo="Typo.caption" Class="mb-2 text-muted">ရရှိနိုင်သော ဂိုဒေါင် Batch စာရင်းမှ လိုအပ်သလောက် ရွေးချယ်ပါ:</MudText>
+
+                @foreach (var allocation in _selectedAllocations)
+                {
+                    <MudGrid Class="mb-2 align-center">
+                        <MudItem xs="6">
+                            <MudSelect T="string" Value="@allocation.warehouse_batch_id" ValueChanged="@((val) => OnBatchSelected(allocation, val))"
+                                       Label="Warehouse Batch" Variant="Variant.Outlined" Margin="Margin.Dense">
+                                @foreach (var b in _availableBatches)
+                                {
+                                    <MudSelectItem Value="@b.id">@b.batch_number (လက်ကျန်: @b.total_weight lbs)</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </MudItem>
+                        <MudItem xs="5">
+                            <MudNumericField @bind-Value="allocation.input_weight" Label="သုံးမည့်အလေးချိန် (ပေါင်)" Variant="Variant.Outlined" Margin="Margin.Dense" Min="0" Required="true" />
+                        </MudItem>
+                        <MudItem xs="1">
+                            <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" OnClick="() => RemoveAllocation(allocation)" />
+                        </MudItem>
+                    </MudGrid>
+                }
+
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="AddAllocation" Class="mb-4">
+                    Batch ထပ်ထည့်ရန်
+                </MudButton>
+            }
+
+            <div class="d-flex justify-end gap-2 mt-4">
+                <MudButton OnClick="Cancel" Variant="Variant.Text">
+                    @LangService.GetString("Btn_Cancel")
+                </MudButton>
+                <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Disabled="_isSaving">
+                    @LangService.GetString("Btn_Save")
+                </MudButton>
+            </div>
+        </EditForm>
+    </DialogContent>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public RubberSmokingBatchModel Model { get; set; } = new();
+
+    private bool _isSaving = false;
+    private string _selectedWarehouseId = string.Empty;
+    private List<WarehouseModel> _warehouses = new();
+    private List<WarehouseBatchModel> _availableBatches = new();
+    private List<BatchAllocationItem> _selectedAllocations = new();
+
+    private DateTime? _startDate
+    {
+        get => Model.start_date;
+        set => Model.start_date = value ?? DateTime.Today;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        Model.batch_number = $"SMK-{DateTime.Now:yyyyMMdd}-{Guid.NewGuid().ToString().Substring(0, 4).ToUpper()}";
+        await LoadWarehousesAsync();
+    }
+
+    private async Task LoadWarehousesAsync()
+    {
+        try
+        {
+            _warehouses = await Http.GetFromJsonAsync<List<WarehouseModel>>("rest/v1/warehouses?select=*") ?? new();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading warehouses: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task OnWarehouseChanged(string warehouseId)
+    {
+        _selectedWarehouseId = warehouseId;
+        _selectedAllocations.Clear();
+
+        try
+        {
+            _availableBatches = await Http.GetFromJsonAsync<List<WarehouseBatchModel>>($"rest/v1/warehouse_batches?warehouse_id=eq.{warehouseId}&status=eq.Active&select=*") ?? new();
+            AddAllocation();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading batches: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void AddAllocation()
+    {
+        _selectedAllocations.Add(new BatchAllocationItem());
+    }
+
+    private void RemoveAllocation(BatchAllocationItem item)
+    {
+        if (_selectedAllocations.Count > 1)
+        {
+            _selectedAllocations.Remove(item);
+        }
+    }
+
+    private void OnBatchSelected(BatchAllocationItem allocation, string batchId)
+    {
+        allocation.warehouse_batch_id = batchId;
+        var batch = _availableBatches.FirstOrDefault(x => x.id == batchId);
+        if (batch != null)
+        {
+            allocation.input_weight = batch.total_weight;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (!_selectedAllocations.Any() || _selectedAllocations.Any(x => string.IsNullOrEmpty(x.warehouse_batch_id) || x.input_weight <= 0))
+        {
+            Snackbar.Add("ကျေးဇူးပြု၍ Warehouse Batch နှင့် အလေးချိန်များကို မှန်ကန်စွာ ဖြည့်သွင်းပါ။", Severity.Warning);
+            return;
+        }
+
+        _isSaving = true;
+        try
+        {
+            string ownerId = await UserContext.GetCurrentOwnerIdAsync();
+            string staffId = await UserContext.GetCurrentStaffIdAsync();
+
+            if (string.IsNullOrEmpty(ownerId))
+            {
+                Snackbar.Add("User Session not found. Please login again.", Severity.Error);
+                return;
+            }
+
+            decimal totalInput = _selectedAllocations.Sum(x => x.input_weight);
+
+            var batchPayload = new
+            {
+                owner_id = ownerId,
+                staff_id = string.IsNullOrEmpty(staffId) ? null : staffId,
+                batch_number = Model.batch_number,
+                start_date = Model.start_date.ToString("yyyy-MM-dd"),
+                status = "Processing",
+                total_input_weight = totalInput,
+                total_output_weight = 0.00m,
+                total_loss_weight = 0.00m,
+                note = Model.note
+            };
+
+            var reqMsg = new HttpRequestMessage(HttpMethod.Post, "rest/v1/rubber_smoking_batches")
+            {
+                Content = JsonContent.Create(batchPayload)
+            };
+            reqMsg.Headers.Add("Prefer", "return=representation");
+            var resp = await Http.SendAsync(reqMsg);
+
+            if (resp.IsSuccessStatusCode)
+            {
+                var createdBatchList = await resp.Content.ReadFromJsonAsync<List<RubberSmokingBatchModel>>();
+                string? batchId = createdBatchList?.FirstOrDefault()?.id;
+
+                if (!string.IsNullOrEmpty(batchId))
+                {
+                    foreach (var alloc in _selectedAllocations)
+                    {
+                        var matchedBatch = _availableBatches.FirstOrDefault(x => x.id == alloc.warehouse_batch_id);
+
+                        var itemPayload = new
+                        {
+                            batch_id = batchId,
+                            warehouse_batch_id = alloc.warehouse_batch_id,
+                            supplier_name = matchedBatch?.batch_number ?? "Warehouse Stock",
+                            input_weight = alloc.input_weight,
+                            output_weight = 0.00m,
+                            loss_weight = 0.00m
+                        };
+                        await Http.PostAsJsonAsync("rest/v1/rubber_smoking_items", itemPayload);
+                    }
+                }
+
+                Snackbar.Add(LangService.GetString("Smoking_SaveSuccess"), Severity.Success);
+                MudDialog.Close(DialogResult.Ok(true));
+            }
+            else
+            {
+                var err = await resp.Content.ReadAsStringAsync();
+                Snackbar.Add($"Failed to save batch: {err}", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private class WarehouseModel
+    {
+        public string id { get; set; } = string.Empty;
+        public string warehouse_name { get; set; } = string.Empty;
+    }
+
+    private class WarehouseBatchModel
+    {
+        public string id { get; set; } = string.Empty;
+        public string batch_number { get; set; } = string.Empty;
+        public decimal total_weight { get; set; }
+    }
+
+    private class BatchAllocationItem
+    {
+        public string warehouse_batch_id { get; set; } = string.Empty;
+        public decimal input_weight { get; set; }
+    }
+}

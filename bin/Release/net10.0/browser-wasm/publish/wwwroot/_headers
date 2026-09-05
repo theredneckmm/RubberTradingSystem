@@ -1,0 +1,17 @@
+/*
+  X-Content-Type-Options: nosniff
+
+/_framework/*
+  Content-Type: application/wasm
+
+/*.wasm
+  Content-Type: application/wasm
+
+/*.dll
+  Content-Type: application/octet-stream
+
+/*.js
+  Content-Type: application/javascript
+
+/*.json
+  Content-Type: application/json

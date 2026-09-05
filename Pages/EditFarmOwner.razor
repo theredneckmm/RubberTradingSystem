@@ -1,0 +1,64 @@
+﻿@page "/farm-owners/edit/{Id:int}"
+@using MudBlazor
+@using RubberTradingSystem.Models
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+
+<MudContainer MaxWidth="MaxWidth.Small" Class="mt-5">
+    <MudCard Elevation="3">
+        <MudCardHeader>
+            <MudText Typo="Typo.h5" Color="Color.Warning">ခြံရှင်အချက်အလက် ပြင်ဆင်ရန်</MudText>
+        </MudCardHeader>
+        <MudCardContent>
+            @if (_farmOwner == null)
+            {
+                <MudProgressCircular Indeterminate="true" />
+            }
+            else
+            {
+                <EditForm Model="@_farmOwner" OnValidSubmit="UpdateFarmOwnerAsync">
+                    <MudTextField @bind-Value="_farmOwner.name" Label="ခြံရှင်အမည်" Variant="Variant.Outlined" Class="mb-4" />
+                    <MudTextField @bind-Value="_farmOwner.phone" Label="ဖုန်းနံပါတ်" Variant="Variant.Outlined" Class="mb-4" />
+                    <MudTextField @bind-Value="_farmOwner.address" Label="နေရပ်လိပ်စာ" Variant="Variant.Outlined" Lines="3" Class="mb-4" />
+
+                    <div class="d-flex justify-end mt-4">
+                        <MudButton OnClick="Cancel" Variant="Variant.Text" Color="Color.Default" Class="mr-2">မလုပ်တော့ပါ</MudButton>
+                        <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Warning">သိမ်းဆည်းမည်</MudButton>
+                    </div>
+                </EditForm>
+            }
+        </MudCardContent>
+    </MudCard>
+</MudContainer>
+
+@code {
+    [Parameter] public int Id { get; set; }
+    private FarmOwner? _farmOwner;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Database ထဲက အချက်အလက်ကို ID နဲ့ လှမ်းခေါ်ခြင်း
+        var list = await Http.GetFromJsonAsync<List<FarmOwner>>($"rest/v1/farm_owners?id=eq.{Id}");
+        _farmOwner = list?.FirstOrDefault();
+    }
+
+    private async Task UpdateFarmOwnerAsync()
+    {
+        // Patch သုံးပြီး update လုပ်ခြင်း
+        var response = await Http.PatchAsync($"rest/v1/farm_owners?id=eq.{Id}",
+            JsonContent.Create(_farmOwner));
+
+        if (response.IsSuccessStatusCode)
+        {
+            Snackbar.Add("ပြင်ဆင်မှု အောင်မြင်ပါသည်။", Severity.Success);
+            Navigation.NavigateTo("/farm-owners");
+        }
+        else
+        {
+            Snackbar.Add("ပြင်ဆင်ရာတွင် အမှားအယွင်းရှိပါသည်။", Severity.Error);
+        }
+    }
+
+    private void Cancel() => Navigation.NavigateTo("/farm-owners");
+}

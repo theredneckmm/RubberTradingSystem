@@ -1,0 +1,194 @@
+﻿@page "/fund-transfers"
+@using MudBlazor
+@using RubberTradingSystem.Models
+@using RubberTradingSystem.Services
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@inject LanguageService LangService
+@implements IDisposable
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4 mb-6">
+    <MudText Typo="Typo.h5" Color="Color.Primary" Class="mb-4 font-weight-bold">
+        @LangService.GetString("Transfer_ListTitle")
+    </MudText>
+
+    <MudTable Items="@_items"
+              Dense="true"
+              Hover="true"
+              Bordered="true"
+              Striped="true"
+              Filter="new Func<TransferModel,bool>(FilterFunc)"
+              @bind-SelectedItem="_selectedItem"
+              RowClassFunc="SelectedRowClassFunc"
+              Elevation="2">
+
+        <ToolBarContent>
+            <MudSpacer />
+            <MudTextField @bind-Value="_searchString"
+                          Placeholder="@LangService.GetString("Transfer_SearchPlaceholder")"
+                          Immediate="true"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search"
+                          Class="mt-0"
+                          Clearable="true">
+            </MudTextField>
+        </ToolBarContent>
+
+        <HeaderContent>
+            <MudTh>@LangService.GetString("Transfer_ColFrom")</MudTh>
+            <MudTh>@LangService.GetString("Transfer_ColTo")</MudTh>
+            <MudTh>@LangService.GetString("Transfer_ColAmount")</MudTh>
+            <MudTh>@LangService.GetString("Transfer_ColDate")</MudTh>
+            <MudTh>@LangService.GetString("Transfer_ColNote")</MudTh>
+        </HeaderContent>
+
+        <RowTemplate>
+            <MudTd DataLabel="From">
+                <MudChip T="string" Color="Color.Error" Size="Size.Small">@context.from_wallet_name</MudChip>
+            </MudTd>
+            <MudTd DataLabel="To">
+                <MudChip T="string" Color="Color.Success" Size="Size.Small">@context.to_wallet_name</MudChip>
+            </MudTd>
+            <MudTd DataLabel="Amount"><b style="color: var(--mud-palette-primary-text);">@context.amount.ToString("N0")</b></MudTd>
+            <MudTd DataLabel="Date">@context.transfer_date.ToString("dd/MM/yyyy")</MudTd>
+            <MudTd DataLabel="Note">@context.note</MudTd>
+        </RowTemplate>
+
+        <PagerContent>
+            <MudTablePager PageSizeOptions="new int[] { 10, 25, 50 }" />
+        </PagerContent>
+    </MudTable>
+
+    <MudPaper Class="d-flex justify-end pa-4 mt-4" Elevation="2">
+        <MudButton Variant="Variant.Filled" Color="Color.Success" StartIcon="@Icons.Material.Filled.SwapHoriz"
+                   OnClick="OpenAddDialog" Class="mr-2">
+            @LangService.GetString("Transfer_AddButton")
+        </MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete"
+                   Disabled="@(_selectedItem == null)" OnClick="DeleteAsync">
+            @LangService.GetString("Transfer_DeleteButton")
+        </MudButton>
+    </MudPaper>
+</MudContainer>
+
+<style>
+    .selected-row {
+        background-color: rgba(33, 150, 243, 0.2) !important;
+    }
+</style>
+
+@code {
+    private List<TransferModel> _items = new();
+    private TransferModel? _selectedItem;
+    private string _searchString = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        LangService.OnLanguageChanged += StateHasChanged;
+        await LoadDataAsync();
+    }
+
+    public void Dispose() => LangService.OnLanguageChanged -= StateHasChanged;
+
+    private async Task LoadDataAsync()
+    {
+        try
+        {
+            _items = await Http.GetFromJsonAsync<List<TransferModel>>("rest/v1/fund_transfers?select=*&order=transfer_date.desc") ?? new();
+            _selectedItem = null;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private string SelectedRowClassFunc(TransferModel item, int rowNumber)
+    {
+        if (_selectedItem != null && _selectedItem.id == item.id)
+        {
+            return "selected-row";
+        }
+        return string.Empty;
+    }
+
+    private bool FilterFunc(TransferModel item)
+    {
+        if (string.IsNullOrWhiteSpace(_searchString)) return true;
+        return item.from_wallet_name.Contains(_searchString, StringComparison.OrdinalIgnoreCase) ||
+               item.to_wallet_name.Contains(_searchString, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private async Task OpenAddDialog()
+    {
+        var parameters = new DialogParameters { ["Model"] = new TransferModel(), ["IsNew"] = true };
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<FundTransferDialog>(LangService.GetString("Transfer_AddTitle"), parameters, options);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled) await LoadDataAsync();
+    }
+
+    private async Task DeleteAsync()
+    {
+        if (_selectedItem == null) return;
+
+        var confirmed = await DialogService.ShowMessageBoxAsync(
+            LangService.GetString("Confirm_Title"),
+            LangService.GetString("Confirm_DeleteMessage"),
+            yesText: LangService.GetString("Btn_Yes"), cancelText: LangService.GetString("Btn_Cancel"));
+
+        if (confirmed == true)
+        {
+            try
+            {
+                // 1. Wallets balance များကို မူလအခြေအနေသို့ ပြန်လည်ချိန်ညှိခြင်း (From wallet တွင် ပြန်ပေါင်း၊ To wallet တွင် ပြန်နှုတ်)
+                var fromWallet = await Http.GetFromJsonAsync<List<WalletFullModel>>($"rest/v1/wallets?id=eq.{_selectedItem.from_wallet_id}&select=balance");
+                if (fromWallet != null && fromWallet.Any())
+                {
+                    await Http.PatchAsync($"rest/v1/wallets?id=eq.{_selectedItem.from_wallet_id}", JsonContent.Create(new { balance = fromWallet.First().balance + _selectedItem.amount }));
+                }
+
+                var toWallet = await Http.GetFromJsonAsync<List<WalletFullModel>>($"rest/v1/wallets?id=eq.{_selectedItem.to_wallet_id}&select=balance");
+                if (toWallet != null && toWallet.Any())
+                {
+                    await Http.PatchAsync($"rest/v1/wallets?id=eq.{_selectedItem.to_wallet_id}", JsonContent.Create(new { balance = toWallet.First().balance - _selectedItem.amount }));
+                }
+
+                // 2. Transactions, Vouchers, Ledgers များကို ဖျက်ခြင်း
+                var transactions = await Http.GetFromJsonAsync<List<TransactionLookupModel>>(
+                    $"rest/v1/transactions?description=like.*Transfer: {_selectedItem.from_wallet_name} -> {_selectedItem.to_wallet_name}*&select=id");
+
+                if (transactions != null && transactions.Any())
+                {
+                    foreach (var tx in transactions)
+                    {
+                        await Http.DeleteAsync($"rest/v1/ledgers?transaction_id=eq.{tx.id}");
+                        await Http.DeleteAsync($"rest/v1/vouchers?reference_id=eq.{tx.id}");
+                        await Http.DeleteAsync($"rest/v1/transactions?id=eq.{tx.id}");
+                    }
+                }
+
+                // 3. fund_transfers ဇယားမှ ဖျက်ခြင်း
+                var response = await Http.DeleteAsync($"rest/v1/fund_transfers?id=eq.{_selectedItem.id}");
+                if (response.IsSuccessStatusCode)
+                {
+                    Snackbar.Add(LangService.GetString("Transfer_DeleteSuccess"), Severity.Success);
+                    await LoadDataAsync();
+                }
+                else
+                {
+                    Snackbar.Add("Failed to delete transfer record.", Severity.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Delete Error: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+
+    private class TransactionLookupModel { public string id { get; set; } = string.Empty; }
+    private class WalletFullModel { public string id { get; set; } = string.Empty; public decimal balance { get; set; } }
+}

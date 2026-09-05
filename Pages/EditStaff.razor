@@ -1,0 +1,102 @@
+﻿@page "/staff/edit/{Id}"
+@using MudBlazor
+@using RubberTradingSystem.Models
+@using RubberTradingSystem.Services
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+@inject LanguageService LangService
+
+<MudContainer MaxWidth="MaxWidth.Small" Class="mt-5">
+    <MudCard Elevation="3">
+        <MudCardHeader>
+            <MudText Typo="Typo.h5" Color="Color.Primary">ဝန်ထမ်းအချက်အလက် ပြင်ဆင်ရန်</MudText>
+        </MudCardHeader>
+        <MudCardContent>
+            <EditForm Model="@_model" OnValidSubmit="UpdateStaff">
+                <DataAnnotationsValidator />
+
+                <MudTextField @bind-Value="_model.full_name"
+                              Label="ဝန်ထမ်းအမည်"
+                              Variant="Variant.Outlined"
+                              Class="mb-4"
+                              Required="true" />
+
+                <MudTextField @bind-Value="_model.email"
+                              Label="အီးမေးလ် (Email)"
+                              Variant="Variant.Outlined"
+                              Class="mb-4"
+                              Disabled="true" /> <!-- Email ကို Edit လုပ်လို့မရအောင် ပိတ်ထားသည် -->
+
+                <div class="d-flex justify-end mt-4">
+                    <MudButton OnClick="Cancel" Variant="Variant.Text" Class="mr-2">ပယ်ဖျက်မည်</MudButton>
+                    <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Disabled="@_isSaving">
+                        @if (_isSaving)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                            <MudText>သိမ်းဆည်းနေပါသည်...</MudText>
+                        }
+                        else
+                        {
+                            <MudText>ပြင်ဆင်မည်</MudText>
+                        }
+                    </MudButton>
+                </div>
+            </EditForm>
+        </MudCardContent>
+    </MudCard>
+</MudContainer>
+
+@code {
+    [Parameter]
+    public string Id { get; set; } = string.Empty;
+
+    private StaffModel _model = new();
+    private bool _isSaving;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var result = await Http.GetFromJsonAsync<List<StaffModel>>($"rest/v1/profiles?id=eq.{Id}&select=*");
+            if (result != null && result.Count > 0)
+            {
+                _model = result[0];
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"အချက်အလက် ရယူရာတွင် အမှားရှိသည်: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task UpdateStaff()
+    {
+        _isSaving = true;
+        try
+        {
+            var updateData = new { full_name = _model.full_name };
+            var response = await Http.PatchAsync($"rest/v1/profiles?id=eq.{Id}", JsonContent.Create(updateData));
+
+            if (response.IsSuccessStatusCode)
+            {
+                Snackbar.Add("ဝန်ထမ်းအချက်အလက် ပြင်ဆင်ပြီးပါပြီ။", Severity.Success);
+                Navigation.NavigateTo("/staff-list");
+            }
+            else
+            {
+                Snackbar.Add("ပြင်ဆင်၍ မအောင်မြင်ပါ။", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"အမှားအယွင်း: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private void Cancel() => Navigation.NavigateTo("/staff-list");
+}

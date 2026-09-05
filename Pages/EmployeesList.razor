@@ -1,0 +1,175 @@
+﻿@page "/employees"
+@using MudBlazor
+@using RubberTradingSystem.Models
+@using RubberTradingSystem.Services
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@inject NavigationManager Nav
+@inject LanguageService LangService
+@implements IDisposable
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+    <MudText Typo="Typo.h5" Color="Color.Primary" Class="mb-4">@LangService.GetString("Emp_ListTitle")</MudText>
+
+    <MudTable Items="@_items"
+              Dense="true"
+              Hover="true"
+              Bordered="true"
+              Striped="true"
+              Filter="new Func<EmployeeModel,bool>(FilterFunc)"
+              @bind-SelectedItem="_selectedItem"
+              RowClass="cursor-pointer"
+              Elevation="2">
+
+        <ToolBarContent>
+            <MudSpacer />
+            <MudTextField @bind-Value="_searchString"
+                          Placeholder="@LangService.GetString("Emp_SearchPlaceholder")"
+                          Immediate="true"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search"
+                          Class="mt-0"
+                          Clearable="true">
+            </MudTextField>
+        </ToolBarContent>
+
+        <HeaderContent>
+            <MudTh>@LangService.GetString("Emp_ColName")</MudTh>
+            <MudTh>@LangService.GetString("Emp_ColPosition")</MudTh>
+            <MudTh>@LangService.GetString("Emp_ColSalary")</MudTh>
+            <MudTh>@LangService.GetString("Emp_ColPhone")</MudTh>
+            <MudTh>@LangService.GetString("Emp_ColStatus")</MudTh>
+            <MudTh>Actions</MudTh>
+        </HeaderContent>
+
+        <RowTemplate>
+            <MudTd DataLabel="Name"><b>@context.full_name</b></MudTd>
+            <MudTd DataLabel="Position">@context.position</MudTd>
+            <MudTd DataLabel="Salary">@context.salary.ToString("N0")</MudTd>
+            <MudTd DataLabel="Phone">@context.phone</MudTd>
+            <MudTd DataLabel="Status">
+                <MudChip T="string" Color="@(context.status == "Active" ? Color.Success : Color.Error)" Size="Size.Small">
+                    @context.status
+                </MudChip>
+            </MudTd>
+            <MudTd DataLabel="Actions">
+                <MudButton Variant="Variant.Outlined" Color="Color.Info" Size="Size.Small">
+                           OnClick="@(() => Nav.NavigateTo($"/employee/{context.id}"))"
+                    @LangService.GetString("Emp_Profile")
+                </MudButton>
+            </MudTd>
+        </RowTemplate>
+
+        <PagerContent>
+            <MudTablePager PageSizeOptions="new int[] { 10, 25, 50 }" />
+        </PagerContent>
+    </MudTable>
+
+    <MudPaper Class="d-flex justify-end pa-4 mt-4" Elevation="2">
+        <MudButton Variant="Variant.Filled" Color="Color.Success" StartIcon="@Icons.Material.Filled.Add"
+                   OnClick="OpenAddDialog" Class="mr-2">
+            @LangService.GetString("Emp_AddButton")
+        </MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Warning" StartIcon="@Icons.Material.Filled.Edit"
+                   Disabled="@(_selectedItem == null)" OnClick="OpenEditDialog" Class="mr-2">
+            @LangService.GetString("Emp_EditButton")
+        </MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete"
+                   Disabled="@(_selectedItem == null)" OnClick="DeleteAsync">
+            @LangService.GetString("Emp_DeleteButton")
+        </MudButton>
+    </MudPaper>
+</MudContainer>
+
+@code {
+    private List<EmployeeModel> _items = new();
+    private EmployeeModel? _selectedItem;
+    private string _searchString = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        LangService.OnLanguageChanged += StateHasChanged;
+        await LoadDataAsync();
+    }
+
+    public void Dispose() => LangService.OnLanguageChanged -= StateHasChanged;
+
+    private async Task LoadDataAsync()
+    {
+        try
+        {
+            _items = await Http.GetFromJsonAsync<List<EmployeeModel>>("rest/v1/employees?select=*&order=full_name.asc") ?? new();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private bool FilterFunc(EmployeeModel item)
+    {
+        if (string.IsNullOrWhiteSpace(_searchString)) return true;
+        return item.full_name.Contains(_searchString, StringComparison.OrdinalIgnoreCase) ||
+               item.position.Contains(_searchString, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private async Task OpenAddDialog()
+    {
+        var parameters = new DialogParameters { ["Model"] = new EmployeeModel(), ["IsNew"] = true };
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<EmployeeDialog>(LangService.GetString("Emp_AddTitle"), parameters, options);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled) await LoadDataAsync();
+    }
+
+    private async Task OpenEditDialog()
+    {
+        if (_selectedItem == null) return;
+        var editModel = new EmployeeModel
+        {
+            id = _selectedItem.id,
+            owner_id = _selectedItem.owner_id,
+            full_name = _selectedItem.full_name,
+            position = _selectedItem.position,
+            salary = _selectedItem.salary,
+            phone = _selectedItem.phone,
+            address = _selectedItem.address,
+            hire_date = _selectedItem.hire_date,
+            status = _selectedItem.status
+        };
+
+        var parameters = new DialogParameters { ["Model"] = editModel, ["IsNew"] = false };
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<EmployeeDialog>(LangService.GetString("Emp_EditTitle"), parameters, options);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled) await LoadDataAsync();
+    }
+
+    private async Task DeleteAsync()
+    {
+        if (_selectedItem == null) return;
+
+        var confirmed = await DialogService.ShowMessageBoxAsync(
+            "Confirm",
+            LangService.GetString("Emp_DeleteConfirm"),
+            yesText: "Yes", cancelText: "Cancel");
+
+        if (confirmed == true)
+        {
+            var response = await Http.DeleteAsync($"rest/v1/employees?id=eq.{_selectedItem.id}");
+            if (response.IsSuccessStatusCode)
+            {
+                Snackbar.Add(LangService.GetString("Emp_DeleteSuccess"), Severity.Success);
+                await LoadDataAsync();
+                _selectedItem = null;
+            }
+            else
+            {
+                Snackbar.Add("Failed to delete employee.", Severity.Error);
+            }
+        }
+    }
+}

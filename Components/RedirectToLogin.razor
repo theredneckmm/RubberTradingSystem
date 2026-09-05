@@ -1,0 +1,9 @@
+﻿@inject NavigationManager NavManager
+
+@code {
+    protected override void OnInitialized()
+    {
+        // Login Page သို့ အလိုအလျောက် ပို့ဆောင်ပေးခြင်း
+        NavManager.NavigateTo("/login", true);
+    }
+}

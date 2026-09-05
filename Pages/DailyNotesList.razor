@@ -1,0 +1,155 @@
+﻿@page "/daily-notes"
+@using MudBlazor
+@using RubberTradingSystem.Models
+@using RubberTradingSystem.Services
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@inject LanguageService LangService
+@implements IDisposable
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+    <MudText Typo="Typo.h5" Color="Color.Primary" Class="mb-4">@LangService.GetString("Note_ListTitle")</MudText>
+
+    <MudTable Items="@_items"
+              Dense="true"
+              Hover="true"
+              Bordered="true"
+              Striped="true"
+              Filter="new Func<DailyNoteModel,bool>(FilterFunc)"
+              @bind-SelectedItem="_selectedItem"
+              RowClass="cursor-pointer"
+              Elevation="2">
+
+        <ToolBarContent>
+            <MudSpacer />
+            <MudTextField @bind-Value="_searchString"
+                          Placeholder="@LangService.GetString("Note_SearchPlaceholder")"
+                          Immediate="true"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search"
+                          Class="mt-0"
+                          Clearable="true">
+            </MudTextField>
+        </ToolBarContent>
+
+        <HeaderContent>
+            <MudTh>@LangService.GetString("Note_ColTitle")</MudTh>
+            <MudTh>@LangService.GetString("Note_ColContent")</MudTh>
+            <MudTh>@LangService.GetString("Note_ColDate")</MudTh>
+        </HeaderContent>
+
+        <RowTemplate>
+            <MudTd DataLabel="Title"><b>@context.title</b></MudTd>
+            <MudTd DataLabel="Content">@context.content</MudTd>
+            <MudTd DataLabel="Date">@context.note_date.ToString("dd/MM/yyyy")</MudTd>
+        </RowTemplate>
+
+        <PagerContent>
+            <MudTablePager PageSizeOptions="new int[] { 10, 25, 50 }" />
+        </PagerContent>
+    </MudTable>
+
+    <MudPaper Class="d-flex justify-end pa-4 mt-4" Elevation="2">
+        <MudButton Variant="Variant.Filled" Color="Color.Success" StartIcon="@Icons.Material.Filled.Add"
+                   OnClick="OpenAddDialog" Class="mr-2">
+            @LangService.GetString("Note_AddButton")
+        </MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Warning" StartIcon="@Icons.Material.Filled.Edit"
+                   Disabled="@(_selectedItem == null)" OnClick="OpenEditDialog" Class="mr-2">
+            @LangService.GetString("Note_EditButton")
+        </MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete"
+                   Disabled="@(_selectedItem == null)" OnClick="DeleteAsync">
+            @LangService.GetString("Note_DeleteButton")
+        </MudButton>
+    </MudPaper>
+</MudContainer>
+
+@code {
+    private List<DailyNoteModel> _items = new();
+    private DailyNoteModel? _selectedItem;
+    private string _searchString = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        LangService.OnLanguageChanged += StateHasChanged;
+        await LoadDataAsync();
+    }
+
+    public void Dispose() => LangService.OnLanguageChanged -= StateHasChanged;
+
+    private async Task LoadDataAsync()
+    {
+        try
+        {
+            _items = await Http.GetFromJsonAsync<List<DailyNoteModel>>("rest/v1/daily_notes?select=*&order=note_date.desc") ?? new();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private bool FilterFunc(DailyNoteModel item)
+    {
+        if (string.IsNullOrWhiteSpace(_searchString)) return true;
+        return item.title.Contains(_searchString, StringComparison.OrdinalIgnoreCase) ||
+               item.content.Contains(_searchString, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private async Task OpenAddDialog()
+    {
+        var parameters = new DialogParameters { ["Model"] = new DailyNoteModel(), ["IsNew"] = true };
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<DailyNoteDialog>(LangService.GetString("Note_AddTitle"), parameters, options);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled) await LoadDataAsync();
+    }
+
+    private async Task OpenEditDialog()
+    {
+        if (_selectedItem == null) return;
+        var editModel = new DailyNoteModel
+        {
+            id = _selectedItem.id,
+            owner_id = _selectedItem.owner_id,
+            title = _selectedItem.title,
+            content = _selectedItem.content,
+            note_date = _selectedItem.note_date
+        };
+
+        var parameters = new DialogParameters { ["Model"] = editModel, ["IsNew"] = false };
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<DailyNoteDialog>(LangService.GetString("Note_EditTitle"), parameters, options);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled) await LoadDataAsync();
+    }
+
+    private async Task DeleteAsync()
+    {
+        if (_selectedItem == null) return;
+
+        var confirmed = await DialogService.ShowMessageBoxAsync(
+            "Confirm",
+            LangService.GetString("Note_DeleteConfirm"),
+            yesText: "Yes", cancelText: "Cancel");
+
+        if (confirmed == true)
+        {
+            var response = await Http.DeleteAsync($"rest/v1/daily_notes?id=eq.{_selectedItem.id}");
+            if (response.IsSuccessStatusCode)
+            {
+                Snackbar.Add(LangService.GetString("Note_DeleteSuccess"), Severity.Success);
+                await LoadDataAsync();
+                _selectedItem = null;
+            }
+            else
+            {
+                Snackbar.Add("Failed to delete note.", Severity.Error);
+            }
+        }
+    }
+}
