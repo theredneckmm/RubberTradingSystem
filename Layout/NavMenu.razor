@@ -1,5 +1,6 @@
 ﻿@using RubberTradingSystem.Services
 @inject LanguageService LangService
+@inject NavigationManager Navigation
 @implements IDisposable
 
 <MudNavMenu Class="pa-2">
@@ -131,5 +132,23 @@
     private void UpdateUI() => InvokeAsync(StateHasChanged);
 
     protected override void OnInitialized() => LangService.OnLanguageChanged += UpdateUI;
-    public void Dispose() => LangService.OnLanguageChanged -= UpdateUI;
+   
+
+    private string AppUrl(string path)
+    {
+        return $"{Navigation.BaseUri.TrimEnd('/')}/{path.TrimStart('/')}";
+    }
+
+    private void UpdateUI() => InvokeAsync(StateHasChanged);
+
+    protected override void OnInitialized()
+    {
+        LangService.OnLanguageChanged += UpdateUI;
+    }
+
+    public void Dispose()
+    {
+        LangService.OnLanguageChanged -= UpdateUI;
+    }
+}
 }
