@@ -4,14 +4,17 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>RubberTradingSystem</title>
-   <base href="/RTS/" />
+    
+    <!-- Base href ကို repository နာမည်အမှန်အတိုင်း သတ်မှတ်ပါ -->
+    <base href="/RubberTradingSystem/" />
 
-    <!-- မူလ Bootstrap များကို ခဏထားထားနိုင်ပါသည်။ MudBlazor အတွက် အောက်ပါ ၃ ကြောင်း ထည့်ပါ -->
+    <!-- Google Fonts & MudBlazor CSS -->
     <link href="https://fonts.googleapis.com/css?family=Roboto:300,400,500,700&display=swap" rel="stylesheet" />
     <link href="_content/MudBlazor/MudBlazor.min.css" rel="stylesheet" />
 
-    <link href="css/app.css" rel="stylesheet" />
-    <link href="RubberTradingSystem.styles.css" rel="stylesheet" />
+    <!-- App Styles (Relative path ဖြစ်စေရန် ./ ထည့်ထားပါသည်) -->
+    <link href="./css/app.css" rel="stylesheet" />
+    <link href="./RubberTradingSystem.styles.css" rel="stylesheet" />
 </head>
 <body>
     <div id="app">
@@ -25,11 +28,12 @@
         <a href="" class="reload">Reload</a>
         <a class="dismiss">🗙</a>
     </div>
-    <script src="_framework/blazor.webassembly.js"></script>
 
-    <!-- MudBlazor JS ကို ဤနေရာတွင် ထည့်ပါ -->
-    <script src="_content/MudBlazor/MudBlazor.min.js"></script>
-    <!-- index.html -->
-    <script src="js/site.js"></script>
+    <!-- Blazor WASM Script -->
+    <script src="./_framework/blazor.webassembly.js"></script>
+
+    <!-- MudBlazor & Custom JS Scripts -->
+    <script src="./_content/MudBlazor/MudBlazor.min.js"></script>
+    <script src="./js/site.js"></script>
 </body>
 </html>
