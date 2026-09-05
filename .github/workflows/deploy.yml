@@ -2,7 +2,8 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
 
 permissions:
   contents: write
@@ -11,30 +12,56 @@ permissions:
 
 jobs:
   build-and-deploy:
+
     runs-on: ubuntu-latest
+
     steps:
-    - uses: actions/checkout@v3
 
-    - name: Setup .NET Core
-      uses: actions/setup-dotnet@v3
-      with:
-        dotnet-version: '10.0'
+      # 1. Checkout source code
+      - name: Checkout
+        uses: actions/checkout@v4
 
-    # Project ကို Release Mode ဖြင့် Publish လုပ်ခြင်း
-    - name: Publish .NET Core Project
-      run: dotnet publish RubberTradingSystem.csproj -c Release -o release --nologo
+      # 2. Setup .NET 10
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
 
-    # GitHub Pages အတွက် .nojekyll ဖိုင်ထည့်ခြင်း
-    - name: Add .nojekyll file
-      run: touch release/wwwroot/.nojekyll
+      # 3. Restore
+      - name: Restore
+        run: dotnet restore RubberTradingSystem.csproj
 
-    # Base path များကို GitHub Pages တွင် အလုပ်လုပ်စေရန် index.html ကို base tag ထည့်ခြင်း (သို့မဟုတ် index.html ကို 404.html အဖြစ် Copy ကူးခြင်း)
-    - name: Copy index.html to 404.html for SPA routing
-      run: cp release/wwwroot/index.html release/wwwroot/404.html
+      # 4. Publish
+      - name: Publish
+        run: dotnet publish RubberTradingSystem.csproj -c Release -o release --nologo
 
-    # gh-pages branch သို့ Deploy လုပ်ခြင်း
-    - name: Deploy to GitHub Pages
-      uses: peaceiris/actions-gh-pages@v3
-      with:
-        github_token: ${{ secrets.GITHUB_TOKEN }}
-        publish_dir: release/wwwroot
+      # 5. Check published files
+      - name: Check publish output
+        run: |
+          echo "===== RELEASE ====="
+          ls -la release
+
+          echo "===== WWWROOT ====="
+          ls -la release/wwwroot
+
+          echo "===== FRAMEWORK ====="
+          ls -la release/wwwroot/_framework
+
+      # 6. Add .nojekyll
+      - name: Add .nojekyll
+        run: |
+          touch release/wwwroot/.nojekyll
+
+      # 7. SPA fallback
+      - name: Create 404.html
+        run: |
+          cp release/wwwroot/index.html release/wwwroot/404.html
+
+      # 8. Deploy to gh-pages
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./release/wwwroot
+          publish_branch: gh-pages
+          force_orphan: true
