@@ -1,39 +1,69 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
     <title>RubberTradingSystem</title>
-    
-    <!-- Base href ကို repository နာမည်အမှန်အတိုင်း သတ်မှတ်ပါ -->
+
+    <!-- For GitHub Pages / Sub-folder Hosting -->
     <base href="/RubberTradingSystem/" />
 
-    <!-- Google Fonts & MudBlazor CSS -->
-    <link href="https://fonts.googleapis.com/css?family=Roboto:300,400,500,700&display=swap" rel="stylesheet" />
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css?family=Roboto:300,400,500,700&display=swap"
+          rel="stylesheet" />
+
+    <!-- MudBlazor CSS -->
     <link href="_content/MudBlazor/MudBlazor.min.css" rel="stylesheet" />
 
-    <!-- App Styles (Relative path ဖြစ်စေရန် ./ ထည့်ထားပါသည်) -->
-    <link href="./css/app.css" rel="stylesheet" />
-    <link href="./RubberTradingSystem.styles.css" rel="stylesheet" />
+    <!-- Application CSS -->
+    <link href="css/app.css" rel="stylesheet" />
+
+    <!-- Generated CSS -->
+    <link href="RubberTradingSystem.styles.css" rel="stylesheet" />
+
 </head>
+
 <body>
+
     <div id="app">
         <svg class="loading-progress">
-            <!-- Loading indicator -->
+            <circle r="40%" cx="50%" cy="50%" />
+            <circle r="40%" cx="50%" cy="50%" />
         </svg>
+
+        <div class="loading-progress-text"></div>
     </div>
+
 
     <div id="blazor-error-ui">
+
         An unhandled error has occurred.
-        <a href="" class="reload">Reload</a>
-        <a class="dismiss">🗙</a>
+
+        <a href="" class="reload">
+            Reload
+        </a>
+
+        <a class="dismiss">
+            🗙
+        </a>
+
     </div>
 
-    <!-- Blazor WASM Script -->
-    <script src="./_framework/blazor.webassembly.js"></script>
 
-    <!-- MudBlazor & Custom JS Scripts -->
-    <script src="./_content/MudBlazor/MudBlazor.min.js"></script>
-    <script src="./js/site.js"></script>
+    <!-- Blazor WebAssembly -->
+    <script src="_framework/blazor.webassembly.js"></script>
+
+
+    <!-- MudBlazor JS -->
+    <script src="_content/MudBlazor/MudBlazor.min.js"></script>
+
+
+    <!-- Custom JavaScript -->
+    <script src="js/site.js"></script>
+
+
 </body>
+
 </html>
