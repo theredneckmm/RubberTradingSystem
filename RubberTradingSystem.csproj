@@ -2,20 +2,49 @@
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
+
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <OverrideHtmlAssetPlaceholders>true</OverrideHtmlAssetPlaceholders>
+
+    <!-- Disable HTML asset fingerprint placeholders -->
+    <OverrideHtmlAssetPlaceholders>false</OverrideHtmlAssetPlaceholders>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Blazor.Storage" Version="5.0.0" />
-    <PackageReference Include="ClosedXML" Version="0.105.1" />
-    <PackageReference Include="Microsoft.AspNetCore.Components.Authorization" Version="10.0.11" />
-    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="10.0.10" />
-    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="10.0.10" PrivateAssets="all" />
-    <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.11" />
-    <PackageReference Include="MudBlazor" Version="9.8.0" />
-    <PackageReference Include="Supabase.Postgrest" Version="4.4.0" />
+
+    <!-- Blazor Storage -->
+    <PackageReference Include="Blazor.Storage"
+                      Version="5.0.0" />
+
+    <!-- Excel -->
+    <PackageReference Include="ClosedXML"
+                      Version="0.105.1" />
+
+    <!-- Authentication -->
+    <PackageReference Include="Microsoft.AspNetCore.Components.Authorization"
+                      Version="10.0.11" />
+
+    <!-- Blazor WebAssembly -->
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly"
+                      Version="10.0.10" />
+
+    <!-- Blazor WebAssembly Development Server -->
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer"
+                      Version="10.0.10"
+                      PrivateAssets="all" />
+
+    <!-- HTTP Client -->
+    <PackageReference Include="Microsoft.Extensions.Http"
+                      Version="10.0.11" />
+
+    <!-- MudBlazor -->
+    <PackageReference Include="MudBlazor"
+                      Version="9.8.0" />
+
+    <!-- Supabase -->
+    <PackageReference Include="Supabase.Postgrest"
+                      Version="4.4.0" />
+
   </ItemGroup>
 
 </Project>
