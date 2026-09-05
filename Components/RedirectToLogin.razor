@@ -1,9 +1,12 @@
-﻿@inject NavigationManager NavManager
+@inject NavigationManager NavManager
 
 @code {
     protected override void OnInitialized()
     {
-        // Login Page သို့ အလိုအလျောက် ပို့ဆောင်ပေးခြင်း
-        NavManager.NavigateTo("/login", true);
+        // GitHub Pages အပါအဝင် application ရဲ့ BaseUri ကို အသုံးပြုပြီး Login သို့သွားမည်
+        NavManager.NavigateTo(
+            NavManager.BaseUri + "login",
+            true
+        );
     }
 }
