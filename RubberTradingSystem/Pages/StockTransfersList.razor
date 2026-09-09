@@ -1,0 +1,78 @@
+﻿@page "/stock-transfers"
+@using MudBlazor
+@using RubberTradingSystem.Models
+@using RubberTradingSystem.Services
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@inject LanguageService LangService
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+    <MudText Typo="Typo.h5" Color="Color.Primary" Class="mb-4">Stock Transfers & Truck Intake</MudText>
+
+    <MudTable Items="@_items" Dense="true" Hover="true" Bordered="true" Striped="true" Elevation="2">
+        <ToolBarContent>
+            <MudSpacer />
+            <MudButton Variant="Variant.Filled" Color="Color.Success" StartIcon="@Icons.Material.Filled.Add"
+                       OnClick="OpenAddDialog">
+                New Transfer / Intake
+            </MudButton>
+        </ToolBarContent>
+        <HeaderContent>
+            <MudTh>Voucher No</MudTh>
+            <MudTh>From (Source)</MudTh>
+            <MudTh>To (Destination)</MudTh>
+            <MudTh>Rubber Type</MudTh>
+            <MudTh>Weight (kg)</MudTh>
+            <MudTh>Date</MudTh>
+            <MudTh>Note</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd><b>@context.transfer_no</b></MudTd>
+            <MudTd>
+                <MudChip T="string" Color="Color.Warning" Size="Size.Small">@context.from_location</MudChip>
+            </MudTd>
+            <MudTd>
+                <MudChip T="string" Color="Color.Success" Size="Size.Small">@context.to_location</MudChip>
+            </MudTd>
+            <MudTd>@context.rubber_type</MudTd>
+            <MudTd><b>@context.weight_kg.ToString("N2") kg</b></MudTd>
+            <MudTd>@context.transfer_date.ToString("dd/MM/yyyy")</MudTd>
+            <MudTd>@context.note</MudTd>
+        </RowTemplate>
+        <PagerContent>
+            <MudTablePager PageSizeOptions="new int[] { 10, 25, 50 }" />
+        </PagerContent>
+    </MudTable>
+</MudContainer>
+
+@code {
+    private List<StockTransferModel> _items = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        try
+        {
+            _items = await Http.GetFromJsonAsync<List<StockTransferModel>>("rest/v1/stock_transfers?select=*&order=transfer_date.desc") ?? new();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task OpenAddDialog()
+    {
+        var parameters = new DialogParameters { ["Model"] = new StockTransferModel() };
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Medium, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<StockTransferDialog>("New Stock Transfer / Intake", parameters, options);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled) await LoadDataAsync();
+    }
+}

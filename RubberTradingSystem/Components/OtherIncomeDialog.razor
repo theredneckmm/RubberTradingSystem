@@ -1,0 +1,368 @@
+﻿@using MudBlazor
+@using RubberTradingSystem.Models
+@using RubberTradingSystem.Services
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject LanguageService LangService
+@inject UserContextService UserContext
+@implements IDisposable
+
+<MudDialog>
+    <DialogContent>
+        <EditForm Model="@Model" OnValidSubmit="SaveAsync">
+            <DataAnnotationsValidator />
+
+            <!-- ဘောင်ချာအမှတ်စဉ်ပြသရန် -->
+            <div class="d-flex justify-space-between align-center mb-4">
+                <MudText Typo="Typo.subtitle1"><b>Voucher: @_currentVoucherNumber</b></MudText>
+            </div>
+
+            <MudTextField @bind-Value="Model.description"
+                          Label="@LangService.GetString("Income_DescLabel")"
+                          Variant="Variant.Outlined"
+                          Class="mb-4"
+                          Required="true"
+                          Disabled="_isSuccessCompleted" />
+
+            <MudNumericField @bind-Value="Model.amount"
+                             Label="@LangService.GetString("Income_AmountLabel")"
+                             Variant="Variant.Outlined"
+                             Class="mb-4"
+                             Min="0"
+                             Disabled="_isSuccessCompleted" />
+
+            <!-- ငွေပေးချေမှု နည်းလမ်း ရွေးချယ်သည့် Dropdown (wallets ဇယားမှ လှမ်းယူသည်) -->
+            <MudSelect T="string" @bind-Value="Model.payment_method"
+                       Label="@LangService.GetString("Income_PaymentMethodLabel")"
+                       Variant="Variant.Outlined"
+                       Class="mb-4"
+                       Required="true"
+                       Disabled="_isSuccessCompleted">
+                @foreach (var method in _paymentMethods)
+                {
+                    <MudSelectItem Value="@method">@method</MudSelectItem>
+                }
+            </MudSelect>
+
+            <MudDatePicker @bind-Date="_receivedDate"
+                           Label="@LangService.GetString("Income_DateLabel")"
+                           Variant="Variant.Outlined"
+                           Class="mb-4"
+                           Disabled="_isSuccessCompleted" />
+
+            <MudTextField @bind-Value="Model.note"
+                          Label="@LangService.GetString("Income_NoteLabel")"
+                          Variant="Variant.Outlined"
+                          Lines="2"
+                          Class="mb-4"
+                          Disabled="_isSuccessCompleted" />
+
+            <div class="d-flex justify-end gap-2">
+                @if (!_isSuccessCompleted)
+                {
+                    <MudButton OnClick="Cancel" Variant="Variant.Text" Class="mr-2">
+                        @LangService.GetString("Rubber_Cancel")
+                    </MudButton>
+                    <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Disabled="_isSaving">
+                        @(IsNew ? LangService.GetString("Rubber_Save") : LangService.GetString("Rubber_Update"))
+                    </MudButton>
+                }
+                else
+                {
+                    <MudButton Variant="Variant.Outlined" Color="Color.Secondary" OnClick="PrintVoucher">
+                        Print Voucher
+                    </MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Success" OnClick="FinishTransaction">
+                        Finish
+                    </MudButton>
+                }
+            </div>
+        </EditForm>
+    </DialogContent>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public OtherIncomeModel Model { get; set; } = new();
+    [Parameter] public bool IsNew { get; set; }
+
+    private string _currentVoucherNumber = string.Empty;
+    private bool _isSaving = false;
+    private bool _isSuccessCompleted = false;
+
+    private List<string> _paymentMethods = new();
+    private decimal _originalAmount = 0;
+
+    private DateTime? _receivedDate
+    {
+        get => Model.received_date;
+        set => Model.received_date = value ?? DateTime.Today;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        LangService.OnLanguageChanged += StateHasChanged;
+        await LoadPaymentMethodsAsync();
+
+        if (IsNew)
+        {
+            _currentVoucherNumber = await GenerateVoucherNumberAsync("INC");
+        }
+        else
+        {
+            _originalAmount = Model.amount;
+            var existingTxs = await Http.GetFromJsonAsync<List<TransactionResponseModel>>(
+                $"rest/v1/transactions?description=like.*{Model.description}*&select=voucher_number");
+            if (existingTxs != null && existingTxs.Any())
+            {
+                _currentVoucherNumber = existingTxs.First().voucher_number ?? "INC-EDIT";
+            }
+            else
+            {
+                _currentVoucherNumber = "INC-EDIT";
+            }
+        }
+    }
+
+    public void Dispose() => LangService.OnLanguageChanged -= StateHasChanged;
+
+    private async Task LoadPaymentMethodsAsync()
+    {
+        try
+        {
+            var wallets = await Http.GetFromJsonAsync<List<WalletNameModel>>("rest/v1/wallets?select=wallet_name");
+            if (wallets != null && wallets.Any())
+            {
+                _paymentMethods = wallets.Select(x => x.wallet_name).Distinct().ToList();
+            }
+            else
+            {
+                _paymentMethods = new List<string> { "Cash" };
+            }
+        }
+        catch
+        {
+            _paymentMethods = new List<string> { "Cash" };
+        }
+    }
+
+    private class WalletNameModel { public string wallet_name { get; set; } = string.Empty; }
+
+    private async Task SaveAsync()
+    {
+        _isSaving = true;
+        try
+        {
+            string ownerId = await UserContext.GetCurrentOwnerIdAsync();
+            string staffId = await UserContext.GetCurrentStaffIdAsync();
+
+            if (string.IsNullOrEmpty(ownerId))
+            {
+                Snackbar.Add("User Session not found. Please login again.", Severity.Error);
+                return;
+            }
+
+            string? walletId = null;
+            if (!string.IsNullOrEmpty(Model.payment_method))
+            {
+                var wallets = await Http.GetFromJsonAsync<List<WalletFullModel>>($"rest/v1/wallets?wallet_name=eq.{Uri.EscapeDataString(Model.payment_method)}&select=id,balance");
+                if (wallets != null && wallets.Any())
+                {
+                    walletId = wallets.First().id;
+                }
+            }
+
+            if (IsNew)
+            {
+                // 1. other_incomes ဇယားသို့ သိမ်းဆည်းခြင်း
+                var incomePayload = new
+                {
+                    owner_id = ownerId,
+                    staff_id = string.IsNullOrEmpty(staffId) ? null : staffId,
+                    description = Model.description,
+                    amount = Model.amount,
+                    payment_method = Model.payment_method,
+                    received_date = Model.received_date.ToString("yyyy-MM-dd"),
+                    note = Model.note
+                };
+
+                var response = await Http.PostAsJsonAsync("rest/v1/other_incomes", incomePayload);
+                if (!response.IsSuccessStatusCode)
+                {
+                    var err = await response.Content.ReadAsStringAsync();
+                    Snackbar.Add($"Failed to save income: {err}", Severity.Error);
+                    return;
+                }
+
+                // 2. Transactions ဇယားသို့ သိမ်းဆည်းခြင်း (transaction_type = "Income")
+                var txPayload = new
+                {
+                    owner_id = ownerId,
+                    staff_id = string.IsNullOrEmpty(staffId) ? null : staffId,
+                    transaction_type = "Income",
+                    wallet_id = string.IsNullOrEmpty(walletId) ? null : walletId,
+                    voucher_number = _currentVoucherNumber,
+                    total_amount = Model.amount,
+                    paid_amount = Model.amount,
+                    description = $"Other Income: {Model.description}"
+                };
+
+                var txReq = new HttpRequestMessage(HttpMethod.Post, "rest/v1/transactions")
+                {
+                    Content = JsonContent.Create(txPayload)
+                };
+                txReq.Headers.Add("Prefer", "return=representation");
+                var txResp = await Http.SendAsync(txReq);
+
+                if (txResp.IsSuccessStatusCode)
+                {
+                    var txList = await txResp.Content.ReadFromJsonAsync<List<TransactionResponseModel>>();
+                    string? txId = txList?.FirstOrDefault()?.id;
+
+                    // 3. Vouchers ဇယားသို့ သိမ်းဆည်းခြင်း
+                    var voucherPayload = new
+                    {
+                        owner_id = ownerId,
+                        staff_id = string.IsNullOrEmpty(staffId) ? null : staffId,
+                        voucher_number = _currentVoucherNumber,
+                        voucher_type = "Income",
+                        reference_id = string.IsNullOrEmpty(txId) ? null : txId
+                    };
+                    await Http.PostAsJsonAsync("rest/v1/vouchers", voucherPayload);
+
+                    // 4. Ledgers ဇယားသို့ သိမ်းဆည်းခြင်း (Income ဖြစ်므로 entry_type = "Debit", ref_type = "OtherIncome")
+                    var ledgerPayload = new
+                    {
+                        owner_id = ownerId,
+                        staff_id = string.IsNullOrEmpty(staffId) ? null : staffId,
+                        transaction_id = string.IsNullOrEmpty(txId) ? null : txId,
+                        voucher_number = _currentVoucherNumber,
+                        entry_type = "Debit",
+                        debit_amount = Model.amount,
+                        credit_amount = 0.00m,
+                        ref_type = "OtherIncome",
+                        description = $"Other Income: {Model.description}"
+                    };
+                    await Http.PostAsJsonAsync("rest/v1/ledgers", ledgerPayload);
+
+                    // 5. Wallets ဇယားသို့ ငွေပမာဏ ပေါင်းထည့်ခြင်း (Balance Add)
+                    if (!string.IsNullOrEmpty(walletId) && Model.amount > 0)
+                    {
+                        var targetWallets = await Http.GetFromJsonAsync<List<WalletFullModel>>($"rest/v1/wallets?id=eq.{walletId}&select=balance");
+                        if (targetWallets != null && targetWallets.Any())
+                        {
+                            decimal currentBalance = targetWallets.First().balance;
+                            decimal newBalance = currentBalance + Model.amount;
+                            await Http.PatchAsync($"rest/v1/wallets?id=eq.{walletId}", JsonContent.Create(new { balance = newBalance }));
+                        }
+                    }
+                }
+
+                Snackbar.Add(LangService.GetString("Income_SaveSuccess"), Severity.Success);
+                _isSuccessCompleted = true;
+            }
+            else
+            {
+                // UPDATE CASE
+                var response = await Http.PatchAsync($"rest/v1/other_incomes?id=eq.{Model.id}", JsonContent.Create(new
+                {
+                    description = Model.description,
+                    amount = Model.amount,
+                    payment_method = Model.payment_method,
+                    received_date = Model.received_date.ToString("yyyy-MM-dd"),
+                    note = Model.note
+                }));
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var existingTxs = await Http.GetFromJsonAsync<List<TransactionUpdateModel>>(
+                        $"rest/v1/transactions?voucher_number=eq.{_currentVoucherNumber}&select=id,wallet_id,total_amount");
+
+                    if (existingTxs != null && existingTxs.Any())
+                    {
+                        var tx = existingTxs.First();
+                        decimal amountDiff = Model.amount - _originalAmount; // ဝင်ငွေတိုးလာလျှင် balance ပိုပေါင်းရမည်
+
+                        if (!string.IsNullOrEmpty(tx.wallet_id))
+                        {
+                            var wallets = await Http.GetFromJsonAsync<List<WalletFullModel>>($"rest/v1/wallets?id=eq.{tx.wallet_id}&select=balance");
+                            if (wallets != null && wallets.Any())
+                            {
+                                decimal currentBal = wallets.First().balance;
+                                decimal adjustedBal = currentBal + amountDiff;
+                                await Http.PatchAsync($"rest/v1/wallets?id=eq.{tx.wallet_id}", JsonContent.Create(new { balance = adjustedBal }));
+                            }
+                        }
+
+                        await Http.PatchAsync($"rest/v1/transactions?id=eq.{tx.id}", JsonContent.Create(new
+                        {
+                            total_amount = Model.amount,
+                            paid_amount = Model.amount,
+                            description = $"Other Income: {Model.description}"
+                        }));
+
+                        await Http.PatchAsync($"rest/v1/ledgers?transaction_id=eq.{tx.id}", JsonContent.Create(new
+                        {
+                            debit_amount = Model.amount,
+                            description = $"Other Income: {Model.description}"
+                        }));
+                    }
+
+                    Snackbar.Add(LangService.GetString("Income_UpdateSuccess"), Severity.Success);
+                    MudDialog.Close(DialogResult.Ok(true));
+                }
+                else
+                {
+                    Snackbar.Add("Failed to update income.", Severity.Error);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private class WalletFullModel { public string id { get; set; } = string.Empty; public decimal balance { get; set; } }
+    private class TransactionUpdateModel { public string id { get; set; } = string.Empty; public string? wallet_id { get; set; } public decimal total_amount { get; set; } }
+
+    private void PrintVoucher() => Snackbar.Add($"ဘောင်ချာအမှတ် {_currentVoucherNumber} ကို Print ထုတ်နေပါပြီ...", Severity.Info);
+    private void FinishTransaction() => MudDialog.Close(DialogResult.Ok(true));
+    private void Cancel() => MudDialog.Cancel();
+
+    private async Task<string> GenerateVoucherNumberAsync(string prefix)
+    {
+        string dateStr = DateTime.Now.ToString("yyyyMMdd");
+        string searchPattern = $"{prefix}-{dateStr}-";
+        try
+        {
+            var transactions = await Http.GetFromJsonAsync<List<TransactionResponseModel>>(
+                $"rest/v1/transactions?voucher_number=like.{searchPattern}*&select=voucher_number");
+            int nextSeq = 1;
+            if (transactions != null && transactions.Any())
+            {
+                var maxSeq = transactions
+                    .Where(t => !string.IsNullOrEmpty(t.voucher_number) && t.voucher_number.Contains("-"))
+                    .Select(t =>
+                    {
+                        string part = t.voucher_number!.Substring(t.voucher_number.LastIndexOf('-') + 1);
+                        return int.TryParse(part, out int val) ? val : 0;
+                    })
+                    .DefaultIfEmpty(0)
+                    .Max();
+                nextSeq = maxSeq + 1;
+            }
+            return $"{prefix}-{dateStr}-{nextSeq:D3}";
+        }
+        catch
+        {
+            return $"{prefix}-{dateStr}-001";
+        }
+    }
+
+    private class TransactionResponseModel { public string id { get; set; } = string.Empty; public string? voucher_number { get; set; } }
+}

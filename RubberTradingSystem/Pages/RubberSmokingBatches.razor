@@ -1,0 +1,186 @@
+﻿@page "/rubber-smoking"
+@using MudBlazor
+@using RubberTradingSystem.Models
+@using RubberTradingSystem.Services
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@inject NavigationManager Navigation
+@inject LanguageService LangService
+@implements IDisposable
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4 mb-6">
+    <MudText Typo="Typo.h5" Color="Color.Primary" Class="mb-4 font-weight-bold">
+        @LangService.GetString("Smoking_ListTitle")
+    </MudText>
+
+    <MudTable Items="@_items"
+              Dense="true"
+              Hover="true"
+              Bordered="true"
+              Striped="true"
+              Filter="new Func<RubberSmokingBatchModel,bool>(FilterFunc)"
+              @bind-SelectedItem="_selectedItem"
+              RowClassFunc="SelectedRowClassFunc"
+              Elevation="2">
+
+        <ToolBarContent>
+            <MudSpacer />
+            <MudTextField @bind-Value="_searchString"
+                          Placeholder="@LangService.GetString("Smoking_SearchPlaceholder")"
+                          Immediate="true"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search"
+                          Class="mt-0"
+                          Clearable="true">
+            </MudTextField>
+        </ToolBarContent>
+
+        <HeaderContent>
+            <MudTh>@LangService.GetString("Smoking_ColBatchNo")</MudTh>
+            <MudTh>@LangService.GetString("Smoking_ColStartDate")</MudTh>
+            <MudTh>@LangService.GetString("Smoking_ColEndDate")</MudTh>
+            <MudTh>@LangService.GetString("Smoking_ColStatus")</MudTh>
+            <MudTh>@LangService.GetString("Smoking_ColInput")</MudTh>
+            <MudTh>@LangService.GetString("Smoking_ColOutput")</MudTh>
+            <MudTh>@LangService.GetString("Smoking_ColLoss")</MudTh>
+        </HeaderContent>
+
+        <RowTemplate>
+            <MudTd DataLabel="Batch No"><b>@context.batch_number</b></MudTd>
+            <MudTd DataLabel="Start Date">@context.start_date.ToString("dd/MM/yyyy")</MudTd>
+            <MudTd DataLabel="End Date">@(context.end_date?.ToString("dd/MM/yyyy") ?? "-")</MudTd>
+            <MudTd DataLabel="Status">
+                <MudChip T="string" Color="@(context.status == "Completed" ? Color.Success : Color.Warning)" Size="Size.Small">
+                    @context.status
+                </MudChip>
+            </MudTd>
+            <MudTd DataLabel="Input Weight"><b>@context.total_input_weight.ToString("N0")</b></MudTd>
+            <MudTd DataLabel="Output Weight"><b style="color: var(--mud-palette-success-text);">@context.total_output_weight.ToString("N0")</b></MudTd>
+            <MudTd DataLabel="Loss Weight"><b style="color: var(--mud-palette-error-text);">@context.total_loss_weight.ToString("N0")</b></MudTd>
+        </RowTemplate>
+
+        <PagerContent>
+            <MudTablePager PageSizeOptions="new int[] { 10, 25, 50 }" />
+        </PagerContent>
+    </MudTable>
+
+    <MudPaper Class="d-flex justify-end pa-4 mt-4" Elevation="2">
+        <MudButton Variant="Variant.Filled" Color="Color.Success" StartIcon="@Icons.Material.Filled.Add"
+                   OnClick="NavigateToCreate" Class="mr-2">
+            @LangService.GetString("Smoking_AddButton")
+        </MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.CheckCircle"
+                   Disabled="@(_selectedItem == null || _selectedItem.status == "Completed")" OnClick="NavigateToComplete" Class="mr-2">
+            @LangService.GetString("Smoking_CompleteButton")
+        </MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete"
+                   Disabled="@(_selectedItem == null)" OnClick="DeleteAsync">
+            @LangService.GetString("Btn_Delete")
+        </MudButton>
+    </MudPaper>
+</MudContainer>
+
+<style>
+    .selected-row {
+        background-color: rgba(33, 150, 243, 0.2) !important;
+    }
+</style>
+
+@code {
+    private List<RubberSmokingBatchModel> _items = new();
+    private RubberSmokingBatchModel? _selectedItem;
+    private string _searchString = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        LangService.OnLanguageChanged += StateHasChanged;
+        Navigation.LocationChanged += OnLocationChanged;
+        await LoadDataAsync();
+    }
+
+    private async void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        await LoadDataAsync();
+        StateHasChanged();
+    }
+
+    public void Dispose()
+    {
+        LangService.OnLanguageChanged -= StateHasChanged;
+        Navigation.LocationChanged -= OnLocationChanged;
+    }
+
+    private async Task LoadDataAsync()
+    {
+        try
+        {
+            _items = await Http.GetFromJsonAsync<List<RubberSmokingBatchModel>>("rest/v1/rubber_smoking_batches?select=*&order=start_date.desc") ?? new();
+            _selectedItem = null;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private string SelectedRowClassFunc(RubberSmokingBatchModel item, int rowNumber)
+    {
+        if (_selectedItem != null && _selectedItem.id == item.id)
+        {
+            return "selected-row";
+        }
+        return string.Empty;
+    }
+
+    private bool FilterFunc(RubberSmokingBatchModel item)
+    {
+        if (string.IsNullOrWhiteSpace(_searchString)) return true;
+        return item.batch_number.Contains(_searchString, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // Dialog အစား Dedicated Page သို့ လမ်းကြောင်းပြောင်းခြင်း
+    private void NavigateToCreate()
+    {
+        Navigation.NavigateTo("/rubber-smoking/create");
+    }
+
+    private void NavigateToComplete()
+    {
+        if (_selectedItem == null) return;
+        Navigation.NavigateTo($"/rubber-smoking/complete/{_selectedItem.id}");
+    }
+
+    private async Task DeleteAsync()
+    {
+        if (_selectedItem == null) return;
+
+        var confirmed = await DialogService.ShowMessageBoxAsync(
+            LangService.GetString("Confirm_Title"),
+            LangService.GetString("Confirm_DeleteMessage"),
+            yesText: LangService.GetString("Btn_Yes"), cancelText: LangService.GetString("Btn_Cancel"));
+
+        if (confirmed == true)
+        {
+            try
+            {
+                await Http.DeleteAsync($"rest/v1/rubber_smoking_items?batch_id=eq.{_selectedItem.id}");
+                var response = await Http.DeleteAsync($"rest/v1/rubber_smoking_batches?id=eq.{_selectedItem.id}");
+
+                if (response.IsSuccessStatusCode)
+                {
+                    Snackbar.Add("Deleted successfully.", Severity.Success);
+                    await LoadDataAsync();
+                }
+                else
+                {
+                    Snackbar.Add("Failed to delete batch.", Severity.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+}

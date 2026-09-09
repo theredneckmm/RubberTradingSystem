@@ -1,0 +1,120 @@
+﻿@page "/staff/add"
+@using MudBlazor
+@using RubberTradingSystem.Models
+@using RubberTradingSystem.Services
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+@inject LanguageService LangService
+@inject AuthenticationStateProvider AuthStateProvider
+@implements IDisposable
+
+<MudContainer MaxWidth="MaxWidth.Small" Class="mt-5">
+    <MudCard Elevation="3">
+        <MudCardHeader>
+            <MudText Typo="Typo.h5" Color="Color.Primary">@LangService.GetString("Staff_AddNew")</MudText>
+        </MudCardHeader>
+        <MudCardContent>
+            <EditForm Model="@_model" OnValidSubmit="SaveStaff">
+                <DataAnnotationsValidator />
+
+                <MudTextField @bind-Value="_model.name"
+                              Label="@LangService.GetString("Staff_Name")"
+                              Variant="Variant.Outlined"
+                              Class="mb-4"
+                              Required="true" />
+
+                <MudTextField @bind-Value="_model.email"
+                              Label="@LangService.GetString("Staff_Email")"
+                              Variant="Variant.Outlined"
+                              Class="mb-4"
+                              Required="true" />
+
+                <MudTextField @bind-Value="_model.password"
+                              Label="@LangService.GetString("Staff_Password")"
+                              Variant="Variant.Outlined"
+                              InputType="InputType.Password"
+                              Class="mb-4"
+                              Required="true" />
+
+                <div class="d-flex justify-end mt-4">
+                    <MudButton OnClick="Cancel" Variant="Variant.Text" Class="mr-2">
+                        @LangService.GetString("Cancel")
+                    </MudButton>
+                    <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Disabled="@_isSaving">
+                        @if (_isSaving)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                            <MudText>@LangService.GetString("Creating")</MudText>
+                        }
+                        else
+                        {
+                            <MudText>@LangService.GetString("Create")</MudText>
+                        }
+                    </MudButton>
+                </div>
+            </EditForm>
+        </MudCardContent>
+    </MudCard>
+</MudContainer>
+
+@code {
+    private CreateStaffModel _model = new();
+    private bool _isSaving;
+
+    protected override void OnInitialized()
+    {
+        LangService.OnLanguageChanged += StateHasChanged;
+    }
+
+    public void Dispose()
+    {
+        LangService.OnLanguageChanged  -= StateHasChanged;
+    }
+
+    private async Task SaveStaff()
+    {
+        // ၁။ လက်ရှိ Login ဝင်ထားတဲ့ Owner ရဲ့ ID ကို ဖမ်းယူခြင်း
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        var currentOwnerId = user.FindFirst(c => c.Type == "sub")?.Value; // Supabase တွင် ID ကို sub (Subject) အနေဖြင့် သိမ်းထားသည်
+
+        _isSaving = true;
+        try
+        {
+            // ၂။ Signup API သို့ owner_id ကို Metadata အနေဖြင့် ပို့ခြင်း
+            var response = await Http.PostAsJsonAsync("auth/v1/signup", new
+            {
+                email = _model.email,
+                password = _model.password,
+                data = new
+                {
+                    full_name = _model.name,
+                    role = "Staff",
+                    owner_id = currentOwnerId // ဤနေရာတွင် အလိုအလျောက် ထည့်ပေးလိုက်သည်
+                }
+            });
+
+            if (response.IsSuccessStatusCode)
+            {
+                Snackbar.Add(LangService.GetString("Staff_CreateSuccess"), Severity.Success);
+                Navigation.NavigateTo("/staff-list");
+            }
+            else
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                Snackbar.Add($"{LangService.GetString("Staff_CreateError")}({error})", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"{LangService.GetString("GeneralError")}{ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private void Cancel() => Navigation.NavigateTo("/");
+}

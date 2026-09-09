@@ -1,0 +1,295 @@
+﻿@using MudBlazor
+@using RubberTradingSystem.Models
+@using RubberTradingSystem.Services
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject LanguageService LangService
+@inject UserContextService UserContext
+@implements IDisposable
+
+<MudDialog>
+    <DialogContent>
+        <EditForm Model="@Model" OnValidSubmit="SaveAsync">
+            <DataAnnotationsValidator />
+
+            <div class="d-flex justify-space-between align-center mb-4">
+                <MudText Typo="Typo.subtitle1"><b>Voucher: @_currentVoucherNumber</b></MudText>
+            </div>
+
+            <!-- ၁။ ငွေလွှဲထွက်မည့်အကောင့် (From Wallet) -->
+            <MudSelect T="string" @bind-Value="Model.from_wallet_id"
+                       Label="@LangService.GetString("Transfer_FromLabel")"
+                       Variant="Variant.Outlined"
+                       Class="mb-4"
+                       Required="true"
+                       Disabled="_isSuccessCompleted">
+                @foreach (var w in _wallets)
+                {
+                    <MudSelectItem Value="@w.id">@w.wallet_name (@w.balance.ToString("N0"))</MudSelectItem>
+                }
+            </MudSelect>
+
+            <!-- ၂။ ငွေလက်ခံမည့်အကောင့် (To Wallet) -->
+            <MudSelect T="string" @bind-Value="Model.to_wallet_id"
+                       Label="@LangService.GetString("Transfer_ToLabel")"
+                       Variant="Variant.Outlined"
+                       Class="mb-4"
+                       Required="true"
+                       Disabled="_isSuccessCompleted">
+                @foreach (var w in _wallets.Where(x => x.id != Model.from_wallet_id))
+                {
+                    <MudSelectItem Value="@w.id">@w.wallet_name (@w.balance.ToString("N0"))</MudSelectItem>
+                }
+            </MudSelect>
+
+            <!-- ၃။ လွှဲပြောင်းမည့် ငွေပမာဏ -->
+            <MudNumericField @bind-Value="Model.amount"
+                             Label="@LangService.GetString("Transfer_AmountLabel")"
+                             Variant="Variant.Outlined"
+                             Class="mb-4"
+                             Min="0"
+                             Disabled="_isSuccessCompleted" />
+
+            <!-- ၄။ နေ့စွဲ -->
+            <MudDatePicker @bind-Date="_transferDate"
+                           Label="@LangService.GetString("Transfer_DateLabel")"
+                           Variant="Variant.Outlined"
+                           Class="mb-4"
+                           Disabled="_isSuccessCompleted" />
+
+            <!-- ၅။ မှတ်ချက် -->
+            <MudTextField @bind-Value="Model.note"
+                          Label="@LangService.GetString("Transfer_NoteLabel")"
+                          Variant="Variant.Outlined"
+                          Lines="2"
+                          Class="mb-4"
+                          Disabled="_isSuccessCompleted" />
+
+            <div class="d-flex justify-end gap-2">
+                @if (!_isSuccessCompleted)
+                {
+                    <MudButton OnClick="Cancel" Variant="Variant.Text" Class="mr-2">
+                        @LangService.GetString("Btn_Cancel")
+                    </MudButton>
+                    <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Disabled="_isSaving">
+                        @LangService.GetString("Btn_Save")
+                    </MudButton>
+                }
+                else
+                {
+                    <MudButton Variant="Variant.Outlined" Color="Color.Secondary" OnClick="PrintVoucher">
+                        Print Voucher
+                    </MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Success" OnClick="FinishTransaction">
+                        Finish
+                    </MudButton>
+                }
+            </div>
+        </EditForm>
+    </DialogContent>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public TransferModel Model { get; set; } = new();
+    [Parameter] public bool IsNew { get; set; }
+
+    private string _currentVoucherNumber = string.Empty;
+    private bool _isSaving = false;
+    private bool _isSuccessCompleted = false;
+    private List<WalletFullModel> _wallets = new();
+
+    private DateTime? _transferDate
+    {
+        get => Model.transfer_date;
+        set => Model.transfer_date = value ?? DateTime.Today;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        LangService.OnLanguageChanged += StateHasChanged;
+        await LoadWalletsAsync();
+        _currentVoucherNumber = await GenerateVoucherNumberAsync("TRF");
+    }
+
+    public void Dispose() => LangService.OnLanguageChanged -= StateHasChanged;
+
+    private async Task LoadWalletsAsync()
+    {
+        try
+        {
+            _wallets = await Http.GetFromJsonAsync<List<WalletFullModel>>("rest/v1/wallets?select=id,wallet_name,balance") ?? new();
+        }
+        catch
+        {
+            _wallets = new();
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (Model.from_wallet_id == Model.to_wallet_id)
+        {
+            Snackbar.Add(LangService.GetString("Transfer_SameWalletError"), Severity.Error);
+            return;
+        }
+
+        _isSaving = true;
+        try
+        {
+            string ownerId = await UserContext.GetCurrentOwnerIdAsync();
+            string staffId = await UserContext.GetCurrentStaffIdAsync();
+
+            if (string.IsNullOrEmpty(ownerId))
+            {
+                Snackbar.Add("User Session not found. Please login again.", Severity.Error);
+                return;
+            }
+
+            var fromWallet = _wallets.FirstOrDefault(x => x.id == Model.from_wallet_id);
+            var toWallet = _wallets.FirstOrDefault(x => x.id == Model.to_wallet_id);
+
+            if (fromWallet == null || toWallet == null)
+            {
+                Snackbar.Add("Invalid wallets selected.", Severity.Error);
+                return;
+            }
+
+            if (fromWallet.balance < Model.amount)
+            {
+                Snackbar.Add(LangService.GetString("Transfer_InsufficientBalance"), Severity.Error);
+                return;
+            }
+
+            Model.from_wallet_name = fromWallet.wallet_name;
+            Model.to_wallet_name = toWallet.wallet_name;
+
+            // 1. fund_transfers ဇယားသို့ သိမ်းဆည်းခြင်း
+            var transferPayload = new
+            {
+                owner_id = ownerId,
+                staff_id = string.IsNullOrEmpty(staffId) ? null : staffId,
+                from_wallet_id = Model.from_wallet_id,
+                from_wallet_name = Model.from_wallet_name,
+                to_wallet_id = Model.to_wallet_id,
+                to_wallet_name = Model.to_wallet_name,
+                amount = Model.amount,
+                transfer_date = Model.transfer_date.ToString("yyyy-MM-dd"),
+                note = Model.note
+            };
+
+            var response = await Http.PostAsJsonAsync("rest/v1/fund_transfers", transferPayload);
+            if (!response.IsSuccessStatusCode)
+            {
+                var err = await response.Content.ReadAsStringAsync();
+                Snackbar.Add($"Failed to save transfer: {err}", Severity.Error);
+                return;
+            }
+
+            // 2. Transactions ဇယားသို့ သိမ်းဆည်းခြင်း
+            var txPayload = new
+            {
+                owner_id = ownerId,
+                staff_id = string.IsNullOrEmpty(staffId) ? null : staffId,
+                transaction_type = "Transfer",
+                wallet_id = Model.from_wallet_id,
+                voucher_number = _currentVoucherNumber,
+                total_amount = Model.amount,
+                paid_amount = Model.amount,
+                description = $"Transfer: {Model.from_wallet_name} -> {Model.to_wallet_name}"
+            };
+
+            var txReq = new HttpRequestMessage(HttpMethod.Post, "rest/v1/transactions")
+            {
+                Content = JsonContent.Create(txPayload)
+            };
+            txReq.Headers.Add("Prefer", "return=representation");
+            var txResp = await Http.SendAsync(txReq);
+
+            if (txResp.IsSuccessStatusCode)
+            {
+                var txList = await txResp.Content.ReadFromJsonAsync<List<TransactionResponseModel>>();
+                string? txId = txList?.FirstOrDefault()?.id;
+
+                // 3. Vouchers ဇယား
+                var voucherPayload = new
+                {
+                    owner_id = ownerId,
+                    staff_id = string.IsNullOrEmpty(staffId) ? null : staffId,
+                    voucher_number = _currentVoucherNumber,
+                    voucher_type = "Transfer",
+                    reference_id = string.IsNullOrEmpty(txId) ? null : txId
+                };
+                await Http.PostAsJsonAsync("rest/v1/vouchers", voucherPayload);
+
+                // 4. Ledgers ဇယား (Credit from wallet)
+                var ledgerPayload = new
+                {
+                    owner_id = ownerId,
+                    staff_id = string.IsNullOrEmpty(staffId) ? null : staffId,
+                    transaction_id = string.IsNullOrEmpty(txId) ? null : txId,
+                    voucher_number = _currentVoucherNumber,
+                    entry_type = "Credit",
+                    debit_amount = 0.00m,
+                    credit_amount = Model.amount,
+                    ref_type = "Transfer",
+                    description = $"Transfer: {Model.from_wallet_name} -> {Model.to_wallet_name}"
+                };
+                await Http.PostAsJsonAsync("rest/v1/ledgers", ledgerPayload);
+
+                // 5. Wallets Balance ချိန်ညှိခြင်း (From Wallet တွင် နှုတ်၊ To Wallet တွင် ပေါင်း)
+                await Http.PatchAsync($"rest/v1/wallets?id=eq.{Model.from_wallet_id}", JsonContent.Create(new { balance = fromWallet.balance - Model.amount }));
+                await Http.PatchAsync($"rest/v1/wallets?id=eq.{Model.to_wallet_id}", JsonContent.Create(new { balance = toWallet.balance + Model.amount }));
+            }
+
+            Snackbar.Add(LangService.GetString("Transfer_SaveSuccess"), Severity.Success);
+            _isSuccessCompleted = true;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private class WalletFullModel { public string id { get; set; } = string.Empty; public string wallet_name { get; set; } = string.Empty; public decimal balance { get; set; } }
+
+    private void PrintVoucher() => Snackbar.Add($"ဘောင်ချာအမှတ် {_currentVoucherNumber} ကို Print ထုတ်နေပါပြီ...", Severity.Info);
+    private void FinishTransaction() => MudDialog.Close(DialogResult.Ok(true));
+    private void Cancel() => MudDialog.Cancel();
+
+    private async Task<string> GenerateVoucherNumberAsync(string prefix)
+    {
+        string dateStr = DateTime.Now.ToString("yyyyMMdd");
+        string searchPattern = $"{prefix}-{dateStr}-";
+        try
+        {
+            var transactions = await Http.GetFromJsonAsync<List<TransactionResponseModel>>(
+                $"rest/v1/transactions?voucher_number=like.{searchPattern}*&select=voucher_number");
+            int nextSeq = 1;
+            if (transactions != null && transactions.Any())
+            {
+                var maxSeq = transactions
+                    .Where(t => !string.IsNullOrEmpty(t.voucher_number) && t.voucher_number.Contains("-"))
+                    .Select(t =>
+                    {
+                        string part = t.voucher_number!.Substring(t.voucher_number.LastIndexOf('-') + 1);
+                        return int.TryParse(part, out int val) ? val : 0;
+                    })
+                    .DefaultIfEmpty(0)
+                    .Max();
+                nextSeq = maxSeq + 1;
+            }
+            return $"{prefix}-{dateStr}-{nextSeq:D3}";
+        }
+        catch
+        {
+            return $"{prefix}-{dateStr}-001";
+        }
+    }
+
+    private class TransactionResponseModel { public string id { get; set; } = string.Empty; public string? voucher_number { get; set; } }
+}

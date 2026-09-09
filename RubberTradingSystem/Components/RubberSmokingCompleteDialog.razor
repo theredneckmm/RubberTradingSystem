@@ -1,0 +1,204 @@
+﻿@using MudBlazor
+@using RubberTradingSystem.Models
+@using RubberTradingSystem.Services
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject LanguageService LangService
+@implements IDisposable
+
+<MudDialog MaxWidth="MaxWidth.Large" FullWidth="true" Class="pa-2">
+    <DialogContent>
+        <EditForm Model="@Model" OnValidSubmit="CompleteBatchAsync">
+            <DataAnnotationsValidator />
+
+            <!-- အချက်အလက်ပြ Box -->
+            <div class="d-flex flex-column mb-4 pa-3" style="background-color: var(--mud-palette-background-grey); border-radius: 4px;">
+                <MudText Typo="Typo.subtitle1"><b>Batch No: @Model.batch_number</b></MudText>
+                <MudText Typo="Typo.body2" Class="mt-1">
+                    စုစုပေါင်း ထည့်သွင်းခဲ့သည့် အလေးချိန် (Total Input): <b>@Model.total_input_weight.ToString("N0") ပေါင်</b>
+                </MudText>
+            </div>
+
+            <MudDatePicker @bind-Date="_endDate"
+                           Label="@LangService.GetString("Smoking_ColEndDate")"
+                           Variant="Variant.Outlined"
+                           Class="mb-4" />
+
+            <MudDivider Class="my-4" />
+            <MudText Typo="Typo.subtitle2" Class="mb-3 font-weight-bold" Color="Color.Primary">
+                ထည့်သွင်းခဲ့သော Batch တစ်ခုချင်းစီအလိုက် ရလဒ်များ ဖြည့်သွင်းရန်
+            </MudText>
+
+            <!-- ထည့်သွင်းခဲ့သော Items များကို Grid ဖြင့် တစ်ခုချင်းစီ ပြသခြင်း -->
+            @foreach (var item in _smokingItems)
+            {
+                <MudPaper Class="pa-3 mb-3" Elevation="1" Outlined="true">
+                    <MudGrid AlignItems="Center">
+                        <MudItem xs="12" md="3">
+                            <MudText Typo="Typo.body2"><b>Batch/Source:</b> @item.supplier_name</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">သွင်းအား: @item.input_weight.ToString("N0") ပေါင်</MudText>
+                        </MudItem>
+                        <MudItem xs="12" md="4">
+                            <MudNumericField @bind-Value="item.output_weight"
+                                             Label="ထွက်လာသည့်အလေးချိန် (ပေါင်)"
+                                             Variant="Variant.Outlined"
+                                             Margin="Margin.Dense"
+                                             Min="0"
+                                             Required="true" />
+                        </MudItem>
+                        <MudItem xs="12" md="4">
+                            <MudNumericField @bind-Value="item.remaining_weight"
+                                             Label="နောက်တစ်ကြိမ် မှိုင်းခံရန် လက်ကျန်"
+                                             Variant="Variant.Outlined"
+                                             Margin="Margin.Dense"
+                                             Min="0" />
+                        </MudItem>
+                        <MudItem xs="12" md="1" Class="text-right">
+                            <MudText Typo="Typo.caption" Color="Color.Error">
+                                Loss: <b>@(item.input_weight - (item.output_weight + item.remaining_weight))</b>
+                            </MudText>
+                        </MudItem>
+                    </MudGrid>
+                </MudPaper>
+            }
+
+            <!-- စုစုပေါင်း တွက်ချက်ပြသမှု Box -->
+            <div class="pa-3 mb-4 mt-4" style="background-color: rgba(33, 150, 243, 0.1); border-radius: 4px;">
+                <MudText Typo="Typo.body1" Color="Color.Primary">
+                    <b>စုစုပေါင်း ထွက်ရှိမှု:</b> @TotalOutputWeight.ToString("N0") ပေါင် |
+                    <b>စုစုပေါင်း လက်ကျန်:</b> @TotalRemainingWeight.ToString("N0") ပေါင် |
+                    <b>စုစုပေါင်း အလျော့အလေးချိန် (Moisture Loss):</b> <span style="color: red;">@TotalLossWeight.ToString("N0") ပေါင်</span>
+                    @if (Model.total_input_weight > 0)
+                    {
+                        <span> (@((TotalLossWeight / Model.total_input_weight * 100).ToString("N1")) %)</span>
+                    }
+                </MudText>
+            </div>
+
+            <div class="d-flex justify-end gap-2 mt-4">
+                <MudButton OnClick="Cancel" Variant="Variant.Text">
+                    @LangService.GetString("Btn_Cancel")
+                </MudButton>
+                <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Success" Disabled="_isSaving">
+                    @LangService.GetString("Btn_Save")
+                </MudButton>
+            </div>
+        </EditForm>
+    </DialogContent>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public RubberSmokingBatchModel Model { get; set; } = new();
+
+    private bool _isSaving = false;
+    private DateTime? _endDate = DateTime.Today;
+    private List<SmokingItemDetailModel> _smokingItems = new();
+
+    private decimal TotalOutputWeight => _smokingItems.Sum(x => x.output_weight);
+    private decimal TotalRemainingWeight => _smokingItems.Sum(x => x.remaining_weight);
+    private decimal TotalLossWeight => Model.total_input_weight - (TotalOutputWeight + TotalRemainingWeight);
+
+    protected override async Task OnInitializedAsync()
+    {
+        LangService.OnLanguageChanged += StateHasChanged;
+        await LoadSmokingItemsAsync();
+    }
+
+    public void Dispose() => LangService.OnLanguageChanged -= StateHasChanged;
+
+    private async Task LoadSmokingItemsAsync()
+    {
+        try
+        {
+            var items = await Http.GetFromJsonAsync<List<SmokingItemDetailModel>>($"rest/v1/rubber_smoking_items?batch_id=eq.{Model.id}&select=*");
+            if (items != null)
+            {
+                _smokingItems = items;
+                // Default အနေဖြင့် တစ်ခုချင်းစီအတွက် 70% ခန့်မှန်း output ချပေးမည်
+                foreach (var item in _smokingItems)
+                {
+                    item.output_weight = item.input_weight * 0.7m;
+                    item.remaining_weight = 0;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading items: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task CompleteBatchAsync()
+    {
+        if (_smokingItems.Any(x => x.output_weight <= 0))
+        {
+            Snackbar.Add("ကျေးဇူးပြု၍ ထွက်လာသည့်အလေးချိန်များကို မှန်ကန်စွာ ဖြည့်သွင်းပါ။", Severity.Warning);
+            return;
+        }
+
+        if (TotalLossWeight < 0)
+        {
+            Snackbar.Add("ထွက်ရှိလာသည့်အလေးချိန်နှင့် လက်ကျန်အလေးချိန် ပေါင်းစုသည် စုစုပေါင်းသွင်းအားထက် များနေပါသည်။", Severity.Error);
+            return;
+        }
+
+        _isSaving = true;
+        try
+        {
+            // 1. Batch ကို Completed အဖြစ် update လုပ်ခြင်း
+            var batchPayload = new
+            {
+                end_date = _endDate?.ToString("yyyy-MM-dd"),
+                status = "Completed",
+                total_output_weight = TotalOutputWeight,
+                total_loss_weight = TotalLossWeight
+            };
+
+            var batchResp = await Http.PatchAsync($"rest/v1/rubber_smoking_batches?id=eq.{Model.id}", JsonContent.Create(batchPayload));
+
+            if (batchResp.IsSuccessStatusCode)
+            {
+                // 2. Item တစ်ခုချင်းစီ၏ output_weight နှင့် loss_weight ကို ဇယားထဲသို့ update လုပ်ခြင်း
+                foreach (var item in _smokingItems)
+                {
+                    decimal itemLoss = item.input_weight - (item.output_weight + item.remaining_weight);
+                    var itemPayload = new
+                    {
+                        output_weight = item.output_weight,
+                        loss_weight = itemLoss
+                    };
+                    await Http.PatchAsync($"rest/v1/rubber_smoking_items?id=eq.{item.id}", JsonContent.Create(itemPayload));
+                }
+
+                Snackbar.Add(LangService.GetString("Smoking_CompleteSuccess"), Severity.Success);
+                MudDialog.Close(DialogResult.Ok(true));
+            }
+            else
+            {
+                Snackbar.Add("Failed to complete batch.", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private class SmokingItemDetailModel
+    {
+        public string id { get; set; } = string.Empty;
+        public string batch_id { get; set; } = string.Empty;
+        public string supplier_name { get; set; } = string.Empty;
+        public decimal input_weight { get; set; }
+        public decimal output_weight { get; set; }
+        public decimal remaining_weight { get; set; }
+        public decimal loss_weight { get; set; }
+    }
+}

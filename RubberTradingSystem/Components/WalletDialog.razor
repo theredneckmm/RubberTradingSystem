@@ -1,0 +1,117 @@
+﻿@using MudBlazor
+@using RubberTradingSystem.Models
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject RubberTradingSystem.Services.UserContextService UserContext
+
+<MudDialog>
+    <DialogContent>
+        <EditForm Model="@Model" OnValidSubmit="Save">
+            <DataAnnotationsValidator />
+
+            <MudTextField @bind-Value="Model.WalletName"
+                          Label="အကောင့်အမည် (ဥပမာ- KBZ (ကိုအောင်))"
+                          Variant="Variant.Outlined"
+                          Class="mb-4"
+                          Required="true" />
+
+            <MudSelect @bind-Value="Model.WalletType"
+                       Label="အမျိုးအစား (Wallet Type)"
+                       Variant="Variant.Outlined"
+                       Class="mb-4">
+                <MudSelectItem Value="@("Cash")">Cash (ငွေသား)</MudSelectItem>
+                <MudSelectItem Value="@("KPay")">KPay</MudSelectItem>
+                <MudSelectItem Value="@("WavePay")">WavePay</MudSelectItem>
+                <MudSelectItem Value="@("Bank")">Bank</MudSelectItem>
+            </MudSelect>
+
+            <MudNumericField @bind-Value="Model.Balance"
+                             Label="စတင်လက်ကျန်ငွေ (Initial Balance)"
+                             Variant="Variant.Outlined"
+                             Class="mb-4"
+                             Format="N2" />
+
+            <div class="d-flex justify-end">
+                <MudButton OnClick="Cancel" Variant="Variant.Text" Class="mr-2">ပယ်ဖျက်မည်</MudButton>
+                <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary">သိမ်းမည်</MudButton>
+            </div>
+        </EditForm>
+    </DialogContent>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public WalletModel Model { get; set; } = new();
+    [Parameter] public bool IsNew { get; set; }
+
+    private async Task Save()
+    {
+        try
+        {
+            if (IsNew)
+            {
+                // ၁။ Owner ID နှင့် Staff ID ကို UserContext မှတဆင့် ရယူခြင်း
+                var ownerId = await UserContext.GetCurrentOwnerIdAsync();
+                var staffId = await UserContext.GetCurrentStaffIdAsync();
+
+                if (string.IsNullOrEmpty(ownerId) || string.IsNullOrEmpty(staffId))
+                {
+                    Snackbar.Add("အမှားအယွင်း: အသုံးပြုသူအချက်အလက် (Owner / Staff ID) ရှာမတွေ့ပါ။", Severity.Error);
+                    return;
+                }
+
+                // ၂။ အသစ်ထည့်ရန် Data ပြင်ဆင်ခြင်း (owner_id နှင့် staff_id ပါ ထည့်မည်)
+                var newWallet = new
+                {
+                    wallet_name = Model.WalletName,
+                    wallet_type = Model.WalletType,
+                    balance = Model.Balance,
+                    owner_id = ownerId,
+                    staff_id = staffId
+                };
+
+                var response = await Http.PostAsJsonAsync("rest/v1/wallets", newWallet);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    Snackbar.Add("အောင်မြင်စွာ သိမ်းဆည်းပြီးပါပြီ။", Severity.Success);
+                    MudDialog.Close(DialogResult.Ok(true));
+                }
+                else
+                {
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    Snackbar.Add($"မအောင်မြင်ပါ: {errorContent}", Severity.Error);
+                }
+            }
+            else
+            {
+                // ၃။ Update (Patch) လုပ်ရန် Data ပြင်ဆင်ခြင်း
+                var updateWallet = new
+                {
+                    wallet_name = Model.WalletName,
+                    wallet_type = Model.WalletType,
+                    balance = Model.Balance
+                };
+
+                var response = await Http.PatchAsync($"rest/v1/wallets?id=eq.{Model.Id}", JsonContent.Create(updateWallet));
+
+                if (response.IsSuccessStatusCode)
+                {
+                    Snackbar.Add("ပြင်ဆင်ပြီးပါပြီ။", Severity.Success);
+                    MudDialog.Close(DialogResult.Ok(true));
+                }
+                else
+                {
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    Snackbar.Add($"ပြင်ဆင်၍ မအောင်မြင်ပါ: {errorContent}", Severity.Error);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"အမှားအယွင်း: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

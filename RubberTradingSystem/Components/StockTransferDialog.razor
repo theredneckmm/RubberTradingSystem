@@ -1,0 +1,177 @@
+﻿@using MudBlazor
+@using RubberTradingSystem.Models
+@using RubberTradingSystem.Services
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject LanguageService LangService
+@implements IDisposable
+
+<MudDialog>
+    <DialogContent>
+        <EditForm Model="@Model" OnValidSubmit="SaveAsync">
+            <DataAnnotationsValidator />
+
+            <MudGrid>
+                <MudItem xs="12" sm="6">
+                    <MudTextField @bind-Value="Model.transfer_no"
+                                  Label="Transfer Voucher No"
+                                  Variant="Variant.Outlined"
+                                  Class="mb-4"
+                                  Required="true" />
+                </MudItem>
+
+                <MudItem xs="12" sm="6">
+                    <MudDatePicker @bind-Date="_transferDate"
+                                   Label="Transfer Date"
+                                   Variant="Variant.Outlined"
+                                   Class="mb-4" />
+                </MudItem>
+
+                <!-- Source Type Selection (Warehouse or Truck) -->
+                <MudItem xs="12" sm="6">
+                    <MudSelect T="string" @label="Source Type"
+                               Variant="Variant.Outlined"
+                               Class="mb-4"
+                               Value="_sourceType"
+                               ValueChanged="OnSourceTypeChanged">
+                        <MudSelectItem Value="@("Warehouse")">From Warehouse</MudSelectItem>
+                        <MudSelectItem Value="@("Truck")">From Truck</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+
+                <!-- Source Location (Dynamic based on Source Type) -->
+                <MudItem xs="12" sm="6">
+                    @if (_sourceType == "Warehouse")
+                    {
+                        <MudSelect T="string" @bind-Value="Model.from_location"
+                                   Label="From Warehouse"
+                                   Variant="Variant.Outlined"
+                                   Class="mb-4" Required="true">
+                            @foreach (var wh in _warehouseList)
+                            {
+                                <MudSelectItem Value="@wh">@wh</MudSelectItem>
+                            }
+                        </MudSelect>
+                    }
+                    else
+                    {
+                        <MudTextField @bind-Value="Model.from_location"
+                                      Label="Truck Number (e.g. 1A-1234)"
+                                      Variant="Variant.Outlined"
+                                      Class="mb-4" Required="true" />
+                    }
+                </MudItem>
+
+                <!-- Destination Warehouse -->
+                <MudItem xs="12" sm="6">
+                    <MudSelect T="string" @bind-Value="Model.to_location"
+                               Label="To Destination Warehouse"
+                               Variant="Variant.Outlined"
+                               Class="mb-4" Required="true">
+                        @foreach (var wh in _warehouseList)
+                        {
+                            <MudSelectItem Value="@wh">@wh</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+
+                <MudItem xs="12" sm="6">
+                    <MudSelect T="string" @bind-Value="Model.rubber_type"
+                               Label="Rubber Type"
+                               Variant="Variant.Outlined"
+                               Class="mb-4" Required="true">
+                        @foreach (var type in _rubberTypeList)
+                        {
+                            <MudSelectItem Value="@type">@type</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+
+                <MudItem xs="12" sm="6">
+                    <MudNumericField @bind-Value="Model.weight_kg"
+                                     Label="Weight (kg)"
+                                     Variant="Variant.Outlined"
+                                     Class="mb-4" Min="0" Required="true" />
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="Model.note"
+                                  Label="Note / Remark"
+                                  Variant="Variant.Outlined"
+                                  Lines="2"
+                                  Class="mb-4" />
+                </MudItem>
+            </MudGrid>
+
+            <div class="d-flex justify-end mt-2">
+                <MudButton OnClick="Cancel" Variant="Variant.Text" Class="mr-2">Cancel</MudButton>
+                <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary">Save Transfer</MudButton>
+            </div>
+        </EditForm>
+    </DialogContent>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public StockTransferModel Model { get; set; } = new();
+
+    private string _sourceType = "Warehouse";
+    private List<string> _warehouseList = new();
+    private List<string> _rubberTypeList = new();
+
+    private DateTime? _transferDate
+    {
+        get => Model.transfer_date;
+        set => Model.transfer_date = value ?? DateTime.Today;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        LangService.OnLanguageChanged += StateHasChanged;
+        await LoadDropdownsAsync();
+    }
+
+    public void Dispose() => LangService.OnLanguageChanged -= StateHasChanged;
+
+    private async Task LoadDropdownsAsync()
+    {
+        try
+        {
+            var warehouses = await Http.GetFromJsonAsync<List<WarehouseModel>>("rest/v1/warehouses?select=warehouse_name");
+            if (warehouses != null) _warehouseList = warehouses.Select(x => x.warehouse_name).ToList();
+
+            var types = await Http.GetFromJsonAsync<List<RubberTypeModel>>("rest/v1/rubber_types?select=grade");
+            if (types != null) _rubberTypeList = types.Select(x => x.grade).ToList();
+        }
+        catch { }
+    }
+
+    private void OnSourceTypeChanged(string val)
+    {
+        _sourceType = val;
+        Model.from_location = string.Empty;
+    }
+
+    private async Task SaveAsync()
+    {
+        try
+        {
+            var response = await Http.PostAsJsonAsync("rest/v1/stock_transfers", Model);
+            if (response.IsSuccessStatusCode)
+            {
+                Snackbar.Add("Stock transfer saved successfully.", Severity.Success);
+                MudDialog.Close(DialogResult.Ok(true));
+            }
+            else
+            {
+                Snackbar.Add("Failed to save stock transfer.", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

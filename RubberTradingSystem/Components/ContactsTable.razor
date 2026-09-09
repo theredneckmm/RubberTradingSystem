@@ -1,0 +1,50 @@
+﻿@using MudBlazor
+@using RubberTradingSystem.Models
+@using RubberTradingSystem.Services
+
+<MudTable Items="@Items" Dense="true" Hover="true" Bordered="true" Striped="true"
+          Filter="new Func<Contact,bool>(FilterFunc)" Elevation="0">
+    <ToolBarContent>
+        <MudTextField @bind-Value="_localSearch" Placeholder="@Lang.GetString("Placeholder_Search")"
+                      Immediate="true" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Class="mt-0" Clearable="true">
+        </MudTextField>
+    </ToolBarContent>
+    <HeaderContent>
+        <MudTh>@Lang.GetString("Th_Name")</MudTh>
+        <MudTh>@Lang.GetString("Th_Phone")</MudTh>
+        <MudTh>@Lang.GetString("Th_Type")</MudTh>
+        <MudTh Style="text-align:right">@Lang.GetString("Th_AdvanceBalance")</MudTh>
+        <MudTh Style="text-align:right">@Lang.GetString("Th_ReceivableBalance")</MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd DataLabel="အမည်"><b>@context.Name</b></MudTd>
+        <MudTd DataLabel="ဖုန်းနံပါတ်">@context.Phone</MudTd>
+        <MudTd DataLabel="အမျိုးအစား">
+            <MudChip T="string" Color="@(context.ContactType == "Supplier" ? Color.Info : Color.Success)" Size="Size.Small">
+                @context.ContactType
+            </MudChip>
+        </MudTd>
+        <MudTd DataLabel="ကြိုတင်ငွေ" Style="text-align:right">
+            <span style="color: var(--mud-palette-error);">@context.AdvanceBalance.ToString("N2") MMK</span>
+        </MudTd>
+        <MudTd DataLabel="ရရန်ရှိငွေ" Style="text-align:right">
+            <span style="color: var(--mud-palette-success);">@context.ReceivableBalance.ToString("N2") MMK</span>
+        </MudTd>
+    </RowTemplate>
+    <PagerContent>
+        <MudTablePager PageSizeOptions="new int[] { 10, 25, 50 }" />
+    </PagerContent>
+</MudTable>
+
+@code {
+    [Parameter] public List<Contact> Items { get; set; } = new();
+    [Parameter] public LanguageService Lang { get; set; } = default!;
+    private string _localSearch = "";
+
+    private bool FilterFunc(Contact item)
+    {
+        if (string.IsNullOrWhiteSpace(_localSearch)) return true;
+        return item.Name.Contains(_localSearch, StringComparison.OrdinalIgnoreCase) ||
+               (!string.IsNullOrEmpty(item.Phone) && item.Phone.Contains(_localSearch, StringComparison.OrdinalIgnoreCase));
+    }
+}

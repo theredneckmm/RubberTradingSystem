@@ -1,0 +1,174 @@
+﻿@page "/business-settings"
+@using MudBlazor
+@using RubberTradingSystem.Models
+@using RubberTradingSystem.Services
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@inject LanguageService LangService
+@inject RubberTradingSystem.Services.UserContextService UserContext
+@implements IDisposable
+
+<MudContainer MaxWidth="MaxWidth.Medium" Class="mt-6">
+    <MudText Typo="Typo.h5" Color="Color.Primary" Class="mb-4">@LangService.GetString("Settings_Title")</MudText>
+
+    <MudPaper Class="pa-6" Elevation="3">
+        <EditForm Model="@_model" OnValidSubmit="SaveSettingsAsync">
+            <DataAnnotationsValidator />
+
+            <!-- ယူနစ်ရွေးချယ်ရန် -->
+            <MudSelect T="string" @bind-Value="_model.default_weight_unit"
+                       Label="@LangService.GetString("Settings_WeightUnit")"
+                       Variant="Variant.Outlined" Class="mb-4">
+                <MudSelectItem Value="@("Vis (ပိဿာ)")">Vis (ပိဿာ)</MudSelectItem>
+                <MudSelectItem Value="@("LB (ပေါင်)")">LB (ပေါင်)</MudSelectItem>
+                <MudSelectItem Value="@("KG (ကီလို)")">KG (ကီလို)</MudSelectItem>
+            </MudSelect>
+
+            <!-- ပုံသေ ဝန်ဆောင်မှုစရိတ် -->
+            <MudNumericField @bind-Value="_model.default_service_cost"
+                             Label="@LangService.GetString("Settings_ServiceCost")"
+                             Variant="Variant.Outlined" Class="mb-4" Min="0" />
+
+            <!-- ပုံသေ အလျော့ရာခိုင်နှုန်း -->
+            <MudNumericField @bind-Value="_model.default_deduction_percent"
+                             Label="@LangService.GetString("Settings_Deduction")"
+                             Variant="Variant.Outlined" Class="mb-4" Min="0" Max="100" />
+
+            <!-- ငွေကြေးအမျိုးအစား -->
+            <MudTextField @bind-Value="_model.currency_symbol"
+                          Label="@LangService.GetString("Settings_Currency")"
+                          Variant="Variant.Outlined" Class="mb-4" />
+
+            <!-- ကြိုတင်ငွေ အလိုအလျောက်ဖြတ်ရန် Switch -->
+            <MudSwitch @bind-Value="_model.enable_auto_advance_deduction"
+                       Color="Color.Primary"
+                       Label="@LangService.GetString("Settings_AutoAdvance")"
+                       Class="mb-6" />
+
+            <div class="d-flex justify-end gap-2">
+                @if (_isExisting)
+                {
+                    <!-- ဖျက်ရန် ခလုတ် (Delete Button) -->
+                    <MudButton Variant="Variant.Filled" Color="Color.Error" OnClick="DeleteSettingsAsync">
+                        @LangService.GetString("Settings_DeleteButton")
+                    </MudButton>
+                }
+
+                <!-- သိမ်းဆည်းရန် ခလုတ် (Save / Update Button) -->
+                <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary">
+                    @(_isExisting ? LangService.GetString("Settings_UpdateButton") : LangService.GetString("Settings_SaveButton"))
+                </MudButton>
+            </div>
+        </EditForm>
+    </MudPaper>
+</MudContainer>
+
+@code {
+    private BusinessSettingsModel _model = new();
+    private bool _isExisting = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        LangService.OnLanguageChanged += StateHasChanged;
+        await LoadSettingsAsync();
+    }
+
+    public void Dispose() => LangService.OnLanguageChanged -= StateHasChanged;
+
+    private async Task LoadSettingsAsync()
+    {
+        try
+        {
+            var list = await Http.GetFromJsonAsync<List<BusinessSettingsModel>>("rest/v1/business_settings?select=*");
+            if (list != null && list.Count > 0)
+            {
+                _model = list.First();
+                _isExisting = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading settings: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task SaveSettingsAsync()
+    {
+        try
+        {
+            var ownerId = await UserContext.GetCurrentOwnerIdAsync();
+            var staffId = await UserContext.GetCurrentStaffIdAsync();
+
+            _model.owner_id = ownerId;
+            _model.staff_id = staffId;
+            _model.updated_at = DateTime.UtcNow;
+
+            HttpResponseMessage response;
+
+            if (!_isExisting)
+            {
+                // အသစ်ထည့်သွင်းခြင်း (Insert)
+                response = await Http.PostAsJsonAsync("rest/v1/business_settings", _model);
+            }
+            else
+            {
+                // ရှိပြီးသားကို ပြင်ဆင်ခြင်း (Update / Edit)
+                response = await Http.PatchAsync($"rest/v1/business_settings?id=eq.{_model.id}", JsonContent.Create(new
+                {
+                    default_weight_unit = _model.default_weight_unit,
+                    default_service_cost = _model.default_service_cost,
+                    default_deduction_percent = _model.default_deduction_percent,
+                    currency_symbol = _model.currency_symbol,
+                    enable_auto_advance_deduction = _model.enable_auto_advance_deduction,
+                    updated_at = _model.updated_at
+                }));
+            }
+
+            if (response.IsSuccessStatusCode)
+            {
+                Snackbar.Add(LangService.GetString("Settings_SaveSuccess"), Severity.Success);
+                _isExisting = true;
+            }
+            else
+            {
+                var err = await response.Content.ReadAsStringAsync();
+                Snackbar.Add($"Failed to save: {err}", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Exception: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task DeleteSettingsAsync()
+    {
+        var confirmed = await DialogService.ShowMessageBoxAsync(
+            "Confirm",
+            LangService.GetString("Settings_DeleteConfirm"),
+            yesText: "Yes", cancelText: "Cancel");
+
+        if (confirmed == true)
+        {
+            try
+            {
+                var response = await Http.DeleteAsync($"rest/v1/business_settings?id=eq.{_model.id}");
+                if (response.IsSuccessStatusCode)
+                {
+                    Snackbar.Add(LangService.GetString("Settings_DeleteSuccess"), Severity.Success);
+                    _model = new BusinessSettingsModel(); // Form ကို ရှင်းလင်းခြင်း
+                    _isExisting = false;
+                }
+                else
+                {
+                    Snackbar.Add("Failed to delete settings.", Severity.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Exception: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+}

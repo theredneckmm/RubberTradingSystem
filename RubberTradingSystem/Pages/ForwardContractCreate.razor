@@ -1,0 +1,501 @@
+﻿@page "/forward-contract/create"
+@page "/forward-contract/edit/{id}"
+@using MudBlazor
+@using RubberTradingSystem.Models
+@using RubberTradingSystem.Services
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@inject NavigationManager Navigation
+@inject LanguageService LangService
+@inject UserContextService UserContext
+@implements IDisposable
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4 mb-6">
+
+    <div class="d-flex justify-space-between align-center mb-4">
+        <MudText Typo="Typo.h5" Color="Color.Primary" Class="font-weight-bold">
+            @(!string.IsNullOrEmpty(id) ? LangService.GetString("Title_EditForwardContract") : LangService.GetString("Title_CreateForwardContract"))
+        </MudText>
+        <MudChip T="string" Color="Color.Primary" Variant="Variant.Filled" Size="Size.Large">
+            <b>Voucher: @_currentVoucherNumber</b>
+        </MudChip>
+    </div>
+
+    <MudPaper Class="pa-6" Elevation="3">
+        <EditForm Model="@_model" OnValidSubmit="HandleValidSubmitAsync">
+            <DataAnnotationsValidator />
+
+            <MudGrid Spacing="3">
+                <!-- 1. ကုန်သည်/ကုမ္ပဏီ (Buyer) ရွေးချယ်ခြင်း (Contact Type = Buyer သာ) -->
+                <MudItem xs="12" md="6">
+                    <MudSelect T="string" @bind-Value="_model.contact_id" Label="@LangService.GetString("Lbl_SelectBuyerMerchant")"
+                               Variant="Variant.Outlined" Dense="true" Required="true" Clearable="true" Disabled="_isSuccessCompleted">
+                        @if (_buyers != null)
+                        {
+                            @foreach (var merchant in _buyers)
+                            {
+                                <MudSelectItem Value="@merchant.Id">@merchant.Name</MudSelectItem>
+                            }
+                        }
+                    </MudSelect>
+                </MudItem>
+
+                <!-- 2. ငွေလက်ခံမည့် Wallet -->
+                <MudItem xs="12" md="6">
+                    <MudSelect T="string" @bind-Value="_model.wallet_id" Label="@LangService.GetString("Lbl_SelectReceiveWallet")"
+                               Variant="Variant.Outlined" Dense="true" Required="true" Clearable="true" Disabled="_isSuccessCompleted">
+                        @if (_wallets != null)
+                        {
+                            @foreach (var wallet in _wallets)
+                            {
+                                <MudSelectItem Value="@wallet.Id">@wallet.WalletName (@wallet.WalletType) - ကျန်ငွေ: @wallet.Balance.ToString("N0")</MudSelectItem>
+                            }
+                        }
+                    </MudSelect>
+                </MudItem>
+
+                <!-- 3. ရာဘာအမျိုးအစား ရွေးချယ်ခြင်း (Rubber Types) -->
+                <MudItem xs="12" md="6">
+                    <MudSelect T="string" @bind-Value="_model.rubber_type_id" Label="@LangService.GetString("Lbl_SelectRubberType")"
+                               Variant="Variant.Outlined" Dense="true" Required="true" Clearable="true" Disabled="_isSuccessCompleted">
+                        @if (_rubberTypes != null)
+                        {
+                            @foreach (var type in _rubberTypes)
+                            {
+                                <MudSelectItem Value="@type.id">@type.name (@type.grade)</MudSelectItem>
+                            }
+                        }
+                    </MudSelect>
+                </MudItem>
+
+                <!-- 4. ရက်စွဲများ -->
+                <MudItem xs="12" md="6">
+                    <MudDatePicker Label="@LangService.GetString("Lbl_ContractDate")" @bind-Date="_contractDate" Variant="Variant.Outlined" Dense="true" Disabled="_isSuccessCompleted" />
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudDatePicker Label="@LangService.GetString("Lbl_DueDate")" @bind-Date="_dueDate" Variant="Variant.Outlined" Dense="true" Disabled="_isSuccessCompleted" />
+                </MudItem>
+
+                <!-- 5. ပိဿာချိန်၊ သဘောတူဈေး (Currency) နှင့် စုစုပေါင်း ကြိုတင်ငွေ -->
+                <MudItem xs="12" md="4">
+                    <MudNumericField T="decimal" @bind-Value="_model.contract_quantity" Immediate="true" Format="N2"
+                                     Label="@($"{LangService.GetString("Lbl_ContractQuantity")} ({_weightUnit})")" Variant="Variant.Outlined" Dense="true" Min="0" HideSpinButtons="true" Disabled="_isSuccessCompleted" />
+                </MudItem>
+
+                <MudItem xs="12" md="4">
+                    <MudNumericField T="decimal" @bind-Value="_model.agreed_price" Immediate="true" Format="N0"
+                                     Label="@($"{LangService.GetString("Lbl_AgreedPrice")} ({_currencySymbol})")" Variant="Variant.Outlined" Dense="true" Min="0" HideSpinButtons="true" Disabled="_isSuccessCompleted" />
+                </MudItem>
+
+                <MudItem xs="12" md="4">
+                    <MudTextField T="string" Value="@_calculatedTotalAdvance.ToString("N0")" ReadOnly="true" Disabled="true"
+                                  Label="@($"{LangService.GetString("Lbl_TotalAdvanceAmount")} ({_currencySymbol})")" Variant="Variant.Outlined" Dense="true" />
+                </MudItem>
+
+                <!-- 6. မှတ်ချက် -->
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="_model.description" Label="@LangService.GetString("Lbl_Note")" Variant="Variant.Outlined" Dense="true" Lines="2" Disabled="_isSuccessCompleted" />
+                </MudItem>
+            </MudGrid>
+
+            <!-- BUTTONS -->
+            <div class="d-flex justify-end gap-3 mt-6">
+                @if (!_isSuccessCompleted)
+                {
+                    <MudButton ButtonType="ButtonType.Button" Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" Class="px-6"
+                               Disabled="@_isSaving" OnClick="HandleValidSubmitAsync">
+                        @if (_isSaving)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+                        }
+                        else
+                        {
+                            <text>@(!string.IsNullOrEmpty(id) ? LangService.GetString("Btn_UpdateContract") : LangService.GetString("Btn_SaveContract"))</text>
+                        }
+                    </MudButton>
+                }
+                else
+                {
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" Disabled="true" Size="Size.Large" Class="px-6">
+                        @LangService.GetString("Btn_SaveContract")
+                    </MudButton>
+                }
+
+                <MudButton Variant="Variant.Outlined" Color="Color.Secondary" Size="Size.Large" OnClick="PrintVoucher"
+                           Disabled="!_isSuccessCompleted">
+                    @LangService.GetString("Btn_PrintVoucher")
+                </MudButton>
+
+                <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Large" OnClick="FinishTransaction"
+                           Disabled="!_isSuccessCompleted" Class="px-6">
+                    @LangService.GetString("Btn_Finish")
+                </MudButton>
+            </div>
+        </EditForm>
+    </MudPaper>
+</MudContainer>
+
+@code {
+    [Parameter] public string? id { get; set; }
+
+    private string _currentVoucherNumber = string.Empty;
+    private bool _isSaving = false;
+    private bool _isSuccessCompleted = false;
+
+    private ForwardContractModel _model = new();
+    private DateTime? _contractDate = DateTime.Today;
+    private DateTime? _dueDate = DateTime.Today.AddDays(30);
+
+    private List<Contact> _buyers = new();
+    private List<WalletModel> _wallets = new();
+    private List<RubberTypeModel> _rubberTypes = new();
+    private string _weightUnit = "ပိဿာ";
+    private string _currencySymbol = "MMK";
+
+    private decimal _calculatedTotalAdvance => _model.contract_quantity * _model.agreed_price;
+
+    protected override async Task OnInitializedAsync()
+    {
+        LangService.OnLanguageChanged += StateHasChanged;
+        await LoadSettingsAsync();
+        await LoadInitialDataAsync();
+
+        if (!string.IsNullOrEmpty(id))
+        {
+            await LoadExistingContractAsync(id);
+        }
+    }
+
+    public void Dispose() => LangService.OnLanguageChanged -= StateHasChanged;
+
+    private async Task LoadSettingsAsync()
+    {
+        try
+        {
+            var settings = await Http.GetFromJsonAsync<List<BusinessSettingModel>>("rest/v1/business_settings?select=*");
+            if (settings != null && settings.Any())
+            {
+                var s = settings.First();
+                _weightUnit = s.default_weight_unit;
+                _currencySymbol = s.currency_symbol;
+            }
+        }
+        catch { }
+    }
+
+    private async Task LoadInitialDataAsync()
+    {
+        try
+        {
+            var allContacts = await Http.GetFromJsonAsync<List<Contact>>("rest/v1/contacts?select=*") ?? new();
+            // contact_type == "Buyer" သာ ရွေးထုတ်ခြင်း
+            _buyers = allContacts.Where(c => c.ContactType == "Buyer").ToList();
+
+            _wallets = await Http.GetFromJsonAsync<List<WalletModel>>("rest/v1/wallets?select=*") ?? new();
+            _rubberTypes = await Http.GetFromJsonAsync<List<RubberTypeModel>>("rest/v1/rubber_types?select=*") ?? new();
+
+            if (string.IsNullOrEmpty(id))
+            {
+                _currentVoucherNumber = await GenerateVoucherNumberAsync("FC");
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading data: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task LoadExistingContractAsync(string contractId)
+    {
+        try
+        {
+            var contracts = await Http.GetFromJsonAsync<List<ForwardContractDetailModel>>($"rest/v1/forward_contracts?id=eq.{contractId}&select=*");
+            if (contracts != null && contracts.Any())
+            {
+                var c = contracts.First();
+                _model.contact_id = c.contact_id ?? "";
+                _model.rubber_type_id = c.rubber_type_id ?? "";
+                _model.contract_quantity = c.contract_quantity;
+                _model.agreed_price = c.agreed_price;
+                _contractDate = c.contract_date;
+                _dueDate = c.due_date;
+                _model.description = c.description;
+
+                var txs = await Http.GetFromJsonAsync<List<TransactionDetailModel>>($"rest/v1/transactions?contact_id=eq.{c.contact_id}&voucher_number=not.is.null&order=created_at.desc&limit=1");
+                if (txs != null && txs.Any())
+                {
+                    _model.wallet_id = txs.First().wallet_id ?? "";
+                    _currentVoucherNumber = txs.First().voucher_number ?? "FC-VOUCHER";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading contract for edit: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task HandleValidSubmitAsync()
+    {
+        if (_model.contract_quantity <= 0 || _model.agreed_price <= 0)
+        {
+            Snackbar.Add("ပိဿာချိန် နှင့် ဈေးနှုန်း မှန်ကန်စွာ ထည့်သွင်းပါ။", Severity.Warning);
+            return;
+        }
+
+        await SaveContractAsync();
+    }
+
+    private async Task SaveContractAsync()
+    {
+        _isSaving = true;
+        try
+        {
+            if (!string.IsNullOrEmpty(id))
+            {
+                await DeleteOldTransactionEffectsAsync(id);
+            }
+
+            var ownerId = await UserContext.GetCurrentOwnerIdAsync();
+            var staffId = await UserContext.GetCurrentStaffIdAsync();
+
+            var forwardPayload = new
+            {
+                owner_id = ownerId,
+                staff_id = string.IsNullOrEmpty(staffId) ? null : staffId,
+                contact_id = _model.contact_id,
+                rubber_type_id = _model.rubber_type_id,
+                contract_date = _contractDate,
+                due_date = _dueDate,
+                contract_quantity = _model.contract_quantity,
+                delivered_quantity = 0.00m,
+                agreed_price = _model.agreed_price,
+                total_advance_amount = _calculatedTotalAdvance,
+                status = "Active",
+                sync_status = "Synced"
+            };
+
+            HttpResponseMessage fcResp;
+            string currentContractId = id ?? string.Empty;
+
+            if (string.IsNullOrEmpty(id))
+            {
+                var reqMsg = new HttpRequestMessage(HttpMethod.Post, "rest/v1/forward_contracts")
+                {
+                    Content = JsonContent.Create(forwardPayload)
+                };
+                reqMsg.Headers.Add("Prefer", "return=representation");
+                fcResp = await Http.SendAsync(reqMsg);
+                if (fcResp.IsSuccessStatusCode)
+                {
+                    var createdFc = await fcResp.Content.ReadFromJsonAsync<List<ForwardContractResponseModel>>();
+                    currentContractId = createdFc?.FirstOrDefault()?.id ?? string.Empty;
+                }
+            }
+            else
+            {
+                fcResp = await Http.PatchAsync($"rest/v1/forward_contracts?id=eq.{id}", JsonContent.Create(forwardPayload));
+            }
+
+            if (!fcResp.IsSuccessStatusCode)
+            {
+                Snackbar.Add("Failed to save forward contract.", Severity.Error);
+                return;
+            }
+
+            var txPayload = new
+            {
+                owner_id = ownerId,
+                staff_id = staffId,
+                contact_id = _model.contact_id,
+                rubber_type_id = _model.rubber_type_id,
+                transaction_type = "BuyerAdvanceIn",
+                wallet_id = _model.wallet_id,
+                total_amount = _calculatedTotalAdvance,
+                paid_amount = _calculatedTotalAdvance,
+                voucher_number = _currentVoucherNumber,
+                quantity = _model.contract_quantity,
+                agreed_price = _model.agreed_price,
+                due_date = _dueDate,
+                description = string.IsNullOrEmpty(_model.description) ? $"Forward Contract Advance In ({_currentVoucherNumber})" : _model.description,
+                sync_status = "Synced"
+            };
+
+            var txReq = new HttpRequestMessage(HttpMethod.Post, "rest/v1/transactions")
+            {
+                Content = JsonContent.Create(txPayload)
+            };
+            txReq.Headers.Add("Prefer", "return=representation");
+            var txResp = await Http.SendAsync(txReq);
+
+            if (txResp.IsSuccessStatusCode)
+            {
+                var createdTx = await txResp.Content.ReadFromJsonAsync<List<TransactionResponseModel>>();
+                string? txId = createdTx?.FirstOrDefault()?.id;
+
+                var voucherPayload = new
+                {
+                    owner_id = ownerId,
+                    staff_id = staffId,
+                    voucher_number = _currentVoucherNumber,
+                    voucher_type = "BuyerAdvanceIn",
+                    reference_id = txId
+                };
+                await Http.PostAsJsonAsync("rest/v1/vouchers", voucherPayload);
+
+                if (!string.IsNullOrEmpty(_model.contact_id))
+                {
+                    decimal prevBal = await GetLatestBalanceForContactAsync(_model.contact_id);
+                    decimal newBal = prevBal - _calculatedTotalAdvance;
+
+                    var ledgerPayload = new
+                    {
+                        owner_id = ownerId,
+                        staff_id = string.IsNullOrEmpty(staffId) ? null : staffId,
+                        contact_id = _model.contact_id,
+                        transaction_id = txId,
+                        voucher_number = _currentVoucherNumber,
+                        entry_type = "Debit",
+                        debit_amount = _calculatedTotalAdvance,
+                        credit_amount = 0.00m,
+                        balance_after = newBal,
+                        balance_impact = "Decrease",
+                        ref_type = "ForwardContract",
+                        description = $"ကြိုပွိုင့်ငွေ လက်ခံရရှိခြင်း Voucher {_currentVoucherNumber}"
+                    };
+                    await Http.PostAsJsonAsync("rest/v1/ledgers", ledgerPayload);
+                }
+
+                if (!string.IsNullOrEmpty(_model.wallet_id))
+                {
+                    var wallets = await Http.GetFromJsonAsync<List<WalletModel>>($"rest/v1/wallets?id=eq.{_model.wallet_id}");
+                    if (wallets != null && wallets.Any())
+                    {
+                        var wallet = wallets.First();
+                        decimal updatedWalletBal = wallet.Balance + _calculatedTotalAdvance;
+                        await Http.PatchAsync($"rest/v1/wallets?id=eq.{_model.wallet_id}", JsonContent.Create(new { balance = updatedWalletBal }));
+                    }
+                }
+
+                Snackbar.Add("ကြိုပွိုင့်စာချုပ် အောင်မြင်စွာ သိမ်းဆည်းပြီးပါပြီ။", Severity.Success);
+                _isSuccessCompleted = true;
+
+                if (!string.IsNullOrEmpty(id))
+                {
+                    Navigation.NavigateTo("/forward-contract/list");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private async Task DeleteOldTransactionEffectsAsync(string contractId)
+    {
+        try
+        {
+            var contracts = await Http.GetFromJsonAsync<List<ForwardContractDetailModel>>($"rest/v1/forward_contracts?id=eq.{contractId}&select=*");
+            if (contracts != null && contracts.Any())
+            {
+                var c = contracts.First();
+                var txs = await Http.GetFromJsonAsync<List<TransactionDetailModel>>($"rest/v1/transactions?contact_id=eq.{c.contact_id}&total_amount=eq.{c.total_advance_amount}&select=wallet_id,total_amount,id");
+                if (txs != null && txs.Any())
+                {
+                    var tx = txs.First();
+                    if (!string.IsNullOrEmpty(tx.wallet_id))
+                    {
+                        var wallets = await Http.GetFromJsonAsync<List<WalletModel>>($"rest/v1/wallets?id=eq.{tx.wallet_id}");
+                        if (wallets != null && wallets.Any())
+                        {
+                            var w = wallets.First();
+                            decimal restoredBal = w.Balance - tx.total_amount;
+                            await Http.PatchAsync($"rest/v1/wallets?id=eq.{tx.wallet_id}", JsonContent.Create(new { balance = restoredBal }));
+                        }
+                    }
+                    await Http.DeleteAsync($"rest/v1/ledgers?transaction_id=eq.{tx.id}");
+                    await Http.DeleteAsync($"rest/v1/vouchers?reference_id=eq.{tx.id}");
+                    await Http.DeleteAsync($"rest/v1/transactions?id=eq.{tx.id}");
+                }
+            }
+        }
+        catch (Exception ex) { Console.WriteLine(ex.Message); }
+    }
+
+    private async Task<decimal> GetLatestBalanceForContactAsync(string contactId)
+    {
+        try
+        {
+            var resp = await Http.GetFromJsonAsync<List<LedgerItemModel>>(
+                $"rest/v1/ledgers?contact_id=eq.{contactId}&select=balance_after&order=created_at.desc&limit=1");
+            if (resp != null && resp.Any()) return resp.First().balance_after;
+        }
+        catch { }
+        return 0m;
+    }
+
+    private void PrintVoucher() => Snackbar.Add($"ဘောင်ချာအမှတ် {_currentVoucherNumber} ကို Print ထုတ်နေပါပြီ...", Severity.Info);
+
+    private async Task FinishTransaction()
+    {
+        _model = new ForwardContractModel();
+        _isSuccessCompleted = false;
+        _isSaving = false;
+        _currentVoucherNumber = await GenerateVoucherNumberAsync("FC");
+        StateHasChanged();
+        Snackbar.Add("ဘောင်ချာအသစ်သို့ ပြောင်းလဲပြီးပါပြီ။", Severity.Info);
+    }
+
+    private async Task<string> GenerateVoucherNumberAsync(string prefix)
+    {
+        string dateStr = DateTime.Now.ToString("yyyyMMdd");
+        string searchPattern = $"{prefix}-{dateStr}-";
+        try
+        {
+            var transactions = await Http.GetFromJsonAsync<List<TransactionResponseModel>>(
+                $"rest/v1/transactions?voucher_number=like.{searchPattern}*&select=voucher_number");
+            int nextSeq = 1;
+            if (transactions != null && transactions.Any())
+            {
+                var maxSeq = transactions
+                    .Where(t => !string.IsNullOrEmpty(t.voucher_number) && t.voucher_number.Contains("-"))
+                    .Select(t =>
+                    {
+                        string part = t.voucher_number!.Substring(t.voucher_number.LastIndexOf('-') + 1);
+                        return int.TryParse(part, out int val) ? val : 0;
+                    })
+                    .DefaultIfEmpty(0)
+                    .Max();
+                nextSeq = maxSeq + 1;
+            }
+            return $"{prefix}-{dateStr}-{nextSeq:D3}";
+        }
+        catch
+        {
+            return $"{prefix}-{dateStr}-001";
+        }
+    }
+
+    private class ForwardContractModel
+    {
+        public string contact_id { get; set; } = string.Empty;
+        public string wallet_id { get; set; } = string.Empty;
+        public string rubber_type_id { get; set; } = string.Empty;
+        public decimal contract_quantity { get; set; }
+        public decimal agreed_price { get; set; }
+        public string? description { get; set; }
+    }
+
+    private class BusinessSettingModel { public string default_weight_unit { get; set; } = "ပိဿာ"; public string currency_symbol { get; set; } = "MMK"; }
+    private class ForwardContractDetailModel { public string id { get; set; } = string.Empty; public string? contact_id { get; set; } public string? rubber_type_id { get; set; } public decimal contract_quantity { get; set; } public decimal agreed_price { get; set; } public decimal total_advance_amount { get; set; } public DateTime? contract_date { get; set; } public DateTime? due_date { get; set; } public string? description { get; set; } }
+    private class ForwardContractResponseModel { public string id { get; set; } = string.Empty; }
+    private class TransactionResponseModel { public string id { get; set; } = string.Empty; public string? voucher_number { get; set; } }
+    private class TransactionDetailModel { public string? wallet_id { get; set; } public decimal total_amount { get; set; } public string id { get; set; } = string.Empty; public string? voucher_number { get; set; } }
+    private class LedgerItemModel { public decimal balance_after { get; set; } }
+}

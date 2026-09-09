@@ -1,0 +1,127 @@
+﻿@using MudBlazor
+@using RubberTradingSystem.Models
+@using RubberTradingSystem.Services
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject LanguageService LangService
+@inject RubberTradingSystem.Services.UserContextService UserContext
+@implements IDisposable
+
+<MudDialog>
+    <DialogContent>
+        <EditForm Model="@Model" OnValidSubmit="SaveAsync">
+            <DataAnnotationsValidator />
+
+            <MudTextField @bind-Value="Model.truck_number"
+                          Label="@LangService.GetString("Truck_NumberLabel")"
+                          Variant="Variant.Outlined"
+                          Class="mb-4"
+                          Required="true" />
+
+            <MudTextField @bind-Value="Model.driver_name"
+                          Label="@LangService.GetString("Truck_DriverLabel")"
+                          Variant="Variant.Outlined"
+                          Class="mb-4"
+                          Required="true" />
+
+            <MudSelect T="string" @bind-Value="Model.status"
+                       Label="@LangService.GetString("Truck_StatusLabel")"
+                       Variant="Variant.Outlined"
+                       Class="mb-4"
+                       Required="true">
+                <MudSelectItem Value="@("Available")">Available (အသင့်)</MudSelectItem>
+                <MudSelectItem Value="@("In-Transit")">In-Transit (လမ်းခရီးတွင်)</MudSelectItem>
+                <MudSelectItem Value="@("Maintenance")">Maintenance (ပြင်ဆင်ဆဲ)</MudSelectItem>
+            </MudSelect>
+
+            <MudNumericField @bind-Value="Model.capacity_kg"
+                             Label="@LangService.GetString("Truck_CapacityLabel")"
+                             Variant="Variant.Outlined"
+                             Class="mb-4"
+                             Min="0" />
+
+            <div class="d-flex justify-end">
+                <MudButton OnClick="Cancel" Variant="Variant.Text" Class="mr-2">
+                    @LangService.GetString("Rubber_Cancel")
+                </MudButton>
+                <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary">
+                    @(IsNew ? LangService.GetString("Rubber_Save") : LangService.GetString("Rubber_Update"))
+                </MudButton>
+            </div>
+        </EditForm>
+    </DialogContent>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public TruckModel Model { get; set; } = new();
+    [Parameter] public bool IsNew { get; set; }
+
+    protected override void OnInitialized() => LangService.OnLanguageChanged += StateHasChanged;
+    public void Dispose() => LangService.OnLanguageChanged -= StateHasChanged;
+
+    private async Task SaveAsync()
+    {
+        try
+        {
+            // 1. Login ဝင်ထားသော User ၏ Owner ID နှင့် Staff ID ကို ရယူခြင်း
+            var ownerId = await UserContext.GetCurrentOwnerIdAsync();
+            var staffId = await UserContext.GetCurrentStaffIdAsync();
+
+            if (IsNew)
+            {
+                // 2. ပို့မည့် Data ထဲတွင် owner_id နှင့် staff_id ကို သေချာထည့်ပေးခြင်း
+                var newTruck = new
+                {
+                    owner_id = ownerId,
+                    staff_id = staffId,
+                    truck_number = Model.truck_number,
+                    driver_name = Model.driver_name,
+                    status = Model.status,
+                    capacity_kg = Model.capacity_kg
+                };
+
+                var response = await Http.PostAsJsonAsync("rest/v1/trucks", newTruck);
+                if (response.IsSuccessStatusCode)
+                {
+                    Snackbar.Add(LangService.GetString("Truck_SaveSuccess"), Severity.Success);
+                    MudDialog.Close(DialogResult.Ok(true));
+                }
+                else
+                {
+                    // Error တက်လာပါက အကြောင်းရင်းအမှန်ကို သိရှိရန်
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    Snackbar.Add($"Supabase Error: {errorContent}", Severity.Error);
+                }
+            }
+            else
+            {
+                var updateTruck = new
+                {
+                    truck_number = Model.truck_number,
+                    driver_name = Model.driver_name,
+                    status = Model.status,
+                    capacity_kg = Model.capacity_kg
+                };
+
+                var response = await Http.PatchAsync($"rest/v1/trucks?id=eq.{Model.id}", JsonContent.Create(updateTruck));
+                if (response.IsSuccessStatusCode)
+                {
+                    Snackbar.Add(LangService.GetString("Truck_UpdateSuccess"), Severity.Success);
+                    MudDialog.Close(DialogResult.Ok(true));
+                }
+                else
+                {
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    Snackbar.Add($"Supabase Error: {errorContent}", Severity.Error);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Exception: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

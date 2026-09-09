@@ -1,0 +1,39 @@
+﻿@using MudBlazor
+@using RubberTradingSystem.Models
+@using RubberTradingSystem.Services
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject LanguageService LangService
+
+<MudDialog>
+    <DialogContent>
+        <EditForm Model="@Payment" OnValidSubmit="SavePayment">
+            <MudTextField @bind-Value="Payment.supplier_name" Label="@LangService.GetString("Supplier_Name")" Variant="Variant.Outlined" Class="mb-4" Required="true" />
+            <MudNumericField @bind-Value="Payment.amount_paid" Label="@LangService.GetString("Amount_Paid")" Variant="Variant.Outlined" Class="mb-4" Required="true" />
+            <MudSelect T="string" @bind-Value="Payment.payment_method" Label="@LangService.GetString("Payment_Method")" Variant="Variant.Outlined" Class="mb-4">
+                <MudSelectItem Value="@("Cash")">@LangService.GetString("Cash")</MudSelectItem>
+                <MudSelectItem Value="@("Bank Transfer")">@LangService.GetString("Bank_Transfer")</MudSelectItem>
+            </MudSelect>
+            <div class="d-flex justify-end">
+                <MudButton OnClick="Cancel" Class="mr-2">@LangService.GetString("Cancel")</MudButton>
+                <MudButton ButtonType="ButtonType.Submit" Color="Color.Primary" Variant="Variant.Filled">@LangService.GetString("Save")</MudButton>
+            </div>
+        </EditForm>
+    </DialogContent>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public PaymentModel Payment { get; set; } = new();
+
+    private async Task SavePayment()
+    {
+        var response = await Http.PostAsJsonAsync("rest/v1/supplier_payments", Payment);
+        if (response.IsSuccessStatusCode)
+        {
+            Snackbar.Add("Payment recorded!", Severity.Success);
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+    }
+    private void Cancel() => MudDialog.Cancel();
+}

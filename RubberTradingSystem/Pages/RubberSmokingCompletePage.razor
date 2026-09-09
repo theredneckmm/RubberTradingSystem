@@ -1,0 +1,199 @@
+﻿@page "/rubber-smoking/complete/{BatchId}"
+@using MudBlazor
+@using RubberTradingSystem.Models
+@using RubberTradingSystem.Services
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+@inject LanguageService LangService
+@inject UserContextService UserContext
+
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4 mb-6">
+    <MudPaper Class="pa-6" Elevation="3">
+        <MudText Typo="Typo.h5" Color="Color.Success" Class="mb-4 font-weight-bold">
+            @LangService.GetString("Smoking_CompleteTitle")
+        </MudText>
+
+        @if (_batch != null)
+        {
+            <div class="d-flex flex-column mb-4 pa-3 bg-light rounded">
+                <MudText Typo="Typo.subtitle1"><b>Batch No: @_batch.batch_number</b></MudText>
+                <MudText Typo="Typo.body2" Class="mt-1">@LangService.GetString("Smoking_ColInput"): <b>@_batch.total_input_weight.ToString("N0") lbs</b></MudText>
+            </div>
+
+            <MudDatePicker @bind-Date="_endDate" Label="@LangService.GetString("Smoking_ColEndDate")" Variant="Variant.Outlined" Class="mb-4" />
+
+            <MudSelect T="string" @bind-Value="_targetWarehouseId" Label="@LangService.GetString("Smoking_TargetWarehouse")" Variant="Variant.Outlined" Class="mb-4" Required="true">
+                @foreach (var wh in _warehouses)
+                {
+                    <MudSelectItem Value="@wh.id">@wh.warehouse_name</MudSelectItem>
+                }
+            </MudSelect>
+
+            <MudDivider Class="my-4" />
+            <MudText Typo="Typo.subtitle2" Class="mb-3 font-weight-bold" Color="Color.Primary">
+                @LangService.GetString("Smoking_ItemAllocationTitle")
+            </MudText>
+
+            @foreach (var item in _items)
+            {
+                <MudPaper Class="pa-4 mb-3" Elevation="1" Outlined="true">
+                    <MudGrid AlignItems="Center">
+                        <MudItem xs="12" md="3">
+                            <MudText Typo="Typo.body2"><b>Source:</b> @item.supplier_name</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">Input: @item.input_weight.ToString("N0") lbs</MudText>
+                        </MudItem>
+                        <MudItem xs="12" md="2">
+                            <MudNumericField @bind-Value="item.output_weight" Label=@LangService.GetString("Smoking_ColOutput") (lbs)" Variant="Variant.Outlined" Margin="Margin.Dense" Min="0" />
+                        </MudItem>
+                        <MudItem xs="12" md="3">
+                            <MudSelect T="string" @bind-Value="item.rubber_grade" Label="@LangService.GetString("Smoking_GradeLabel")" Variant="Variant.Outlined" Margin="Margin.Dense">
+                                <MudSelectItem Value="@("RSS-1")">RSS-1</MudSelectItem>
+                                <MudSelectItem Value="@("RSS-2")">RSS-2</MudSelectItem>
+                                <MudSelectItem Value="@("RSS-3")">RSS-3</MudSelectItem>
+                                <MudSelectItem Value="@("Low Grade")">Low Grade / Scrap</MudSelectItem>
+                            </MudSelect>
+                        </MudItem>
+                        <MudItem xs="12" md="2">
+                            <MudNumericField @bind-Value="item.remaining_weight" Label="@LangService.GetString("Smoking_RemainingLabel")" Variant="Variant.Outlined" Margin="Margin.Dense" Min="0" />
+                        </MudItem>
+                        <MudItem xs="12" md="2">
+                            <div class="pa-2 rounded" style="background-color: rgba(244, 67, 54, 0.1);">
+                                <MudText Typo="Typo.caption" Color="Color.Error">@LangService.GetString("Smoking_ColLoss"):</MudText>
+                                <MudText Typo="Typo.body2" Color="Color.Error">
+                                    <b>@(item.input_weight - (item.output_weight + item.remaining_weight)) lbs</b>
+                                </MudText>
+                            </div>
+                        </MudItem>
+                    </MudGrid>
+                </MudPaper>
+            }
+
+            <div class="d-flex justify-end gap-2 mt-6">
+                <MudButton OnClick="Cancel" Variant="Variant.Text">@LangService.GetString("Btn_Cancel")</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Success" OnClick="SaveCompleteAsync" Disabled="_isSaving">@LangService.GetString("Btn_Save")</MudButton>
+            </div>
+        }
+    </MudPaper>
+</MudContainer>
+
+@code {
+    [Parameter] public string BatchId { get; set; } = string.Empty;
+
+    private RubberSmokingBatchModel? _batch;
+    private List<SmokingItemDetailModel> _items = new();
+    private Dictionary<string, string> _itemRubberTypeIds = new(); // Item တစ်ခုချင်းစီ၏ rubber_type_id များကို သိမ်းရန်
+    private List<WarehouseModel> _warehouses = new();
+    private string _targetWarehouseId = string.Empty;
+    private DateTime? _endDate = DateTime.Today;
+    private bool _isSaving = false;
+
+    protected override async Task OnParametersSetAsync() => await LoadDataAsync();
+
+    private async Task LoadDataAsync()
+    {
+        if (string.IsNullOrEmpty(BatchId)) return;
+
+        try
+        {
+            var batches = await Http.GetFromJsonAsync<List<RubberSmokingBatchModel>>($"rest/v1/rubber_smoking_batches?id=eq.{BatchId}&select=*");
+            _batch = batches?.FirstOrDefault();
+
+            // smoking_items များနှင့်အတူ warehouse_batch မှတစ်ဆင့် rubber_type_id ကိုပါ ဆွဲထုတ်ရန် (သို့မဟုတ် warehouse_batches ဇယားမှ join ၍ယူရန်)
+            _items = await Http.GetFromJsonAsync<List<SmokingItemDetailModel>>($"rest/v1/rubber_smoking_items?batch_id=eq.{BatchId}&select=*") ?? new();
+
+            _itemRubberTypeIds.Clear();
+            foreach (var item in _items)
+            {
+                item.output_weight = item.input_weight * 0.7m;
+                item.rubber_grade = "RSS-3";
+                item.remaining_weight = 0;
+
+                // warehouse_batch_id မှတစ်ဆင့် မူရင်း rubber_type_id ကို warehouse_batches ဇယားမှ လှမ်းယူခြင်း
+                if (!string.IsNullOrEmpty(item.warehouse_batch_id))
+                {
+                    var whBatches = await Http.GetFromJsonAsync<List<WarehouseBatchLookupModel>>($"rest/v1/warehouse_batches?id=eq.{item.warehouse_batch_id}&select=rubber_type_id");
+                    if (whBatches != null && whBatches.Count > 0)
+                    {
+                        _itemRubberTypeIds[item.id] = whBatches[0].rubber_type_id;
+                    }
+                }
+            }
+            _warehouses = await Http.GetFromJsonAsync<List<WarehouseModel>>("rest/v1/warehouses?select=*") ?? new();
+            StateHasChanged();
+        }
+        catch (Exception ex) { Snackbar.Add($"Error: {ex.Message}", Severity.Error); }
+    }
+
+    private async Task SaveCompleteAsync()
+    {
+        if (string.IsNullOrEmpty(_targetWarehouseId))
+        {
+            Snackbar.Add("ကျေးဇူးပြု၍ ကုန်ချောလက်ခံမည့် ဂိုဒေါင်ကို ရွေးချယ်ပါ။", Severity.Warning);
+            return;
+        }
+
+        foreach (var item in _items)
+        {
+            decimal loss = item.input_weight - (item.output_weight + item.remaining_weight);
+            if (loss < 0)
+            {
+                Snackbar.Add("ထွက်ရှိလာသည့်အလေးချိန်နှင့် လက်ကျန်အလေးချိန် ပေါင်းစုသည် သွင်းအားထက် ကျော်လွန်နေပါသည်။", Severity.Error);
+                return;
+            }
+        }
+
+        _isSaving = true;
+        try
+        {
+            string ownerId = await UserContext.GetCurrentOwnerIdAsync();
+            string staffId = await UserContext.GetCurrentStaffIdAsync();
+            decimal totalOutput = _items.Sum(x => x.output_weight);
+            decimal totalLoss = _items.Sum(x => x.input_weight - (x.output_weight + x.remaining_weight));
+
+            var batchPayload = new { end_date = _endDate?.ToString("yyyy-MM-dd"), status = "Completed", total_output_weight = totalOutput, total_loss_weight = totalLoss };
+            await Http.PatchAsync($"rest/v1/rubber_smoking_batches?id=eq.{BatchId}", JsonContent.Create(batchPayload));
+
+            foreach (var item in _items)
+            {
+                decimal itemLoss = item.input_weight - (item.output_weight + item.remaining_weight);
+                await Http.PatchAsync($"rest/v1/rubber_smoking_items?id=eq.{item.id}", JsonContent.Create(new { output_weight = item.output_weight, loss_weight = itemLoss, rubber_grade = item.rubber_grade }));
+
+                string? rTypeId = _itemRubberTypeIds.ContainsKey(item.id) ? _itemRubberTypeIds[item.id] : null;
+
+                if (item.output_weight > 0 && !string.IsNullOrEmpty(rTypeId))
+                {
+                    var fgBatch = new { owner_id = ownerId, staff_id = string.IsNullOrEmpty(staffId) ? null : staffId, warehouse_id = _targetWarehouseId, batch_number = $"{_batch?.batch_number}-{item.rubber_grade}", rubber_type_id = rTypeId, total_weight = item.output_weight, status = "Active" };
+                    await Http.PostAsJsonAsync("rest/v1/warehouse_batches", fgBatch);
+                }
+
+                if (item.remaining_weight > 0 && !string.IsNullOrEmpty(rTypeId))
+                {
+                    var returnBatch = new { owner_id = ownerId, staff_id = string.IsNullOrEmpty(staffId) ? null : staffId, warehouse_id = _targetWarehouseId, batch_number = $"{_batch?.batch_number}-RE", rubber_type_id = rTypeId, total_weight = item.remaining_weight, status = "Active" };
+                    await Http.PostAsJsonAsync("rest/v1/warehouse_batches", returnBatch);
+                }
+            }
+
+            Snackbar.Add("မှိုင်းခံခြင်း ပြီးစီးပြီး ကုန်ချောဂိုဒေါင်သို့ စာရင်းများ ပို့ဆောင်ပြီးပါပြီ။", Severity.Success);
+            Navigation.NavigateTo("/rubber-smoking");
+        }
+        catch (Exception ex) { Snackbar.Add($"Error: {ex.Message}", Severity.Error); }
+        finally { _isSaving = false; }
+    }
+
+    private void Cancel() => Navigation.NavigateTo("/rubber-smoking");
+
+    private class WarehouseModel { public string id { get; set; } = string.Empty; public string warehouse_name { get; set; } = string.Empty; }
+    private class WarehouseBatchLookupModel { public string rubber_type_id { get; set; } = string.Empty; }
+    private class SmokingItemDetailModel
+    {
+        public string id { get; set; } = string.Empty;
+        public string? warehouse_batch_id { get; set; }
+        public string supplier_name { get; set; } = string.Empty;
+        public decimal input_weight { get; set; }
+        public decimal output_weight { get; set; }
+        public decimal remaining_weight { get; set; }
+        public string rubber_grade { get; set; } = "RSS-3";
+    }
+}

@@ -1,0 +1,205 @@
+﻿@using MudBlazor
+@using RubberTradingSystem.Models
+@using RubberTradingSystem.Services
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject LanguageService LangService
+@implements IDisposable
+
+<MudDialog>
+    <DialogContent>
+        <EditForm Model="@Model" OnValidSubmit="SaveAsync">
+            <DataAnnotationsValidator />
+
+            <MudGrid>
+                <MudItem xs="12" sm="6">
+                    <MudTextField @bind-Value="Model.batch_no"
+                                  Label="Batch No"
+                                  Variant="Variant.Outlined"
+                                  Class="mb-4"
+                                  Required="true" />
+                </MudItem>
+
+                <MudItem xs="12" sm="6">
+                    <MudSelect T="string" Value="Model.status"
+                               ValueExpression="@(() => Model.status)"
+                               Label="Status"
+                               Variant="Variant.Outlined"
+                               Class="mb-4" Required="true"
+                               ValueChanged="OnStatusChanged">
+                        <MudSelectItem Value="@("Smoking")">Smoking (မှိုင်းခံဆဲ)</MudSelectItem>
+                        <MudSelectItem Value="@("Completed")">Completed (ပြီးဆုံး)</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+
+                <MudItem xs="12" sm="6">
+                    <MudSelect T="string" @bind-Value="Model.warehouse_name"
+                               Label="Warehouse / Smokehouse"
+                               Variant="Variant.Outlined"
+                               Class="mb-4" Required="true">
+                        @foreach (var wh in _warehouseList)
+                        {
+                            <MudSelectItem Value="@wh">@wh</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+
+                <MudItem xs="12" sm="6">
+                    <MudDatePicker @bind-Date="_startDate"
+                                   Label="Start Date"
+                                   Variant="Variant.Outlined"
+                                   Class="mb-4" />
+                </MudItem>
+
+                <MudItem xs="12" sm="6">
+                    <MudSelect T="string" @bind-Value="Model.rubber_type_input"
+                               Label="Input Rubber Type (ကုန်ကြမ်းအစို)"
+                               Variant="Variant.Outlined"
+                               Class="mb-4" Required="true">
+                        @foreach (var type in _rubberTypeList)
+                        {
+                            <MudSelectItem Value="@type">@type</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+
+                <MudItem xs="12" sm="6">
+                    <MudNumericField @bind-Value="Model.input_weight_kg"
+                                     Label="Input Weight (kg) - အစိုအလေးချိန်"
+                                     Variant="Variant.Outlined"
+                                     Class="mb-4" Min="0" Required="true" />
+                </MudItem>
+
+                @if (Model.status == "Completed")
+                {
+                    <MudItem xs="12" sm="6">
+                        <MudSelect T="string" @bind-Value="Model.rubber_type_output"
+                                   Label="Output Rubber Type (ထွက်လာမည့်အခြောက်)"
+                                   Variant="Variant.Outlined"
+                                   Class="mb-4" Required="true">
+                            @foreach (var type in _rubberTypeList)
+                            {
+                                <MudSelectItem Value="@type">@type</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+
+                    <MudItem xs="12" sm="6">
+                        <MudNumericField @bind-Value="Model.output_weight_kg"
+                                         Label="Output Weight (kg) - အခြောက်အလေးချိန်"
+                                         Variant="Variant.Outlined"
+                                         Class="mb-4" Min="0" Required="true" />
+                    </MudItem>
+
+                    <MudItem xs="12" sm="6">
+                        <MudDatePicker @bind-Date="_endDate"
+                                       Label="End Date"
+                                       Variant="Variant.Outlined"
+                                       Class="mb-4" />
+                    </MudItem>
+                }
+
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="Model.note"
+                                  Label="Note / Remark"
+                                  Variant="Variant.Outlined"
+                                  Lines="2"
+                                  Class="mb-4" />
+                </MudItem>
+            </MudGrid>
+
+            <div class="d-flex justify-end mt-2">
+                <MudButton OnClick="Cancel" Variant="Variant.Text" Class="mr-2">Cancel</MudButton>
+                <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary">Save Batch</MudButton>
+            </div>
+        </EditForm>
+    </DialogContent>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public SmokingBatchModel Model { get; set; } = new();
+
+    private List<string> _warehouseList = new();
+    private List<string> _rubberTypeList = new();
+
+    private DateTime? _startDate
+    {
+        get => Model.start_date;
+        set => Model.start_date = value ?? DateTime.Today;
+    }
+
+    private DateTime? _endDate
+    {
+        get => Model.end_date;
+        set => Model.end_date = value ?? DateTime.Today;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        LangService.OnLanguageChanged += StateHasChanged;
+        await LoadDropdownsAsync();
+    }
+
+    public void Dispose() => LangService.OnLanguageChanged -= StateHasChanged;
+
+    private async Task LoadDropdownsAsync()
+    {
+        try
+        {
+            var warehouses = await Http.GetFromJsonAsync<List<WarehouseModel>>("rest/v1/warehouses?select=warehouse_name");
+            if (warehouses != null) _warehouseList = warehouses.Select(x => x.warehouse_name).ToList();
+
+            var types = await Http.GetFromJsonAsync<List<RubberTypeModel>>("rest/v1/rubber_types?select=grade");
+            if (types != null) _rubberTypeList = types.Select(x => x.grade).ToList();
+        }
+        catch { }
+    }
+
+    private void OnStatusChanged(string status)
+    {
+        Model.status = status;
+        if (status == "Completed" && !Model.output_weight_kg.HasValue)
+        {
+            Model.output_weight_kg = Model.input_weight_kg; // Default value
+            Model.end_date = DateTime.Today;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (Model.status == "Completed" && Model.output_weight_kg > Model.input_weight_kg)
+        {
+            Snackbar.Add("Output weight cannot be greater than input weight!", Severity.Warning);
+            return;
+        }
+
+        try
+        {
+            HttpResponseMessage response;
+
+            // အကယ်၍ id ရှိပြီးသား (Existing Record) ဆိုရင် PATCH (Update) လုပ်မည်
+            // အသစ်ဆိုရင် POST လုပ်မည်
+            response = await Http.SendAsync(new HttpRequestMessage(HttpMethod.Patch, $"rest/v1/smoking_batches?id=eq.{Model.id}")
+            {
+                Content = JsonContent.Create(Model)
+            });
+
+            if (response.IsSuccessStatusCode)
+            {
+                Snackbar.Add("Smoking batch updated successfully.", Severity.Success);
+                MudDialog.Close(DialogResult.Ok(true));
+            }
+            else
+            {
+                Snackbar.Add("Failed to update smoking batch.", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

@@ -1,0 +1,264 @@
+﻿@page "/forward-contract/list"
+@using MudBlazor
+@using RubberTradingSystem.Models
+@using RubberTradingSystem.Services
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@inject NavigationManager Navigation
+@inject LanguageService LangService
+@implements IDisposable
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4 mb-6">
+    <MudText Typo="Typo.h5" Color="Color.Primary" Class="mb-4">@LangService.GetString("Title_ForwardContractList")</MudText>
+
+    <!-- Filter & Search Bar -->
+    <MudPaper Class="pa-4 mb-4" Elevation="2">
+        <MudGrid AlignItems="Center">
+            <MudItem xs="12" sm="8" md="6">
+                <MudTextField T="string" @bind-Value="_searchString"
+                              Placeholder="@LangService.GetString("Placeholder_SearchMerchant")"
+                              Immediate="true"
+                              Variant="Variant.Outlined"
+                              Dense="true"
+                              Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Filled.Search"
+                              Clearable="true">
+                </MudTextField>
+            </MudItem>
+            <MudItem xs="12" sm="4" md="2">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" OnClick="LoadDataAsync">
+                    @LangService.GetString("Btn_Search")
+                </MudButton>
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
+
+    <!-- စာရင်းဇယား Table -->
+    <MudTable Items="@_items"
+              Dense="true"
+              Hover="true"
+              Bordered="true"
+              Striped="true"
+              Filter="new Func<ForwardContractListModel, bool>(item => FilterFunc(item))"
+              @bind-SelectedItem="_selectedItem"
+              RowStyleFunc="@SelectedRowStyle"
+              RowClass="cursor-pointer"
+              Elevation="2">
+
+        <HeaderContent>
+            <MudTh>@LangService.GetString("Th_MerchantName")</MudTh>
+            <MudTh>@LangService.GetString("Th_DueDate")</MudTh>
+            <MudTh>@LangService.GetString("Th_ContractQty")</MudTh>
+            <MudTh>@LangService.GetString("Th_DeliveredQty")</MudTh>
+            <MudTh>@LangService.GetString("Th_RemainingQty")</MudTh>
+            <MudTh>@LangService.GetString("Th_Status")</MudTh>
+        </HeaderContent>
+
+        <RowTemplate>
+            <MudTd DataLabel="Merchant"><b>@context.merchant_name</b></MudTd>
+            <MudTd DataLabel="DueDate">@(context.due_date.HasValue ? context.due_date.Value.ToString("dd/MM/yyyy") : "-")</MudTd>
+            <MudTd DataLabel="Contract Qty">@context.contract_quantity.ToString("N2")</MudTd>
+            <MudTd DataLabel="Delivered Qty">@context.delivered_quantity.ToString("N2")</MudTd>
+            <MudTd DataLabel="Remaining Qty"><b>@context.remaining_quantity.ToString("N2")</b></MudTd>
+            <MudTd DataLabel="Status">
+                <MudChip T="string" Color="@(context.status == "Active" ? Color.Warning : Color.Success)" Size="Size.Small">
+                    @context.status
+                </MudChip>
+            </MudTd>
+        </RowTemplate>
+
+        <PagerContent>
+            <MudTablePager PageSizeOptions="new int[] { 10, 25, 50, 100 }" />
+        </PagerContent>
+    </MudTable>
+
+    <!-- အောက်ခြေ ခလုတ်များ (Add, Edit, Delete) -->
+    <MudPaper Class="d-flex justify-end pa-4 mt-4" Elevation="2">
+        <MudButton Variant="Variant.Filled" Color="Color.Success" StartIcon="@Icons.Material.Filled.Add"
+                   OnClick="OpenAddPage" Class="mr-2">
+            @LangService.GetString("Btn_AddContract")
+        </MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Warning" StartIcon="@Icons.Material.Filled.Edit"
+                   Disabled="@(_selectedItem == null)" OnClick="OpenEditPage" Class="mr-2">
+            @LangService.GetString("Btn_Edit")
+        </MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete"
+                   Disabled="@(_selectedItem == null)" OnClick="DeleteAsync">
+            @LangService.GetString("Btn_Delete")
+        </MudButton>
+    </MudPaper>
+</MudContainer>
+
+@code {
+    private List<ForwardContractListModel> _items = new();
+    private ForwardContractListModel? _selectedItem;
+    private string _searchString = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        LangService.OnLanguageChanged += StateHasChanged;
+        await LoadDataAsync();
+    }
+
+    public void Dispose() => LangService.OnLanguageChanged -= StateHasChanged;
+
+    private async Task LoadDataAsync()
+    {
+        try
+        {
+            string query = "rest/v1/forward_contracts?select=id,due_date,contract_quantity,delivered_quantity,status,contacts(name)&order=created_at.desc";
+            var rawList = await Http.GetFromJsonAsync<List<ForwardContractRawModel>>(query) ?? new();
+
+            _items = rawList.Select(x => new ForwardContractListModel
+            {
+                id = x.id,
+                merchant_name = x.contacts?.name ?? "N/A",
+                due_date = x.due_date,
+                contract_quantity = x.contract_quantity,
+                delivered_quantity = x.delivered_quantity,
+                status = x.status
+            }).ToList();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private bool FilterFunc(ForwardContractListModel item)
+    {
+        if (string.IsNullOrWhiteSpace(_searchString)) return true;
+        return item.merchant_name != null && item.merchant_name.Contains(_searchString, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private string SelectedRowStyle(ForwardContractListModel item, int rowNumber)
+    {
+        if (_selectedItem != null && _selectedItem.id == item.id)
+        {
+            return "background-color: #d4edda !important; font-weight: bold;";
+        }
+        return string.Empty;
+    }
+
+    private void OpenAddPage() => Navigation.NavigateTo("/forward-contract/create");
+
+    private void OpenEditPage()
+    {
+        if (_selectedItem == null) return;
+        Navigation.NavigateTo($"/forward-contract/edit/{_selectedItem.id}");
+    }
+
+    private async Task DeleteAsync()
+    {
+        if (_selectedItem == null) return;
+
+        var confirmed = await DialogService.ShowMessageBoxAsync(
+            "Confirm",
+            LangService.GetString("Msg_DeleteConfirm"),
+            yesText: "Yes", cancelText: "Cancel");
+
+        if (confirmed == true)
+        {
+            try
+            {
+                string contractId = _selectedItem.id;
+
+                // ၁။ အဆိုပါ Forward Contract နဲ့ သက်ဆိုင်သော Transaction ကို ရှာမည် (Advance In / BuyerAdvanceIn)
+                var txList = await Http.GetFromJsonAsync<List<TransactionDetailModel>>(
+                    $"rest/v1/transactions?voucher_number=eq.FC*&description=ilike.*{contractId}*&select=id,wallet_id,total_amount");
+
+                // အကယ်၍ description ဖြင့် ရှابੀမတွေ့လျှင် contact_id နှင့် total_amount ဖြင့် ထပ်ရှာမည်
+                if (txList == null || !txList.Any())
+                {
+                    var fcDetails = await Http.GetFromJsonAsync<List<ForwardContractDetailModel>>($"rest/v1/forward_contracts?id=eq.{contractId}&select=*");
+                    if (fcDetails != null && fcDetails.Any())
+                    {
+                        var fc = fcDetails.First();
+                        txList = await Http.GetFromJsonAsync<List<TransactionDetailModel>>(
+                            $"rest/v1/transactions?contact_id=eq.{fc.contact_id}&total_amount=eq.{fc.total_advance_amount}&select=id,wallet_id,total_amount");
+                    }
+                }
+
+                if (txList != null && txList.Any())
+                {
+                    var tx = txList.First();
+                    string txId = tx.id;
+
+                    // ၂။ Wallet Balance ကို မူလအခြေအနေသို့ ပြန်ပြင်ခြင်း (Advance ယူထားစဉ်က Wallet ထဲ ဝင်သွားသောငွေကို ပြန်နှုတ်မည်)
+                    if (!string.IsNullOrEmpty(tx.wallet_id) && tx.total_amount > 0)
+                    {
+                        var wallets = await Http.GetFromJsonAsync<List<WalletModel>>($"rest/v1/wallets?id=eq.{tx.wallet_id}");
+                        if (wallets != null && wallets.Any())
+                        {
+                            var wallet = wallets.First();
+                            decimal restoredWalletBal = wallet.Balance - tx.total_amount;
+                            await Http.PatchAsync($"rest/v1/wallets?id=eq.{tx.wallet_id}", JsonContent.Create(new { balance = restoredWalletBal }));
+                        }
+                    }
+
+                    // ၃. သက်ဆိုင်ရာ Ledgers နှင့် Vouchers များကို ဖျက်ခြင်း
+                    await Http.DeleteAsync($"rest/v1/ledgers?transaction_id=eq.{txId}");
+                    await Http.DeleteAsync($"rest/v1/vouchers?reference_id=eq.{txId}");
+
+                    // ၄. Transactions ဇယားမှ ဖျက်ခြင်း
+                    await Http.DeleteAsync($"rest/v1/transactions?id=eq.{txId}");
+                }
+
+                // ၅. နောက်ဆုံး Forward Contract ကို ကိုယ်တိုင်ဖျက်ခြင်း
+                var response = await Http.DeleteAsync($"rest/v1/forward_contracts?id=eq.{contractId}");
+                if (response.IsSuccessStatusCode)
+                {
+                    Snackbar.Add(LangService.GetString("Msg_DeleteSuccess"), Severity.Success);
+                    await LoadDataAsync();
+                    _selectedItem = null;
+                }
+                else
+                {
+                    Snackbar.Add("Failed to delete forward contract.", Severity.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add(@"Error: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+
+    // လိုအပ်သော Model အသေးစားများ (အကယ်၍ မပါသေးပါက ထည့်ရန်)
+    private class TransactionDetailModel
+    {
+        public string id { get; set; } = string.Empty;
+        public string? wallet_id { get; set; }
+        public decimal total_amount { get; set; }
+    }
+
+    private class ForwardContractDetailModel
+    {
+        public string id { get; set; } = string.Empty;
+        public string? contact_id { get; set; }
+        public decimal total_advance_amount { get; set; }
+    }
+    public class ForwardContractListModel
+    {
+        public string id { get; set; } = string.Empty;
+        public string merchant_name { get; set; } = string.Empty;
+        public DateTime? due_date { get; set; }
+        public decimal contract_quantity { get; set; }
+        public decimal delivered_quantity { get; set; }
+        public decimal remaining_quantity => contract_quantity - delivered_quantity;
+        public string status { get; set; } = "Active";
+    }
+
+    private class ForwardContractRawModel
+    {
+        public string id { get; set; } = string.Empty;
+        public DateTime? due_date { get; set; }
+        public decimal contract_quantity { get; set; }
+        public decimal delivered_quantity { get; set; }
+        public string status { get; set; } = "Active";
+        public ContactObj? contacts { get; set; }
+    }
+
+    private class ContactObj { public string name { get; set; } = string.Empty; }
+}

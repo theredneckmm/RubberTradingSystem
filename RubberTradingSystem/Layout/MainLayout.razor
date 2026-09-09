@@ -1,0 +1,226 @@
+﻿@inherits LayoutComponentBase
+@inject AppThemeService ThemeService
+@inject LanguageService LangService
+@inject IJSRuntime JSRuntime
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager Navigation
+@inject HttpClient Http
+@inject IDialogService DialogService
+@implements IDisposable
+@using System.Security.Claims
+@using RubberTradingSystem.Models
+@using RubberTradingSystem.Pages
+
+<MudThemeProvider Theme="@ThemeService.CurrentTheme" IsDarkMode="@ThemeService.IsDarkMode" />
+<MudDialogProvider />
+<MudSnackbarProvider />
+<MudPopoverProvider />
+
+<MudLayout>
+    <MudAppBar Elevation="2" Color="Color.Surface">
+        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="@((e) => DrawerToggle())" />
+        <MudText Typo="Typo.h6" Class="ml-3" Color="Color.Primary"><b>@LangService.GetString("AppName")</b></MudText>
+
+        <MudSpacer />
+
+        <!-- Search Bar (Visual Only) -->
+        <MudTextField T="string" Placeholder="@LangService.GetString("Search")" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0 mr-6 d-none d-md-flex" Style="max-width: 300px;" Margin="Margin.Dense" Variant="Variant.Outlined" />
+
+        <!-- Rubber Smoking Processing Notification Badge -->
+        @if (_processingBatches.Any())
+        {
+            <div style="position: relative;" class="mr-3">
+                <MudBadge Content="_processingBatches.Count" Color="Color.Error" Overlap="true">
+                    <MudButton Variant="Variant.Outlined"
+                               Color="Color.Warning"
+                               StartIcon="@Icons.Material.Filled.LocalFireDepartment"
+                               Size="Size.Small"
+                               OnClick="ToggleSmokingMenu">
+                        မှိုင်းခံဆဲ (@_processingBatches.Count)
+                    </MudButton>
+                </MudBadge>
+
+                <!-- Custom Popup Box (Popover alternative) -->
+                @if (_isSmokingMenuOpen)
+                {
+                    <div style="position: absolute; right: 0; top: 45px; z-index: 9999; background: var(--mud-palette-surface); border: 1px solid var(--mud-palette-lines-default); box-shadow: 0px 4px 10px rgba(0,0,0,0.3); border-radius: 4px; min-width: 300px;" class="pa-2">
+                        <div class="d-flex justify-space-between align-center px-2 py-1">
+                            <MudText Typo="Typo.subtitle2" Color="Color.Warning">
+                                🔥 လုပ်ဆောင်ဆဲ မှိုင်းခံဖို Batches
+                            </MudText>
+                            <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" OnClick="() => _isSmokingMenuOpen = false" />
+                        </div>
+                        <MudDivider Class="my-1" />
+                        @foreach (var batch in _processingBatches)
+                        {
+                            <div class="pa-2 rounded my-1" style="cursor: pointer; background: var(--mud-palette-background-grey);" @onclick="() => NavigateToComplete(batch.id)">
+                                <div class="d-flex flex-column">
+                                    <b>@batch.batch_number</b>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">စတင်ရက်: @batch.start_date.ToString("dd/MM/yyyy") | သွင်းအား: @batch.total_input_weight.ToString("N0") lbs</MudText>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        }
+
+        <!-- Sync Status -->
+        <MudTooltip Text="5 Offline Vouchers Pending">
+            <MudIconButton Icon="@Icons.Material.Filled.CloudOff" Color="Color.Warning" />
+        </MudTooltip>
+
+        <!-- Language Toggle -->
+        <MudMenu Label="@LangService.CurrentLanguage.ToString()" Color="Color.Inherit" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight" Class="mr-2">
+            <MudMenuItem OnClick="@(() => SetLanguageAsync(Language.MM))">မြန်မာ (MM)</MudMenuItem>
+            <MudMenuItem OnClick="@(() => SetLanguageAsync(Language.EN))">English (EN)</MudMenuItem>
+        </MudMenu>
+
+        <!-- Theme Selector -->
+        <MudMenu Icon="@Icons.Material.Filled.Palette" Color="Color.Inherit" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
+            <MudMenuItem OnClick="@(() => SetThemeAsync(AppThemeType.Light))">Light Theme</MudMenuItem>
+            <MudMenuItem OnClick="@(() => SetThemeAsync(AppThemeType.Dark))">Dark Theme</MudMenuItem>
+            <MudMenuItem OnClick="@(() => SetThemeAsync(AppThemeType.Gold))">Gold Theme</MudMenuItem>
+            <MudMenuItem OnClick="@(() => SetThemeAsync(AppThemeType.Blue))">Blue Theme</MudMenuItem>
+        </MudMenu>
+
+        <!-- User Profile Dropdown -->
+        <MudMenu Icon="@Icons.Material.Filled.AccountCircle" Color="Color.Primary" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight" Class="ml-4">
+            <ChildContent>
+                <div class="px-4 py-2" style="min-width: 220px;">
+                    <MudText Typo="Typo.body1" Class="mud-text-truncate"><b>@_userEmail</b></MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Success">Role: <b>@_userRole</b></MudText>
+                    @if (!string.IsNullOrEmpty(_fullName))
+                    {
+                        <MudText Typo="Typo.caption" Class="d-block text-muted">Name: @_fullName</MudText>
+                    }
+                </div>
+                <MudDivider />
+                <MudMenuItem Icon="@Icons.Material.Filled.Person" OnClick="OpenProfileDialog">@LangService.GetString("Profile")</MudMenuItem>
+                <MudMenuItem Icon="@Icons.Material.Filled.Logout" Color="Color.Error" OnClick="LogoutAsync">@LangService.GetString("Logout")</MudMenuItem>
+            </ChildContent>
+        </MudMenu>
+    </MudAppBar>
+
+    <MudDrawer @bind-Open="_drawerOpen" Elevation="4" Variant="@DrawerVariant.Responsive" ClipMode="DrawerClipMode.Docked">
+        <NavMenu />
+    </MudDrawer>
+
+    <MudMainContent>
+        <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="pa-6">
+            @Body
+        </MudContainer>
+    </MudMainContent>
+</MudLayout>
+
+@code {
+    private bool _drawerOpen = true;
+    private string _userEmail = "Loading...";
+    private string _userRole = "Staff";
+    private string _fullName = "";
+    private string _userId = "";
+    private List<RubberSmokingBatchModel> _processingBatches = new();
+
+    void DrawerToggle() => _drawerOpen = !_drawerOpen;
+
+    private void UpdateUI() => InvokeAsync(StateHasChanged);
+
+    private bool _isSmokingMenuOpen = false;
+
+    private void ToggleSmokingMenu()
+    {
+        _isSmokingMenuOpen = !_isSmokingMenuOpen;
+    }
+
+    private void NavigateToComplete(string batchId)
+    {
+        _isSmokingMenuOpen = false; // Menu ပိတ်မည်
+        Navigation.NavigateTo($"/rubber-smoking/complete/{batchId}");
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        ThemeService.OnThemeChanged += UpdateUI;
+        LangService.OnLanguageChanged += UpdateUI;
+        Navigation.LocationChanged += OnLocationChanged;
+
+        try
+        {
+            var savedLang = await JSRuntime.InvokeAsync<string>("localStorage.getItem", "app_language");
+            if (!string.IsNullOrEmpty(savedLang) && Enum.TryParse<Language>(savedLang, out var lang)) LangService.SetLanguage(lang);
+
+            var savedTheme = await JSRuntime.InvokeAsync<string>("localStorage.getItem", "app_theme");
+            if (!string.IsNullOrEmpty(savedTheme) && Enum.TryParse<AppThemeType>(savedTheme, out var theme)) ThemeService.SetTheme(theme);
+
+            await LoadUserDataAsync();
+            await LoadProcessingBatchesAsync();
+        }
+        catch { _userEmail = "Session Error"; }
+    }
+
+    private async void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        await LoadProcessingBatchesAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadProcessingBatchesAsync()
+    {
+        try
+        {
+            _processingBatches = await Http.GetFromJsonAsync<List<RubberSmokingBatchModel>>("rest/v1/rubber_smoking_batches?status=eq.Processing&select=*") ?? new();
+        }
+        catch { _processingBatches = new(); }
+    }
+
+    //private void NavigateToComplete(string batchId) => Navigation.NavigateTo($"/rubber-smoking/complete/{batchId}");
+
+    private async Task LoadUserDataAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        if (user.Identity is not null && user.Identity.IsAuthenticated)
+        {
+            _userEmail = user.FindFirst(c => c.Type == ClaimTypes.Email)?.Value ?? user.Identity.Name ?? "Unknown";
+            _userId = user.FindFirst(c => c.Type == ClaimTypes.NameIdentifier)?.Value ?? string.Empty;
+
+            if (!string.IsNullOrEmpty(_userId))
+            {
+                try
+                {
+                    var profiles = await Http.GetFromJsonAsync<List<StaffModel>>($"rest/v1/profiles?id=eq.{_userId}&select=*");
+                    if (profiles != null && profiles.Count > 0)
+                    {
+                        _userRole = profiles[0].role ?? "Staff";
+                        _fullName = profiles[0].full_name ?? "";
+                    }
+                }
+                catch { _userRole = "Staff"; }
+            }
+        }
+        StateHasChanged();
+    }
+
+    private async Task OpenProfileDialog()
+    {
+        var parameters = new DialogParameters { { "Email", _userEmail }, { "FullName", _fullName }, { "Role", _userRole } };
+        await DialogService.ShowAsync<UserProfileDialog>("User Profile", parameters, new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Small, FullWidth = true });
+    }
+
+    private async Task LogoutAsync()
+    {
+        await JSRuntime.InvokeVoidAsync("localStorage.removeItem", "supabase-auth-token");
+        Navigation.NavigateTo("/login", forceLoad: true);
+    }
+
+    private async Task SetLanguageAsync(Language lang) { LangService.SetLanguage(lang); await JSRuntime.InvokeVoidAsync("localStorage.setItem", "app_language", lang.ToString()); }
+    private async Task SetThemeAsync(AppThemeType theme) { ThemeService.SetTheme(theme); await JSRuntime.InvokeVoidAsync("localStorage.setItem", "app_theme", theme.ToString()); }
+
+    public void Dispose()
+    {
+        ThemeService.OnThemeChanged -= UpdateUI;
+        LangService.OnLanguageChanged -= UpdateUI;
+        Navigation.LocationChanged -= OnLocationChanged;
+    }
+}

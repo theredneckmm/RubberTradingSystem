@@ -1,0 +1,140 @@
+﻿@page "/wallets"
+@using MudBlazor
+@using RubberTradingSystem.Models
+@using RubberTradingSystem.Services
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@inject LanguageService LangService
+@implements IDisposable
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+    <MudText Typo="Typo.h5" Color="Color.Primary" Class="mb-4">ငွေအကောင့်များနှင့် ပိုက်ဆံအိတ်များ (Wallets)</MudText>
+
+    <MudTable Items="@_walletList"
+              Dense="true"
+              Hover="true"
+              Bordered="true"
+              Striped="true"
+              Filter="new Func<WalletModel,bool>(FilterFunc)"
+              @bind-SelectedItem="_selectedWallet"
+              RowClass="cursor-pointer"
+              RowClassFunc="@SelectedRowClassFunc"
+              Elevation="2">
+
+        <ToolBarContent>
+            <MudSpacer />
+            <MudTextField @bind-Value="_searchString"
+                          Placeholder="ရှာဖွေရန်..."
+                          Immediate="true"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search"
+                          Class="mt-0"
+                          Clearable="true">
+            </MudTextField>
+        </ToolBarContent>
+
+        <HeaderContent>
+            <MudTh>အမည် (Wallet Name)</MudTh>
+            <MudTh>အမျိုးအစား (Type)</MudTh>
+            <MudTh>လက်ကျန်ငွေ (Balance)</MudTh>
+        </HeaderContent>
+
+        <RowTemplate>
+            <MudTd DataLabel="အမည်"><b>@context.WalletName</b></MudTd>
+            <MudTd DataLabel="အမျိုးအစား">
+                <MudChip T="string" Color="Color.Info" Size="Size.Small">@context.WalletType</MudChip>
+            </MudTd>
+            <MudTd DataLabel="လက်ကျန်ငွေ"><b>@context.Balance.ToString("N2") MMK</b></MudTd>
+        </RowTemplate>
+
+        <PagerContent>
+            <MudTablePager PageSizeOptions="new int[] { 10, 25, 50 }" />
+        </PagerContent>
+    </MudTable>
+
+    <MudPaper Class="d-flex justify-end pa-4 mt-4" Elevation="2">
+        <MudButton Variant="Variant.Filled" Color="Color.Success" StartIcon="@Icons.Material.Filled.Add"
+                   OnClick="OpenAddDialog" Class="mr-2">အသစ်ထည့်မည်</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Warning" StartIcon="@Icons.Material.Filled.Edit"
+                   Disabled="@(_selectedWallet == null)" OnClick="OpenEditDialog" Class="mr-2">ပြင်ဆင်မည်</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete"
+                   Disabled="@(_selectedWallet == null)" OnClick="DeleteWallet">ဖျက်မည်</MudButton>
+    </MudPaper>
+</MudContainer>
+
+@code {
+    private List<WalletModel> _walletList = new();
+    private WalletModel? _selectedWallet;
+    private string _searchString = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        LangService.OnLanguageChanged += StateHasChanged;
+        await LoadWalletsAsync();
+    }
+
+    public void Dispose() => LangService.OnLanguageChanged -= StateHasChanged;
+
+    private async Task LoadWalletsAsync()
+    {
+        try
+        {
+            _walletList = await Http.GetFromJsonAsync<List<WalletModel>>("rest/v1/wallets?select=*&order=created_at.desc") ?? new();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"ဒေတာဆွဲယူရာတွင် အမှားရှိသည်: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private bool FilterFunc(WalletModel item)
+    {
+        if (string.IsNullOrWhiteSpace(_searchString)) return true;
+
+        return (!string.IsNullOrEmpty(item.WalletName) && item.WalletName.Contains(_searchString, StringComparison.OrdinalIgnoreCase)) ||
+               (!string.IsNullOrEmpty(item.WalletType) && item.WalletType.Contains(_searchString, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private string SelectedRowClassFunc(WalletModel item, int rowNumber) =>
+        (_selectedWallet != null && _selectedWallet.Id == item.Id) ? "selected-row-color" : string.Empty;
+
+    private async Task OpenAddDialog()
+    {
+        var parameters = new DialogParameters { ["Model"] = new WalletModel(), ["IsNew"] = true };
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<WalletDialog>("အကောင့်အသစ်ထည့်ရန်", parameters, options);
+        var result = await dialog.Result;
+
+        if (!result.Canceled) await LoadWalletsAsync();
+    }
+
+    private async Task OpenEditDialog()
+    {
+        if (_selectedWallet == null) return;
+        var parameters = new DialogParameters { ["Model"] = _selectedWallet, ["IsNew"] = false };
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<WalletDialog>("အကောင့်ပြင်ဆင်ရန်", parameters, options);
+        var result = await dialog.Result;
+
+        if (!result.Canceled) await LoadWalletsAsync();
+    }
+
+    private async Task DeleteWallet()
+    {
+        if (_selectedWallet == null) return;
+
+        var response = await Http.DeleteAsync($"rest/v1/wallets?id=eq.{_selectedWallet.Id}");
+        if (response.IsSuccessStatusCode)
+        {
+            Snackbar.Add("အောင်မြင်စွာ ဖျက်ပစ်လိုက်ပါပြီ။", Severity.Success);
+            await LoadWalletsAsync();
+            _selectedWallet = null;
+        }
+        else
+        {
+            var errorContent = await response.Content.ReadAsStringAsync();
+            Snackbar.Add($"ဖျက်၍ မအောင်မြင်ပါ: {errorContent}", Severity.Error);
+        }
+    }
+}

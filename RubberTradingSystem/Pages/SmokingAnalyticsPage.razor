@@ -1,0 +1,150 @@
+﻿@page "/rubber-smoking/analytics"
+@using MudBlazor
+@using RubberTradingSystem.Models
+@using RubberTradingSystem.Services
+@inject HttpClient Http
+@inject LanguageService LangService
+@inject ISnackbar Snackbar
+@implements IDisposable
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4 mb-6">
+    <MudText Typo="Typo.h5" Color="Color.Primary" Class="mb-4 font-weight-bold">
+        📊 @LangService.GetString("Title_SmokingAnalytics")
+    </MudText>
+
+    <!-- KPI Summary Cards -->
+    <MudGrid Class="mb-4">
+        <MudItem xs="12" md="3">
+            <MudPaper Class="pa-4" Elevation="2">
+                <MudText Typo="Typo.subtitle2" Color="Color.Secondary">@LangService.GetString("Card_TotalInput")</MudText>
+                <MudText Typo="Typo.h5"><b>@_totalInput.ToString("N0") lbs</b></MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" md="3">
+            <MudPaper Class="pa-4" Elevation="2">
+                <MudText Typo="Typo.subtitle2" Color="Color.Success">@LangService.GetString("Card_TotalOutput")</MudText>
+                <MudText Typo="Typo.h5" Color="Color.Success"><b>@_totalOutput.ToString("N0") lbs</b></MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" md="3">
+            <MudPaper Class="pa-4" Elevation="2">
+                <MudText Typo="Typo.subtitle2" Color="Color.Error">@LangService.GetString("Card_TotalLoss")</MudText>
+                <MudText Typo="Typo.h5" Color="Color.Error"><b>@_totalLoss.ToString("N0") lbs (@_avgLossPercent.ToString("N2")%)</b></MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" md="3">
+            <MudPaper Class="pa-4" Elevation="2">
+                <MudText Typo="Typo.subtitle2" Color="Color.Info">ပျမ်းမျှ ခန့်မှန်းလျော့ (Avg Est. Loss)</MudText>
+                <MudText Typo="Typo.h5" Color="Color.Info"><b>@_avgMoisture.ToString("N2") %</b></MudText>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    <!-- Analytics Data Table -->
+    <MudTable Items="@_reportItems" Dense="true" Hover="true" Bordered="true" Striped="true" Elevation="2">
+        <HeaderContent>
+            <MudTh>@LangService.GetString("Th_BatchNo")</MudTh>
+            <MudTh>@LangService.GetString("Th_StartDate")</MudTh>
+            <MudTh>@LangService.GetString("Th_EndDate")</MudTh>
+            <MudTh>@LangService.GetString("Th_InputWeight")</MudTh>
+            <MudTh>@LangService.GetString("Th_OutputWeight")</MudTh>
+            <MudTh>@LangService.GetString("Th_LossWeight")</MudTh>
+            <MudTh>ဝယ်စဥ်ခန့်မှန်းလျော့ % (Est. Loss %)</MudTh>
+            <MudTh>အမှန်တကယ်လျော့ % (Actual Loss %)</MudTh>
+            <MudTh>ကွာဟချက် % (Variance %)</MudTh>
+            <MudTh>@LangService.GetString("Th_Status")</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd><b>@context.batch_number</b></MudTd>
+            <MudTd>@context.start_date.ToString("dd/MM/yyyy")</MudTd>
+            <MudTd>@(context.end_date?.ToString("dd/MM/yyyy") ?? "-")</MudTd>
+            <MudTd>@context.total_input_weight.ToString("N0")</MudTd>
+            <MudTd>@context.total_output_weight.ToString("N0")</MudTd>
+            <MudTd><b style="color: var(--mud-palette-error-text);">@context.total_loss_weight.ToString("N0")</b></MudTd>
+
+            <!-- ၁။ ဝယ်ယူစဥ်က ခန့်မှန်းခဲ့သော အလျော့ရာခိုင်နှုန်း (Est. Loss %) -->
+            <MudTd>@context.avg_moisture.ToString("N2")%</MudTd>
+
+            <!-- ၂။ အမှန်တကယ် ထွက်လာသော အလျော့ရာခိုင်နှုန်း (Actual Loss %) -->
+            <MudTd>
+                @{
+                    decimal actualLossPercent = context.total_input_weight > 0 ? (context.total_loss_weight / context.total_input_weight) * 100 : 0;
+                }
+                <b>@actualLossPercent.ToString("N2")%</b>
+            </MudTd>
+
+            <!-- ၃။ ကွာဟချက် ရာခိုင်နှုန်း (Variance = Actual Loss - Estimated Loss) -->
+            <MudTd>
+                @{
+                    decimal actualLoss = context.total_input_weight > 0 ? (context.total_loss_weight / context.total_input_weight) * 100 : 0;
+                    decimal variance = actualLoss - context.avg_moisture;
+                }
+                <MudChip T="string" Color="@(variance > 0 ? Color.Error : (variance < 0 ? Color.Success : Color.Default))" Size="Size.Small">
+                    @(variance > 0 ? $"+{variance:N2}%" : $"{variance:N2}%")
+                </MudChip>
+            </MudTd>
+
+            <MudTd>
+                <MudChip T="string" Color="@(context.status == "Completed" ? Color.Success : Color.Info)" Size="Size.Small">
+                    @context.status
+                </MudChip>
+            </MudTd>
+        </RowTemplate>
+        <PagerContent>
+            <MudTablePager PageSizeOptions="new int[] { 10, 25, 50 }" />
+        </PagerContent>
+    </MudTable>
+</MudContainer>
+
+@code {
+    private List<SmokingReportModel> _reportItems = new();
+    private decimal _totalInput = 0;
+    private decimal _totalOutput = 0;
+    private decimal _totalLoss = 0;
+    private decimal _avgLossPercent = 0;
+    private decimal _avgMoisture = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        LangService.OnLanguageChanged += StateHasChanged;
+        await LoadAnalyticsDataAsync();
+    }
+
+    public void Dispose()
+    {
+        LangService.OnLanguageChanged -= StateHasChanged;
+    }
+
+    private async Task LoadAnalyticsDataAsync()
+    {
+        try
+        {
+            _reportItems = await Http.GetFromJsonAsync<List<SmokingReportModel>>("rest/v1/rubber_smoking_batches?select=*&order=start_date.desc") ?? new();
+
+            if (_reportItems.Any())
+            {
+                _totalInput = _reportItems.Sum(x => x.total_input_weight);
+                _totalOutput = _reportItems.Sum(x => x.total_output_weight);
+                _totalLoss = _reportItems.Sum(x => x.total_loss_weight);
+                _avgLossPercent = _totalInput > 0 ? (_totalLoss / _totalInput) * 100 : 0;
+                _avgMoisture = _reportItems.Where(x => x.avg_moisture > 0).Select(x => x.avg_moisture).DefaultIfEmpty(0).Average();
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading analytics: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private class SmokingReportModel
+    {
+        public string batch_number { get; set; } = string.Empty;
+        public DateTime start_date { get; set; }
+        public DateTime? end_date { get; set; }
+        public string status { get; set; } = string.Empty;
+        public decimal total_input_weight { get; set; }
+        public decimal total_output_weight { get; set; }
+        public decimal total_loss_weight { get; set; }
+        public decimal avg_moisture { get; set; }
+    }
+}

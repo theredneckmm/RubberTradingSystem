@@ -1,0 +1,282 @@
+﻿@page "/advance/buyer-out"
+@using MudBlazor
+@using RubberTradingSystem.Models
+@using RubberTradingSystem.Services
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+@inject LanguageService Lang
+@inject UserContextService UserContext
+@implements IDisposable
+
+<MudContainer MaxWidth="MaxWidth.Small" Class="mt-6">
+    <MudPaper Elevation="3" Class="pa-6">
+        <div class="d-flex justify-space-between align-center mb-6">
+            <MudText Typo="Typo.h5" Color="Color.Primary" Class="fw-bold">@Lang.GetString("Title_BuyerAdvanceOut")</MudText>
+            <MudChip T="string" Color="Color.Primary" Variant="Variant.Outlined" Size="Size.Large"><b>@_voucherNumber</b></MudChip>
+        </div>
+
+        <MudForm @ref="_form" @bind-IsValid="@_success">
+            <MudGrid>
+                <!-- ကုန်သည် (Buyer) ရွေးချယ်ခြင်း -->
+                <MudItem xs="12">
+                    <MudSelect T="Guid" Label="@Lang.GetString("Lbl_SelectBuyer")" @bind-Value="_selectedContactId"
+                               SelectedValuesChanged="OnBuyerSelected"
+                               Required="true" Variant="Variant.Outlined" AnchorOrigin="Origin.BottomCenter"
+                               Disabled="_isSuccessCompleted">
+                        @foreach (var contact in _buyers)
+                        {
+                            <MudSelectItem Value="@(Guid.Parse(contact.Id))">@contact.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+
+                @if (_selectedContact != null)
+                {
+                    <MudItem xs="12">
+                        <MudAlert Severity="Severity.Info" Dense="true" Class="mb-2">
+                            @Lang.GetString("Lbl_CurrentAdvance"): <b>@_currentLedgerBalance.ToString("N2") MMK</b>
+                        </MudAlert>
+                    </MudItem>
+                }
+
+                <!-- ငွေလက်ခံမည့် Wallet ကို ရွေးချယ်ခြင်း -->
+                <MudItem xs="12">
+                    <MudSelect T="string" Label="@Lang.GetString("Lbl_SelectWallet")" @bind-Value="_selectedWalletId"
+                               Required="true" Variant="Variant.Outlined" AnchorOrigin="Origin.BottomCenter"
+                               Disabled="_isSuccessCompleted">
+                        @foreach (var wallet in _wallets)
+                        {
+                            <MudSelectItem Value="@wallet.Id">@wallet.WalletName (@wallet.WalletType) - လက်ကျန်: @wallet.Balance.ToString("N2")</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+
+                <!-- ငွေပမာဏ -->
+                <MudItem xs="12">
+                    <MudNumericField @bind-Value="_amount" Label="@Lang.GetString("Lbl_Amount")"
+                                     Required="true" Variant="Variant.Outlined" Adornment="Adornment.Start" AdornmentText="MMK" HideSpinButtons="true" Min="0"
+                                     Disabled="_isSuccessCompleted" />
+                </MudItem>
+
+                <!-- မှတ်ချက် -->
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="_description" Label="@Lang.GetString("Lbl_Note")" Variant="Variant.Outlined" Lines="2"
+                                  Disabled="_isSuccessCompleted" />
+                </MudItem>
+            </MudGrid>
+
+            <div class="d-flex justify-end gap-3 mt-6">
+                @if (!_isSuccessCompleted)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveBuyerAdvanceOutAsync"
+                               Disabled="@(!_success || _isSaving)">
+                        @if (_isSaving)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+                        }
+                        else
+                        {
+                            <MudText>@Lang.GetString("Btn_PayBuyerAdvance")</MudText>
+                        }
+                    </MudButton>
+                }
+                else
+                {
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" Disabled="true">
+                        @Lang.GetString("Btn_PayBuyerAdvance")
+                    </MudButton>
+                }
+
+                <MudButton Variant="Variant.Outlined" Color="Color.Secondary" OnClick="PrintVoucher" Disabled="!_isSuccessCompleted">
+                    Print Voucher
+                </MudButton>
+
+                <MudButton Variant="Variant.Filled" Color="Color.Success" OnClick="FinishTransaction" Disabled="!_isSuccessCompleted">
+                    Finish
+                </MudButton>
+            </div>
+        </MudForm>
+    </MudPaper>
+</MudContainer>
+
+@code {
+    private MudForm _form = new();
+    private bool _success;
+    private bool _isSaving;
+    private bool _isSuccessCompleted = false;
+    private string _voucherNumber = string.Empty;
+
+    private List<Contact> _buyers = new();
+    private List<WalletModel> _wallets = new();
+    private Guid _selectedContactId;
+    private Contact? _selectedContact;
+    private decimal _currentLedgerBalance = 0m;
+    private string _selectedWalletId = "";
+    private decimal _amount;
+    private string _description = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        Lang.OnLanguageChanged += StateHasChanged;
+        await LoadInitialDataAsync();
+    }
+
+    private async Task LoadInitialDataAsync()
+    {
+        var allContacts = await Http.GetFromJsonAsync<List<Contact>>("rest/v1/contacts?select=*");
+        _buyers = allContacts?.Where(c => c.ContactType == "Buyer").ToList() ?? new();
+
+        var ownerId = await UserContext.GetCurrentOwnerIdAsync();
+        _wallets = await Http.GetFromJsonAsync<List<WalletModel>>($"rest/v1/wallets?owner_id=eq.{ownerId}&select=*") ?? new();
+
+        var cashWallet = _wallets.FirstOrDefault(w => w.WalletType.Equals("Cash", StringComparison.OrdinalIgnoreCase));
+        if (cashWallet != null) _selectedWalletId = cashWallet.Id;
+        else if (_wallets.Any()) _selectedWalletId = _wallets.First().Id;
+
+        _voucherNumber = await GenerateVoucherNumberAsync("BOUT");
+    }
+
+    private async Task<string> GenerateVoucherNumberAsync(string prefix)
+    {
+        string dateStr = DateTime.Now.ToString("yyyyMMdd");
+        string searchPattern = $"{prefix}-{dateStr}-";
+        try
+        {
+            var transactions = await Http.GetFromJsonAsync<List<TransactionResponseModel>>(
+                $"rest/v1/transactions?voucher_number=like.{searchPattern}*&order=voucher_number.desc&limit=1");
+
+            int nextSeq = 1;
+            if (transactions != null && transactions.Any() && !string.IsNullOrEmpty(transactions.First().voucher_number))
+            {
+                string lastVoucher = transactions.First().voucher_number!;
+                string seqPart = lastVoucher.Substring(lastVoucher.LastIndexOf('-') + 1);
+                if (int.TryParse(seqPart, out int currentSeq)) nextSeq = currentSeq + 1;
+            }
+            return $"{prefix}-{dateStr}-{nextSeq:D3}";
+        }
+        catch
+        {
+            return $"{prefix}-{dateStr}-001";
+        }
+    }
+
+    private async void OnBuyerSelected()
+    {
+        _selectedContact = _buyers.FirstOrDefault(c => c.Id == _selectedContactId.ToString());
+        if (_selectedContact != null)
+        {
+            _currentLedgerBalance = await GetLatestBalanceForContact(_selectedContact.Id);
+            StateHasChanged();
+        }
+    }
+
+    private async Task<decimal> GetLatestBalanceForContact(string contactId)
+    {
+        try
+        {
+            var ledgers = await Http.GetFromJsonAsync<List<LedgerModel>>($"rest/v1/ledgers?contact_id=eq.{contactId}&order=created_at.desc&limit=1");
+            return ledgers?.FirstOrDefault()?.balance_after ?? 0m;
+        }
+        catch { return 0m; }
+    }
+
+    private async Task SaveBuyerAdvanceOutAsync()
+    {
+        await _form.ValidateAsync();
+        if (!_success) return;
+
+        _isSaving = true;
+        try
+        {
+            string ownerId = await UserContext.GetCurrentOwnerIdAsync();
+            string staffId = await UserContext.GetCurrentStaffIdAsync();
+
+            var transaction = new
+            {
+                owner_id = ownerId,
+                staff_id = staffId,
+                contact_id = _selectedContactId,
+                transaction_type = "BuyerAdvanceOut",
+                voucher_number = _voucherNumber,
+                total_amount = _amount,
+                paid_amount = _amount,
+                wallet_id = _selectedWalletId,
+                description = string.IsNullOrEmpty(_description) ? "Buyer Advance Out (ကုန်သည်ထံမှ ကြိုတင်ငွေထုတ်ယူခြင်း)" : _description
+            };
+
+            var requestMessage = new HttpRequestMessage(HttpMethod.Post, "rest/v1/transactions")
+            {
+                Content = JsonContent.Create(transaction)
+            };
+            requestMessage.Headers.Add("Prefer", "return=representation");
+
+            var transResponse = await Http.SendAsync(requestMessage);
+
+            if (transResponse.IsSuccessStatusCode)
+            {
+                var createdTransactions = await transResponse.Content.ReadFromJsonAsync<List<TransactionResponseModel>>();
+                string? generatedTransactionId = createdTransactions?.FirstOrDefault()?.id;
+
+                decimal previousBalance = await GetLatestBalanceForContact(_selectedContactId.ToString());
+                decimal currentRunningBalance = previousBalance + _amount;
+
+                var ledgerPayload = new
+                {
+                    owner_id = ownerId,
+                    staff_id = staffId,
+                    contact_id = _selectedContactId,
+                    transaction_id = generatedTransactionId,
+                    voucher_number = _voucherNumber,
+                    entry_type = "Credit",
+                    credit_amount = _amount,
+                    balance_after = currentRunningBalance,
+                    balance_impact = "BuyerAdvanceOut",
+                    description = transaction.description
+                };
+                await Http.PostAsJsonAsync("rest/v1/ledgers", ledgerPayload);
+
+                var voucherPayload = new
+                {
+                    owner_id = ownerId,
+                    staff_id = staffId,
+                    voucher_number = _voucherNumber,
+                    voucher_type = "BuyerAdvanceOut",
+                    reference_id = generatedTransactionId
+                };
+                await Http.PostAsJsonAsync("rest/v1/vouchers", voucherPayload);
+
+                var selectedWallet = _wallets.FirstOrDefault(w => w.Id == _selectedWalletId);
+                if (selectedWallet != null)
+                {
+                    decimal newBalance = selectedWallet.Balance + _amount; // Wallet ထဲငွေဝင်မည်
+                    await Http.PatchAsJsonAsync($"rest/v1/wallets?id=eq.{selectedWallet.Id}", new { balance = newBalance });
+                }
+
+                Snackbar.Add(Lang.GetString("Msg_Success"), Severity.Success);
+                _isSuccessCompleted = true;
+            }
+            else
+            {
+                var err = await transResponse.Content.ReadAsStringAsync();
+                Snackbar.Add($"မအောင်မြင်ပါ: {err}", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"အမှားအယွင်း: {ex.Message}", Severity.Error);
+        }
+        finally { _isSaving = false; }
+    }
+
+    private void PrintVoucher() => Navigation.NavigateTo($"/print-voucher/{_voucherNumber}");
+    private void FinishTransaction() => Navigation.NavigateTo("/contacts");
+
+    private class TransactionResponseModel
+    {
+        public string id { get; set; } = string.Empty;
+        public string? voucher_number { get; set; }
+    }
+
+    public void Dispose() => Lang.OnLanguageChanged -= StateHasChanged;
+}

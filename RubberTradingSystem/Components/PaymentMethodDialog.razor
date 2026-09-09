@@ -1,0 +1,55 @@
+﻿@using MudBlazor
+@using RubberTradingSystem.Models
+@using RubberTradingSystem.Services
+@inject LanguageService LangService
+
+<MudDialog>
+    <DialogContent>
+        <EditForm Model="@Model" OnValidSubmit="Save">
+            <DataAnnotationsValidator />
+
+            <MudTextField @bind-Value="Model.name"
+                          Label="@LangService.GetString("Payment_NameLabel")"
+                          Variant="Variant.Outlined"
+                          Class="mb-4"
+                          Required="true" />
+
+            <MudTextField @bind-Value="Model.type"
+                          Label="@LangService.GetString("Payment_TypeLabel")"
+                          Variant="Variant.Outlined"
+                          Class="mb-4"
+                          Required="true" />
+
+            <MudTextField @bind-Value="Model.account_details"
+                          Label="@LangService.GetString("Payment_DetailsLabel")"
+                          Variant="Variant.Outlined"
+                          Class="mb-4"
+                          Required="true" />
+
+            <MudCheckBox @bind-Value="Model.is_active"
+                         Label="@LangService.GetString("Payment_StatusActive")"
+                         Color="Color.Primary"
+                         Class="mb-4" />
+
+            <div class="d-flex justify-end">
+                <MudButton OnClick="Cancel" Variant="Variant.Text" Class="mr-2">@LangService.GetString("Cancel")</MudButton>
+                <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary">@LangService.GetString("Save")</MudButton>
+            </div>
+        </EditForm>
+    </DialogContent>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public PaymentMethodModel Model { get; set; } = new();
+
+    private void Save()
+    {
+        MudDialog.Close(DialogResult.Ok(Model));
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

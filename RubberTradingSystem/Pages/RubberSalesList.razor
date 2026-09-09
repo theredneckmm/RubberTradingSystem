@@ -1,0 +1,273 @@
+﻿@page "/rubber-sales-list"
+@using MudBlazor
+@using RubberTradingSystem.Models
+@using RubberTradingSystem.Services
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@inject NavigationManager Navigation
+@inject LanguageService LangService
+@implements IDisposable
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4 mb-6">
+    <MudText Typo="Typo.h5" Color="Color.Primary" Class="mb-4">@LangService.GetString("Sale_ListTitle")</MudText>
+
+    <!-- ရက်စွဲအလိုက် Filter လုပ်ရန် Search Bar နှင့် Date Pickers များ -->
+    <MudPaper Class="pa-4 mb-4" Elevation="2">
+        <MudGrid AlignItems="Center">
+            <MudItem xs="12" sm="4" md="3">
+                <MudDatePicker Label="ဘယ်ရက်မှ (From Date)" @bind-Date="_fromDate" Variant="Variant.Outlined" Dense="true" Clearable="true" />
+            </MudItem>
+            <MudItem xs="12" sm="4" md="3">
+                <MudDatePicker Label="ဘယ်ရက်အထိ (To Date)" @bind-Date="_toDate" Variant="Variant.Outlined" Dense="true" Clearable="true" />
+            </MudItem>
+            <MudItem xs="12" sm="4" md="4">
+                <MudTextField T="string" @bind-Value="_searchString"
+                              Placeholder="@LangService.GetString("Sale_SearchPlaceholder")"
+                              Immediate="true"
+                              Variant="Variant.Outlined"
+                              Dense="true"
+                              Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Filled.Search"
+                              Clearable="true">
+                </MudTextField>
+            </MudItem>
+            <MudItem xs="12" sm="12" md="2" Class="d-flex gap-2">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" OnClick="LoadDataAsync">ရှာမည်</MudButton>
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
+
+    <!-- စာရင်းဇယား Table -->
+    <MudTable Items="@_items"
+              Dense="true"
+              Hover="true"
+              Bordered="true"
+              Striped="true"
+              Filter="new Func<RubberSaleListModel, bool>(item => FilterFunc(item))"
+              @bind-SelectedItem="_selectedItem"
+              RowStyleFunc="@SelectedRowStyle"
+              RowClass="cursor-pointer"
+              Elevation="2">
+
+        <HeaderContent>
+            <MudTh>@LangService.GetString("Sale_ColVoucher")</MudTh>
+            <MudTh>@LangService.GetString("Sale_ColBuyer")</MudTh>
+            <MudTh>@LangService.GetString("Sale_ColType")</MudTh>
+            <MudTh>@LangService.GetString("Sale_ColWeight")</MudTh>
+            <MudTh>@LangService.GetString("Sale_ColPrice")</MudTh>
+            <MudTh>@LangService.GetString("Sale_ColTotal")</MudTh>
+            <MudTh>@LangService.GetString("Sale_ColDate")</MudTh>
+        </HeaderContent>
+
+        <RowTemplate>
+            <MudTd DataLabel="Voucher"><b>@context.voucher_number</b></MudTd>
+            <MudTd DataLabel="Buyer"><b>@context.buyer_name</b></MudTd>
+            <MudTd DataLabel="Type"><MudChip T="string" Color="Color.Primary" Size="Size.Small">@context.rubber_type</MudChip></MudTd>
+            <MudTd DataLabel="Weight">@context.quantity.ToString("N2")</MudTd>
+            <MudTd DataLabel="Price">@context.agreed_price.ToString("N0")</MudTd>
+            <MudTd DataLabel="Total"><b>@context.total_amount.ToString("N0")</b></MudTd>
+            <MudTd DataLabel="Date">@context.created_at.ToLocalTime().ToString("dd/MM/yyyy")</MudTd>
+        </RowTemplate>
+
+        <PagerContent>
+            <MudTablePager PageSizeOptions="new int[] { 10, 25, 50, 100 }" />
+        </PagerContent>
+    </MudTable>
+
+    <!-- အောက်ခြေ ခလုတ်များ (Add, Edit, Delete) -->
+    <MudPaper Class="d-flex justify-end pa-4 mt-4" Elevation="2">
+        <MudButton Variant="Variant.Filled" Color="Color.Success" StartIcon="@Icons.Material.Filled.Add"
+                   OnClick="OpenAddPage" Class="mr-2">
+            @LangService.GetString("Sale_AddButton")
+        </MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Warning" StartIcon="@Icons.Material.Filled.Edit"
+                   Disabled="@(_selectedItem == null)" OnClick="OpenEditPage" Class="mr-2">
+            @LangService.GetString("Sale_EditButton")
+        </MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete"
+                   Disabled="@(_selectedItem == null)" OnClick="DeleteAsync">
+            @LangService.GetString("Sale_DeleteButton")
+        </MudButton>
+    </MudPaper>
+</MudContainer>
+
+@code {
+    private List<RubberSaleListModel> _items = new();
+    private RubberSaleListModel? _selectedItem;
+    private string _searchString = "";
+
+    private DateTime? _fromDate = DateTime.Today.AddDays(-30);
+    private DateTime? _toDate = DateTime.Today;
+
+    protected override async Task OnInitializedAsync()
+    {
+        LangService.OnLanguageChanged += StateHasChanged;
+        await LoadDataAsync();
+    }
+
+    public void Dispose() => LangService.OnLanguageChanged -= StateHasChanged;
+
+    private async Task LoadDataAsync()
+    {
+        try
+        {
+            // transactions ဇယားမှအရောင်းစာရင်းများကို contacts နှင့် rubber_types များကို join ၍ ဆွဲထုတ်ခြင်း
+            string query = "rest/v1/transactions?transaction_type=eq.Sale&select=id,voucher_number,quantity,agreed_price,total_amount,paid_amount,created_at,contacts(name),rubber_types(name,grade)";
+
+            if (_fromDate.HasValue)
+            {
+                query += $"&created_at=gte.{_fromDate.Value:yyyy-MM-dd}";
+            }
+            if (_toDate.HasValue)
+            {
+                query += $"&created_at=lte.{_toDate.Value.AddDays(1):yyyy-MM-dd}";
+            }
+
+            query += "&order=created_at.desc";
+
+            var rawList = await Http.GetFromJsonAsync<List<TransactionRawModel>>(query) ?? new();
+
+            _items = rawList.Select(x => new RubberSaleListModel
+            {
+                id = x.id,
+                voucher_number = x.voucher_number ?? "N/A",
+                buyer_name = x.contacts?.name ?? "N/A",
+                rubber_type = x.rubber_types != null ? $"{x.rubber_types.name} ({x.rubber_types.grade})" : "N/A",
+                quantity = x.quantity,
+                agreed_price = x.agreed_price,
+                total_amount = x.total_amount,
+                created_at = x.created_at
+            }).ToList();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private bool FilterFunc(RubberSaleListModel item)
+    {
+        if (string.IsNullOrWhiteSpace(_searchString)) return true;
+
+        bool matchBuyer = item.buyer_name != null && item.buyer_name.Contains(_searchString, StringComparison.OrdinalIgnoreCase);
+        bool matchType = item.rubber_type != null && item.rubber_type.Contains(_searchString, StringComparison.OrdinalIgnoreCase);
+        bool matchVoucher = item.voucher_number != null && item.voucher_number.Contains(_searchString, StringComparison.OrdinalIgnoreCase);
+
+        return matchBuyer || matchType || matchVoucher;
+    }
+
+    private string SelectedRowStyle(RubberSaleListModel item, int rowNumber)
+    {
+        if (_selectedItem != null && _selectedItem.id == item.id)
+        {
+            return "background-color: #d4edda !important; font-weight: bold;";
+        }
+        return string.Empty;
+    }
+
+    private void OpenAddPage()
+    {
+        Navigation.NavigateTo("/rubber-sales");
+    }
+
+    private void OpenEditPage()
+    {
+        if (_selectedItem == null) return;
+        // မူလအဝယ်ပုံစံအတိုင်း ဖျက်ပြီးအသစ်လုပ်ရန်အတွက် (သို့မဟုတ် Edit စာမျက်နှာသို့ ID ဖြင့်သွားရန်)
+        // ဤနေရာတွင် တိုက်ရိုက် Delete လုပ်ပြီး အသစ်ပြန်သွင်းရန် (သို့) Edit page သို့ ပို့ရန် သတ်မှတ်နိုင်သည်
+        Navigation.NavigateTo($"/rubber-sales?id={_selectedItem.id}");
+    }
+
+    private async Task DeleteAsync()
+    {
+        if (_selectedItem == null) return;
+
+        var confirmed = await DialogService.ShowMessageBoxAsync(
+            "Confirm",
+            LangService.GetString("Sale_DeleteConfirm"),
+            yesText: "Yes", cancelText: "Cancel");
+
+        if (confirmed == true)
+        {
+            try
+            {
+                string transactionId = _selectedItem.id;
+
+                // 1. Wallet Balance ကို မူလအခြေအနေသို့ ပြန်ပြင်ခြင်း (ရောင်းထားသောကြောင့် Wallet ထဲမှ paid_amount ကို ပြန်နှုတ်မည်)
+                var txList = await Http.GetFromJsonAsync<List<TransactionDetailModel>>($"rest/v1/transactions?id=eq.{transactionId}&select=wallet_id,paid_amount");
+                if (txList != null && txList.Any())
+                {
+                    var tx = txList.First();
+                    if (!string.IsNullOrEmpty(tx.wallet_id) && tx.paid_amount > 0)
+                    {
+                        var wallets = await Http.GetFromJsonAsync<List<WalletModel>>($"rest/v1/wallets?id=eq.{tx.wallet_id}");
+                        if (wallets != null && wallets.Any())
+                        {
+                            var wallet = wallets.First();
+                            decimal restoredBalance = wallet.Balance - tx.paid_amount; // ဝင်ငွေဖြစ်므로 ပြန်နှုတ်မည်
+                            await Http.PatchAsync($"rest/v1/wallets?id=eq.{tx.wallet_id}", JsonContent.Create(new { balance = restoredBalance }));
+                        }
+                    }
+                }
+
+                // 2. သက်ဆိုင်ရာ Ledgers, Vouchers များကို ဖျက်ခြင်း
+                await Http.DeleteAsync($"rest/v1/ledgers?transaction_id=eq.{transactionId}");
+                await Http.DeleteAsync($"rest/v1/vouchers?reference_id=eq.{transactionId}");
+
+                // 3. Transactions ဇယားမှ ဖျက်ခြင်း
+                var response = await Http.DeleteAsync($"rest/v1/transactions?id=eq.{transactionId}");
+
+                if (response.IsSuccessStatusCode)
+                {
+                    Snackbar.Add(LangService.GetString("Sale_DeleteSuccess"), Severity.Success);
+                    await LoadDataAsync();
+                    _selectedItem = null;
+                }
+                else
+                {
+                    Snackbar.Add("Failed to delete related transaction records.", Severity.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+
+    // --- Models ---
+    public class RubberSaleListModel
+    {
+        public string id { get; set; } = string.Empty;
+        public string voucher_number { get; set; } = string.Empty;
+        public string buyer_name { get; set; } = string.Empty;
+        public string rubber_type { get; set; } = string.Empty;
+        public decimal quantity { get; set; }
+        public decimal agreed_price { get; set; }
+        public decimal total_amount { get; set; }
+        public DateTime created_at { get; set; }
+    }
+
+    private class TransactionRawModel
+    {
+        public string id { get; set; } = string.Empty;
+        public string? voucher_number { get; set; }
+        public decimal quantity { get; set; }
+        public decimal agreed_price { get; set; }
+        public decimal total_amount { get; set; }
+        public decimal paid_amount { get; set; }
+        public DateTime created_at { get; set; }
+        public ContactObj? contacts { get; set; }
+        public RubberObj? rubber_types { get; set; }
+    }
+
+    private class ContactObj { public string name { get; set; } = string.Empty; }
+    private class RubberObj { public string name { get; set; } = string.Empty; public string grade { get; set; } = string.Empty; }
+
+    private class TransactionDetailModel
+    {
+        public string? wallet_id { get; set; }
+        public decimal paid_amount { get; set; }
+    }
+}

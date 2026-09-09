@@ -1,0 +1,191 @@
+﻿@page "/payment-methods"
+@using MudBlazor
+@using RubberTradingSystem.Models
+@using RubberTradingSystem.Services
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@inject LanguageService LangService
+@implements IDisposable
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+    <MudText Typo="Typo.h5" Color="Color.Primary" Class="mb-4">@LangService.GetString("Payment_ListTitle")</MudText>
+
+    <!-- Payment Table -->
+    <MudTable Items="@_paymentList"
+              Dense="true"
+              Hover="true"
+              Bordered="true"
+              Striped="true"
+              Filter="new Func<PaymentMethodModel,bool>(FilterFunc)"
+              @bind-SelectedItem="_selectedPayment"
+              RowClass="cursor-pointer"
+              RowClassFunc="@SelectedRowClassFunc"
+              Elevation="2">
+
+        <ToolBarContent>
+            <MudSpacer />
+            <MudTextField @bind-Value="_searchString"
+                          Placeholder="@LangService.GetString("Payment_SearchPlaceholder")"
+                          Immediate="true"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search"
+                          IconSize="Size.Medium"
+                          Class="mt-0"
+                          Clearable="true">
+            </MudTextField>
+        </ToolBarContent>
+
+        <HeaderContent>
+            <MudTh>@LangService.GetString("Payment_ColName")</MudTh>
+            <MudTh>@LangService.GetString("Payment_ColType")</MudTh>
+            <MudTh>@LangService.GetString("Payment_ColDetails")</MudTh>
+            <MudTh>@LangService.GetString("Payment_ColStatus")</MudTh>
+        </HeaderContent>
+
+        <RowTemplate>
+            <MudTd DataLabel="အမည်"><b>@context.name</b></MudTd>
+            <MudTd DataLabel="အမျိုးအစား">@context.type</MudTd>
+            <MudTd DataLabel="အသေးစိတ်">@context.account_details</MudTd>
+            <MudTd DataLabel="အခြေအနေ">
+                @if (context.is_active)
+                {
+                    <MudChip T="string" Color="Color.Success" Size="Size.Small">@LangService.GetString("Payment_StatusActive")</MudChip>
+                }
+                else
+                {
+                    <MudChip T="string" Color="Color.Error" Size="Size.Small">@LangService.GetString("Payment_StatusInactive")</MudChip>
+                }
+            </MudTd>
+        </RowTemplate>
+
+        <PagerContent>
+            <MudTablePager PageSizeOptions="new int[] { 10, 25, 50 }" />
+        </PagerContent>
+    </MudTable>
+
+    <!-- Action Buttons -->
+    <MudPaper Class="d-flex justify-end pa-4 mt-4" Elevation="2">
+        <MudButton Variant="Variant.Filled" Color="Color.Success" StartIcon="@Icons.Material.Filled.Add"
+                   OnClick="OpenAddDialog" Class="mr-2">
+            @LangService.GetString("Btn_AddNew")
+        </MudButton>
+
+        <MudButton Variant="Variant.Filled" Color="Color.Warning" StartIcon="@Icons.Material.Filled.Edit"
+                   Disabled="@(_selectedPayment == null)" OnClick="OpenEditDialog" Class="mr-2">
+            @LangService.GetString("Btn_Edit")
+        </MudButton>
+
+        <MudButton Variant="Variant.Filled" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete"
+                   Disabled="@(_selectedPayment == null)" OnClick="DeletePayment">
+            @LangService.GetString("Btn_Delete")
+        </MudButton>
+    </MudPaper>
+</MudContainer>
+
+<style>
+    .selected-row-color {
+        background-color: #e3f2fd !important;
+    }
+</style>
+
+@code {
+    private List<PaymentMethodModel> _paymentList = new()
+    {
+        // ဥပမာအချက်အလက်များ (Database သို့မဟုတ် LocalStorage သို့ ချိတ်နိုင်သည်)
+        new PaymentMethodModel { name = "KBZ Pay", type = "Mobile Wallet", account_details = "09-987654321 (U Ba)", is_active = true },
+        new PaymentMethodModel { name = "Wave Money", type = "Mobile Wallet", account_details = "09-456789123 (U Mya)", is_active = true },
+        new PaymentMethodModel { name = "AYA Bank Transfer", type = "Bank", account_details = "10012345678 (Rubber Company)", is_active = true }
+    };
+
+    private PaymentMethodModel? _selectedPayment;
+    private string _searchString = "";
+
+    protected override void OnInitialized()
+    {
+        LangService.OnLanguageChanged += StateHasChanged;
+    }
+
+    public void Dispose()
+    {
+        LangService.OnLanguageChanged -= StateHasChanged;
+    }
+
+    private bool FilterFunc(PaymentMethodModel item)
+    {
+        if (string.IsNullOrWhiteSpace(_searchString)) return true;
+        return item.name.Contains(_searchString, StringComparison.OrdinalIgnoreCase) ||
+               item.type.Contains(_searchString, StringComparison.OrdinalIgnoreCase) ||
+               item.account_details.Contains(_searchString, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private string SelectedRowClassFunc(PaymentMethodModel item, int rowNumber)
+    {
+        if (_selectedPayment != null && _selectedPayment.id == item.id)
+            return "selected-row-color";
+        return string.Empty;
+    }
+
+    private async Task OpenAddDialog()
+    {
+        var parameters = new DialogParameters { ["Model"] = new PaymentMethodModel() };
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+
+        var dialog = await DialogService.ShowAsync<PaymentMethodDialog>("Add Payment Method", parameters, options);
+        var result = await dialog.Result;
+
+        if (!result.Canceled && result.Data is PaymentMethodModel newModel)
+        {
+            _paymentList.Add(newModel);
+            Snackbar.Add(LangService.GetString("Payment_SaveSuccess"), Severity.Success);
+        }
+    }
+
+    private async Task OpenEditDialog()
+    {
+        if (_selectedPayment == null) return;
+
+        // Clone to avoid direct mutation before saving
+        var editModel = new PaymentMethodModel
+        {
+            id = _selectedPayment.id,
+            name = _selectedPayment.name,
+            type = _selectedPayment.type,
+            account_details = _selectedPayment.account_details,
+            is_active = _selectedPayment.is_active
+        };
+
+        var parameters = new DialogParameters { ["Model"] = editModel };
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+
+        var dialog = await DialogService.ShowAsync<PaymentMethodDialog>("Edit Payment Method", parameters, options);
+        var result = await dialog.Result;
+
+        if (!result.Canceled && result.Data is PaymentMethodModel updatedModel)
+        {
+            _selectedPayment.name = updatedModel.name;
+            _selectedPayment.type = updatedModel.type;
+            _selectedPayment.account_details = updatedModel.account_details;
+            _selectedPayment.is_active = updatedModel.is_active;
+
+            Snackbar.Add(LangService.GetString("Payment_SaveSuccess"), Severity.Success);
+        }
+    }
+
+    private async Task DeletePayment()
+    {
+        if (_selectedPayment == null) return;
+
+        bool? confirm = await DialogService.ShowMessageBoxAsync(
+            "သတိပေးချက်",
+            LangService.GetString("Payment_DeleteConfirm"),
+            yesText: LangService.GetString("Btn_Delete"),
+            cancelText: LangService.GetString("Cancel"));
+
+        if (confirm == true)
+        {
+            _paymentList.Remove(_selectedPayment);
+            _selectedPayment = null;
+            Snackbar.Add("အောင်မြင်စွာ ဖျက်ပစ်လိုက်ပါပြီ။", Severity.Success);
+        }
+    }
+}

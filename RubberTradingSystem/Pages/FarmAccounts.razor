@@ -1,0 +1,43 @@
+﻿@page "/farm-accounts"
+@using RubberTradingSystem.Models
+@using RubberTradingSystem.Services
+@inject HttpClient Http
+@inject LanguageService LangService
+@implements IDisposable
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
+    <MudText Typo="Typo.h5" Class="mb-4">@LangService.GetString("Accounts_Title")</MudText>
+
+    <MudTable Items="@_suppliers" Hover="true" Bordered="true" Elevation="2">
+        <HeaderContent>
+            <MudTh>@LangService.GetString("Supplier_Name")</MudTh>
+            <MudTh>@LangService.GetString("Total_Purchased")</MudTh>
+            <MudTh>@LangService.GetString("Total_Paid")</MudTh>
+            <MudTh>@LangService.GetString("Balance_Due")</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd>@context.supplier_name</MudTd>
+            <MudTd>@context.total_purchased_amount.ToString("N0")</MudTd>
+            <MudTd>@context.total_paid_amount.ToString("N0")</MudTd>
+            <MudTd><b style="color: @(context.balance_due > 0 ? "red" : "green")">@context.balance_due.ToString("N0")</b></MudTd>
+        </RowTemplate>
+    </MudTable>
+</MudContainer>
+
+@code {
+    private List<SupplierAccountModel> _suppliers = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        LangService.OnLanguageChanged += StateHasChanged;
+        await LoadDataAsync();
+    }
+
+    public void Dispose() => LangService.OnLanguageChanged -= StateHasChanged;
+
+    private async Task LoadDataAsync()
+    {
+        // အရင်ပေးထားတဲ့ View (supplier_balances) ကို ခေါ်ယူခြင်း
+        _suppliers = await Http.GetFromJsonAsync<List<SupplierAccountModel>>("rest/v1/supplier_balances?select=*") ?? new();
+    }
+}

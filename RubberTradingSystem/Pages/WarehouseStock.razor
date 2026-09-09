@@ -1,0 +1,49 @@
+﻿@page "/warehouse-stock"
+@using MudBlazor
+@using RubberTradingSystem.Services
+@inject HttpClient Http
+@inject LanguageService LangService
+
+<MudContainer MaxWidth="MaxWidth.Medium" Class="mt-4">
+    <MudText Typo="Typo.h5" Color="Color.Primary" Class="mb-4">@LangService.GetString("Stock_Title")</MudText>
+
+    <MudTable Items="@_stockList" Dense="true" Hover="true" Bordered="true" Striped="true" Elevation="2">
+        <HeaderContent>
+            <MudTh>@LangService.GetString("Stock_ColWarehouse")</MudTh>
+            <MudTh>@LangService.GetString("Stock_ColType")</MudTh>
+            <MudTh>@LangService.GetString("Stock_ColBalance")</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Warehouse">@context.warehouse_name</MudTd>
+            <MudTd DataLabel="Type">
+                <MudChip T="string" Color="Color.Info" Size="Size.Small">@context.rubber_type</MudChip>
+            </MudTd>
+            <MudTd DataLabel="Balance">
+                <MudText Color="@(context.current_stock_kg > 0 ? Color.Success : Color.Error)" Class="font-weight-bold">
+                    @context.current_stock_kg.ToString("N2") kg
+                </MudText>
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+</MudContainer>
+
+@code {
+    private List<StockModel> _stockList = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadStockAsync();
+    }
+
+    private async Task LoadStockAsync()
+    {
+        _stockList = await Http.GetFromJsonAsync<List<StockModel>>("rest/v1/warehouse_stock_balance?select=*") ?? new();
+    }
+
+    public class StockModel
+    {
+        public string warehouse_name { get; set; } = "";
+        public string rubber_type { get; set; } = "";
+        public decimal current_stock_kg { get; set; }
+    }
+}

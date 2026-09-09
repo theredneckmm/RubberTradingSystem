@@ -1,0 +1,145 @@
+﻿@page "/contacts/add"
+@using MudBlazor
+@using RubberTradingSystem.Models
+@using Supabase.Postgrest
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+@inject RubberTradingSystem.Services.LanguageService Lang
+@inject AuthenticationStateProvider AuthStateProvider
+@inject RubberTradingSystem.Services.UserContextService UserContext
+@implements IDisposable
+
+<MudContainer MaxWidth="MaxWidth.Medium" Class="mt-6">
+    <MudPaper Elevation="3" Class="pa-6">
+        <MudText Typo="Typo.h5" Color="Color.Primary" Class="mb-6 fw-bold">@Lang.GetString("Title_AddContact")</MudText>
+
+        <!-- Validation အတွက် MudForm အသုံးပြုခြင်း -->
+        <MudForm @ref="_form" @bind-IsValid="@_success">
+            <MudGrid>
+                <!-- အမည် -->
+                <MudItem xs="12" sm="6">
+                    <MudTextField @bind-Value="_contact.Name" Label="@Lang.GetString("Lbl_Name")"
+                                  Required="true" RequiredError="@Lang.GetString("Err_NameRequired")" Variant="Variant.Outlined" />
+                </MudItem>
+
+                <!-- ဖုန်းနံပါတ် -->
+                <MudItem xs="12" sm="6">
+                    <MudTextField @bind-Value="_contact.Phone" Label="@Lang.GetString("Lbl_Phone")" Variant="Variant.Outlined" />
+                </MudItem>
+
+                <!-- အမျိုးအစား -->
+                <MudItem xs="12" sm="6">
+                    <MudSelect @bind-Value="_contact.ContactType" Label="@Lang.GetString("Lbl_ContactType")" Required="true" Variant="Variant.Outlined">
+                        <MudSelectItem Value="@("Supplier")">@Lang.GetString("Opt_Supplier")</MudSelectItem>
+                        <MudSelectItem Value="@("Buyer")">@Lang.GetString("Opt_Buyer")</MudSelectItem>
+                        <MudSelectItem Value="@("General")">@Lang.GetString("Opt_General")</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+
+                <!-- ဘဏ်အချက်အလက် -->
+                <MudItem xs="12" sm="6">
+                    <MudTextField @bind-Value="_contact.BankInfo" Label="@Lang.GetString("Lbl_BankInfo")" Variant="Variant.Outlined" />
+                </MudItem>
+
+                <!-- လိပ်စာ -->
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="_contact.Address" Label="@Lang.GetString("Lbl_Address")" Variant="Variant.Outlined" Lines="2" />
+                </MudItem>
+            </MudGrid>
+
+            <!-- ခလုတ်များ -->
+            <div class="d-flex justify-end mt-6">
+                <MudButton Variant="Variant.Text" Color="Color.Secondary" OnClick="Cancel" Class="mr-3">
+                    @Lang.GetString("Btn_Back")
+                </MudButton>
+
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(!_success || _isSaving)" OnClick="SaveContactAsync">
+                    @if (_isSaving)
+                    {
+                        <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                        <MudText Class="ms-2">@Lang.GetString("Btn_Saving")</MudText>
+                    }
+                    else
+                    {
+                        <MudText>@Lang.GetString("Btn_Save")</MudText>
+                    }
+                </MudButton>
+            </div>
+        </MudForm>
+    </MudPaper>
+</MudContainer>
+
+@code {
+    private MudForm _form = new();
+    private bool _success;
+    private bool _isSaving;
+
+    // အသစ်ထည့်မည့် Object (မူလသတ်မှတ်ချက်များ)
+    private Contact _contact = new Contact
+    {
+        ContactType = "Supplier",
+        AdvanceBalance = 0,
+        ReceivableBalance = 0,
+        CreatedAt = DateTime.UtcNow
+    };
+
+    protected override void OnInitialized()
+    {
+        Lang.OnLanguageChanged += StateHasChanged;
+    }
+
+    private async Task SaveContactAsync()
+    {
+        await _form.Validate();
+        if (!_success) return;
+
+        _isSaving = true;
+        try
+        {
+            // 1. ဇယားမှတစ်ဆင့် Owner ID အစစ်အမှန်ကို ရယူခြင်း
+            string currentOwnerId = await UserContext.GetCurrentOwnerIdAsync();
+
+            if (string.IsNullOrEmpty(currentOwnerId))
+            {
+                Snackbar.Add("User ID (သို့မဟုတ်) Profile ကို ရှာမတွေ့ပါ။ ကျေးဇူးပြု၍ အကောင့်ပြန်ဝင်ပါ။", Severity.Error);
+                _isSaving = false;
+                return;
+            }
+
+            _contact.OwnerId = currentOwnerId;
+
+            // 2. Supabase Database သို့ INSERT လုပ်ခြင်း
+            var response = await Http.PostAsJsonAsync("rest/v1/contacts", _contact);
+
+            if (response.IsSuccessStatusCode)
+            {
+                Snackbar.Add(Lang.GetString("Msg_SaveSuccess"), Severity.Success);
+                Navigation.NavigateTo("/contacts");
+            }
+            else
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                Snackbar.Add($"{Lang.GetString("Msg_Error")} {error}", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"{Lang.GetString("Msg_Error")}{ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private void Cancel()
+    {
+        Navigation.NavigateTo("/contacts");
+    }
+
+    public void Dispose()
+    {
+        Lang.OnLanguageChanged -= StateHasChanged;
+    }
+}

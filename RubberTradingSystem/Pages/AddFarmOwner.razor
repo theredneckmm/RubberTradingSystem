@@ -1,0 +1,98 @@
+﻿@page "/farm-owners/add"
+@using RubberTradingSystem.Models
+@using System.Net.Http.Json
+@attribute [Authorize]
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+
+<MudContainer MaxWidth="MaxWidth.Small" Class="mt-5">
+    <MudCard Elevation="3">
+        <MudCardHeader>
+            <CardHeaderContent>
+                <MudText Typo="Typo.h5" Color="Color.Primary">ခြံရှင်အသစ် စာရင်းသွင်းရန်</MudText>
+            </CardHeaderContent>
+        </MudCardHeader>
+
+        <MudCardContent>
+            <EditForm Model="@_farmOwner" OnValidSubmit="SaveFarmOwnerAsync">
+                <DataAnnotationsValidator />
+
+                <MudTextField @bind-Value="_farmOwner.name"
+                              Label="ခြံရှင်အမည်"
+                              For="@(() => _farmOwner.name)"
+                              Variant="Variant.Outlined"
+                              Class="mb-4" />
+
+                <MudTextField @bind-Value="_farmOwner.phone"
+                              Label="ဖုန်းနံပါတ်"
+                              For="@(() => _farmOwner.phone)"
+                              Variant="Variant.Outlined"
+                              Class="mb-4" />
+
+                <MudTextField @bind-Value="_farmOwner.address"
+                              Label="နေရပ်လိပ်စာ"
+                              Variant="Variant.Outlined"
+                              Lines="3"
+                              Class="mb-4" />
+
+                <div class="d-flex justify-end mt-4">
+                    <MudButton OnClick="Cancel" Variant="Variant.Text" Color="Color.Default" Class="mr-2">
+                        ပယ်ဖျက်မည်
+                    </MudButton>
+                    <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Disabled="@_isSaving">
+                        @if (_isSaving)
+                        {
+                            <MudProgressCircular Class="ms-n1 mr-2" Size="Size.Small" Indeterminate="true" />
+                            <MudText>သိမ်းဆည်းနေပါသည်...</MudText>
+                        }
+                        else
+                        {
+                            <MudText>သိမ်းဆည်းမည်</MudText>
+                        }
+                    </MudButton>
+                </div>
+            </EditForm>
+        </MudCardContent>
+    </MudCard>
+</MudContainer>
+
+@code {
+    private FarmOwner _farmOwner = new();
+    private bool _isSaving;
+
+    private async Task SaveFarmOwnerAsync(EditContext context)
+    {
+        if (!context.Validate()) return;
+
+        _isSaving = true;
+        try
+        {
+            var response = await Http.PostAsJsonAsync("rest/v1/farm_owners", _farmOwner);
+
+            if (response.IsSuccessStatusCode)
+            {
+                Snackbar.Add("ခြံရှင်အသစ် အောင်မြင်စွာ မှတ်တမ်းတင်ပြီးပါပြီ။", Severity.Success);
+                Navigation.NavigateTo("/farm-owners");
+            }
+            else
+            {
+                var errorMsg = await response.Content.ReadAsStringAsync();
+                Snackbar.Add($"သိမ်းဆည်းရာတွင် အမှားအယွင်းရှိပါသည်: {errorMsg}", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"ကွန်ရက်ချိတ်ဆက်မှု အမှားအယွင်း: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private void Cancel()
+    {
+        Navigation.NavigateTo("/farm-owners");
+    }
+}

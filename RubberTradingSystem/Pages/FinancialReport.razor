@@ -1,0 +1,109 @@
+﻿@page "/financial-report"
+@using MudBlazor
+@using RubberTradingSystem.Services
+@using ClosedXML.Excel 
+@inject IJSRuntime JS
+@inject HttpClient Http
+@inject LanguageService LangService
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+    <MudText Typo="Typo.h5" Color="Color.Primary" Class="mb-4">@LangService.GetString("Report_Title")</MudText>
+
+    <MudPaper Class="pa-4 mb-4">
+        <MudGrid>
+            <MudItem xs="12" md="4">
+                <MudDatePicker @bind-Date="_startDate" Label="Start Date" Variant="Variant.Outlined" />
+            </MudItem>
+            <MudItem xs="12" md="4">
+                <MudDatePicker @bind-Date="_endDate" Label="End Date" Variant="Variant.Outlined" />
+            </MudItem>
+            <MudItem xs="12" md="4" Class="d-flex align-end">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="LoadReportAsync">@LangService.GetString("Report_Generate")</MudButton>
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
+
+    <MudGrid>
+        <MudItem xs="12" md="3"><MudPaper Class="pa-4" Elevation="2"><MudText>Total Sales</MudText><MudText Typo="Typo.h4">@_totalSales.ToString("N0")</MudText></MudPaper></MudItem>
+        <MudItem xs="12" md="3"><MudPaper Class="pa-4" Elevation="2"><MudText>Total Purchases</MudText><MudText Typo="Typo.h4">@_totalPurchases.ToString("N0")</MudText></MudPaper></MudItem>
+        <MudItem xs="12" md="3"><MudPaper Class="pa-4" Elevation="2"><MudText>Total Expenses</MudText><MudText Typo="Typo.h4">@_totalExpenses.ToString("N0")</MudText></MudPaper></MudItem>
+        <MudItem xs="12" md="3"><MudPaper Class="pa-4" Elevation="2"><MudText>Net Profit</MudText><MudText Typo="Typo.h4" Color="Color.Success">@(_totalSales - _totalPurchases - _totalExpenses).ToString("N0")</MudText></MudPaper></MudItem>
+    </MudGrid>
+</MudContainer>
+<MudButton Variant="Variant.Filled"
+           StartIcon="@Icons.Custom.FileFormats.FileExcel"
+           Color="Color.Success"
+           OnClick="ExportToExcel">
+    Export to Excel (ClosedXML)
+</MudButton>
+
+<MudButton Variant="Variant.Filled"
+           StartIcon="@Icons.Custom.FileFormats.FilePdf"
+           Color="Color.Error"
+           OnClick="PrintToPdf">
+    Print / Save to PDF
+</MudButton>
+
+@code {
+    private DateTime? _startDate = DateTime.Today.AddMonths(-1);
+    private DateTime? _endDate = DateTime.Today;
+    private decimal _totalSales, _totalPurchases, _totalExpenses;
+
+    private async Task LoadReportAsync()
+    {
+        // ဥပမာ - Supabase မှ လှမ်းခေါ်ယူခြင်း (Filter dates)
+        // _totalSales = (await Http.GetFromJsonAsync<List<RubberSaleModel>>("...")).Sum(x => x.total_amount);
+        // ... အခြား data များကိုလည်း ဤအတိုင်း စုပေါင်းပါ ...
+    }
+
+    private async Task PrintToPdf()
+    {
+        // Browser ရဲ့ Print Dialog ပေါ်လာမည်ဖြစ်ပြီး "Save as PDF" ကို ရွေးချယ်နိုင်ပါသည်
+        await JS.InvokeVoidAsync("window.print");
+    }
+
+    private async Task ExportToExcel()
+    {
+        using (var workbook = new XLWorkbook())
+        {
+            var worksheet = workbook.Worksheets.Add("Financial Summary");
+
+            // Header တပ်ဆင်ခြင်း
+            worksheet.Cell("A1").Value = "Description";
+            worksheet.Cell("B1").Value = "Amount (MMK)";
+
+            // Header Style ပြုပြင်ခြင်း (Bold & Background Color)
+            var headerRow = worksheet.Row(1);
+            headerRow.Style.Font.Bold = true;
+            headerRow.Style.Fill.BackgroundColor = XLColor.LightGray;
+
+            // Data များ ထည့်သွင်းခြင်း
+            worksheet.Cell("A2").Value = "Total Sales";
+            worksheet.Cell("B2").Value = _totalSales;
+
+            worksheet.Cell("A3").Value = "Total Purchases";
+            worksheet.Cell("B3").Value = _totalPurchases;
+
+            worksheet.Cell("A4").Value = "Total Expenses";
+            worksheet.Cell("B4").Value = _totalExpenses;
+
+            worksheet.Cell("A5").Value = "Net Profit";
+            worksheet.Cell("B5").Value = _totalSales - _totalPurchases - _totalExpenses;
+            worksheet.Cell("B5").Style.Font.Bold = true;
+
+            // ကော်လံ အကျယ်အဝန်းကို အလိုအလျောက် ချိန်ညှိပေးခြင်း
+            worksheet.Columns().AdjustToContents();
+
+            // MemoryStream သို့ ပြောင်းပြီး File Bytes ထုတ်ယူခြင်း
+            using (var stream = new MemoryStream())
+            {
+                workbook.SaveAs(stream);
+                var content = stream.ToArray();
+
+                // Browser မှတဆင့် File ဒေါင်းလုဒ်ဆွဲစေခြင်း (JS Interop)
+                var fileName = $"Financial_Report_{DateTime.Now:yyyyMMdd}.xlsx";
+                await JS.InvokeVoidAsync("downloadFileFromByteArray", fileName, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", content);
+            }
+        }
+    }
+}

@@ -1,0 +1,176 @@
+﻿@page "/truck-stock"
+@using MudBlazor
+@using RubberTradingSystem.Models
+@using RubberTradingSystem.Services
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@inject LanguageService LangService
+@implements IDisposable
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+    <MudText Typo="Typo.h5" Color="Color.Primary" Class="mb-4">@LangService.GetString("Truck_ListTitle")</MudText>
+
+    <MudTable Items="@_items"
+              Dense="true"
+              Hover="true"
+              Bordered="true"
+              Striped="true"
+              Filter="new Func<TruckModel,bool>(FilterFunc)"
+              @bind-SelectedItem="_selectedItem"
+              RowStyleFunc="@SelectedRowStyle"
+              RowClass="cursor-pointer"
+              Elevation="2">
+
+        <ToolBarContent>
+            <MudSpacer />
+            <MudTextField @bind-Value="_searchString"
+                          Placeholder="@LangService.GetString("Truck_SearchPlaceholder")"
+                          Immediate="true"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search"
+                          Class="mt-0"
+                          Clearable="true">
+            </MudTextField>
+        </ToolBarContent>
+
+        <HeaderContent>
+            <MudTh>@LangService.GetString("Truck_ColNumber")</MudTh>
+            <MudTh>@LangService.GetString("Truck_ColDriver")</MudTh>
+            <MudTh>@LangService.GetString("Truck_ColStatus")</MudTh>
+            <MudTh>@LangService.GetString("Truck_ColCapacity")</MudTh>
+        </HeaderContent>
+
+        <RowTemplate>
+            <MudTd DataLabel="Truck Number"><b>@context.truck_number</b></MudTd>
+            <MudTd DataLabel="Driver Name">@context.driver_name</MudTd>
+            <MudTd DataLabel="Status">
+                <MudChip T="string" Color="@(context.status == "Available" ? Color.Success : Color.Warning)" Size="Size.Small">
+                    @context.status
+                </MudChip>
+            </MudTd>
+            <MudTd DataLabel="Capacity">@context.capacity_kg.ToString("N0")</MudTd>
+        </RowTemplate>
+
+        <PagerContent>
+            <MudTablePager PageSizeOptions="new int[] { 10, 25, 50 }" />
+        </PagerContent>
+    </MudTable>
+
+    <MudPaper Class="d-flex justify-end pa-4 mt-4" Elevation="2">
+        <MudButton Variant="Variant.Filled" Color="Color.Success" StartIcon="@Icons.Material.Filled.Add"
+                   OnClick="OpenAddDialog" Class="mr-2">
+            @LangService.GetString("Truck_AddButton")
+        </MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Warning" StartIcon="@Icons.Material.Filled.Edit"
+                   Disabled="@(_selectedItem == null)" OnClick="OpenEditDialog" Class="mr-2">
+            @LangService.GetString("Truck_EditButton")
+        </MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete"
+                   Disabled="@(_selectedItem == null)" OnClick="DeleteAsync">
+            @LangService.GetString("Truck_DeleteButton")
+        </MudButton>
+    </MudPaper>
+</MudContainer>
+
+@code {
+    private List<TruckModel> _items = new();
+    private TruckModel? _selectedItem;
+    private string _searchString = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        LangService.OnLanguageChanged += StateHasChanged;
+        await LoadDataAsync();
+    }
+
+    public void Dispose() => LangService.OnLanguageChanged -= StateHasChanged;
+
+    private async Task LoadDataAsync()
+    {
+        try
+        {
+            // 👈 Endpoint ကို truck_stock မှ trucks သို့ ပြင်ဆင်ထားပါသည်
+            _items = await Http.GetFromJsonAsync<List<TruckModel>>("rest/v1/trucks?select=*&order=truck_number.asc") ?? new();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private bool FilterFunc(TruckModel item)
+    {
+        if (string.IsNullOrWhiteSpace(_searchString)) return true;
+        return item.truck_number.Contains(_searchString, StringComparison.OrdinalIgnoreCase) ||
+               item.driver_name.Contains(_searchString, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // 👈 Select မှတ်ထားသော Row အတွက် အရောင်ပြောင်းပေးခြင်း
+    private string SelectedRowStyle(TruckModel item, int rowNumber)
+    {
+        if (_selectedItem != null && _selectedItem.id == item.id)
+        {
+            return "background-color: #e3f2fd !important;";
+        }
+        return string.Empty;
+    }
+
+    private async Task OpenAddDialog()
+    {
+        var parameters = new DialogParameters { ["Model"] = new TruckModel(), ["IsNew"] = true };
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<TruckStockDialog>(LangService.GetString("Truck_AddTitle"), parameters, options);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled) await LoadDataAsync();
+    }
+
+    private async Task OpenEditDialog()
+    {
+        if (_selectedItem == null) return;
+        var editModel = new TruckModel
+        {
+            id = _selectedItem.id,
+            owner_id = _selectedItem.owner_id,
+            staff_id = _selectedItem.staff_id,
+            truck_number = _selectedItem.truck_number,
+            driver_name = _selectedItem.driver_name,
+            status = _selectedItem.status,
+            capacity_kg = _selectedItem.capacity_kg
+        };
+
+        var parameters = new DialogParameters { ["Model"] = editModel, ["IsNew"] = false };
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<TruckStockDialog>(LangService.GetString("Truck_EditTitle"), parameters, options);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled) await LoadDataAsync();
+    }
+
+    private async Task DeleteAsync()
+    {
+        if (_selectedItem == null) return;
+
+        var confirmed = await DialogService.ShowMessageBoxAsync(
+            "Confirm",
+            LangService.GetString("Truck_DeleteConfirm"),
+            yesText: "Yes", cancelText: "Cancel");
+
+        if (confirmed == true)
+        {
+            // 👈 Delete URL ကိုလည်း trucks သို့ ပြင်ဆင်ထားပါသည်
+            var response = await Http.DeleteAsync($"rest/v1/trucks?id=eq.{_selectedItem.id}");
+            if (response.IsSuccessStatusCode)
+            {
+                Snackbar.Add(LangService.GetString("Truck_DeleteSuccess"), Severity.Success);
+                await LoadDataAsync();
+                _selectedItem = null;
+            }
+            else
+            {
+                Snackbar.Add("Failed to delete truck.", Severity.Error);
+            }
+        }
+    }
+}

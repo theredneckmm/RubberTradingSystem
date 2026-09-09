@@ -1,0 +1,709 @@
+﻿@page "/rubber-purchase"
+@using MudBlazor
+@using RubberTradingSystem.Models
+@using RubberTradingSystem.Services
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@inject NavigationManager Navigation
+@inject LanguageService LangService
+@inject UserContextService UserContext
+@implements IDisposable
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4 mb-6">
+
+    <div class="d-flex justify-space-between align-center mb-4">
+        <MudText Typo="Typo.h5" Color="Color.Primary" Class="font-weight-bold">
+            @(_isEditMode ? "ဝယ်ယူမှု အချက်အလက် ပြင်ဆင်ခြင်း (Edit Purchase)" : LangService.GetString("Buy_Title"))
+        </MudText>
+        <!-- ဘောင်ချာအမှတ်စဉ် -->
+        <MudChip T="string" Color="Color.Primary" Variant="Variant.Filled" Size="Size.Large">
+            <b>Voucher: @_currentVoucherNumber</b>
+        </MudChip>
+    </div>
+
+    <MudPaper Class="pa-6" Elevation="3">
+
+        <EditForm Model="@_model" OnValidSubmit="SavePurchaseAsync">
+
+            <DataAnnotationsValidator />
+
+            <!-- 1. ဝယ်ယူမည့်နေရာ -->
+            <MudGrid Spacing="3" AlignItems="Center">
+                <MudItem xs="12" md="6">
+                    <MudText Typo="Typo.subtitle2" Class="mb-2">
+                        <b>ဝယ်ယူမည့်နေရာ (Purchase Location)</b>
+                    </MudText>
+                    <MudRadioGroup T="string" @bind-Value="_model.purchase_location" Disabled="_isSuccessCompleted">
+                        <MudRadio T="string" Value="@("Shop")" Color="Color.Primary">ဆိုင်တွင် လာသွင်းသည် (Shop)</MudRadio>
+                        <MudRadio T="string" Value="@("Truck")" Color="Color.Secondary">ကားဖြင့် ဆင်းဝယ်သည် (Truck)</MudRadio>
+                    </MudRadioGroup>
+                </MudItem>
+
+                @if (_model.purchase_location == "Truck")
+                {
+                    <MudItem xs="12" md="6">
+                        <div class="d-flex align-center gap-2">
+                            <MudSelect T="string" @bind-Value="_model.truck_id" Label="ကားနံပါတ်ရွေးချယ်ပါ (Select Truck)"
+                                       Variant="Variant.Outlined" Dense="true" Required="true" Clearable="true" Class="flex-grow-1"
+                                       Disabled="_isSuccessCompleted">
+                                @if (_trucks != null)
+                                {
+                                    @foreach (var truck in _trucks)
+                                    {
+                                        <MudSelectItem Value="@truck.id">@truck.truck_number (@truck.driver_name)</MudSelectItem>
+                                    }
+                                }
+                            </MudSelect>
+                            <MudIconButton Icon="@Icons.Material.Filled.Add" Color="Color.Primary" Variant="Variant.Filled" Size="Size.Medium" OnClick="OpenAddTruckDialog" Disabled="_isSuccessCompleted" />
+                        </div>
+                    </MudItem>
+                }
+            </MudGrid>
+
+            <MudDivider Class="my-4" />
+
+            <!-- 2. ခြံရှင်နှင့် ရာဘာအမျိုးအစား -->
+            <MudGrid Spacing="3">
+                <MudItem xs="12" md="6">
+                    <div class="d-flex align-center gap-2">
+                        <MudSelect T="string" @bind-Value="_model.contact_id" SelectedValuesChanged="OnFarmerSelected"
+                                   Label="@LangService.GetString("Buy_Farmer")" Variant="Variant.Outlined" Dense="true" Required="true" Clearable="true" Class="flex-grow-1"
+                                   Disabled="_isSuccessCompleted">
+                            @if (_suppliers != null)
+                            {
+                                @foreach (var supplier in _suppliers)
+                                {
+                                    <MudSelectItem Value="@supplier.Id">@supplier.Name (@(string.IsNullOrEmpty(supplier.Phone) ? "No Phone" : supplier.Phone))</MudSelectItem>
+                                }
+                            }
+                        </MudSelect>
+                        <MudIconButton Icon="@Icons.Material.Filled.Add" Color="Color.Primary" Variant="Variant.Filled" Size="Size.Medium" OnClick="OpenAddContactDialog" Disabled="_isSuccessCompleted" />
+                    </div>
+                </MudItem>
+
+                <MudItem xs="12" md="6">
+                    <div class="d-flex align-center gap-2">
+                        <MudSelect T="string" @bind-Value="_model.rubber_type_id" SelectedValuesChanged="OnRubberTypeSelected"
+                                   Label="@LangService.GetString("Buy_RubberType")" Variant="Variant.Outlined" Dense="true" Required="true" Clearable="true" Class="flex-grow-1"
+                                   Disabled="_isSuccessCompleted">
+                            @if (_rubberTypes != null)
+                            {
+                                @foreach (var type in _rubberTypes)
+                                {
+                                    <MudSelectItem Value="@type.id">@type.name (@type.grade)</MudSelectItem>
+                                }
+                            }
+                        </MudSelect>
+                        <MudIconButton Icon="@Icons.Material.Filled.Add" Color="Color.Primary" Variant="Variant.Filled" Size="Size.Medium" OnClick="OpenAddRubberTypeDialog" Disabled="_isSuccessCompleted" />
+                    </div>
+                </MudItem>
+            </MudGrid>
+
+            <MudDivider Class="my-4" />
+
+            <!-- 3. ဈေးနှုန်း -->
+            <MudGrid Spacing="3">
+                <MudItem xs="12" sm="6" md="3">
+                    <MudNumericField T="decimal" Value="@_model.price_per_unit" ValueChanged="OnPriceChanged" Immediate="true"
+                                     Label="@LangService.GetString("Buy_BasePrice")" Variant="Variant.Outlined" Dense="true" Min="0" HideSpinButtons="true" Disabled="_isSuccessCompleted" />
+                </MudItem>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudNumericField T="decimal" Value="@_model.service_cost" ValueChanged="OnServiceCostChanged" Immediate="true"
+                                     Label="@LangService.GetString("Buy_ServiceCost")" Variant="Variant.Outlined" Dense="true" Min="0" HideSpinButtons="true" Disabled="_isSuccessCompleted" />
+                </MudItem>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudNumericField T="decimal" Value="@_model.deduction_percent" ValueChanged="OnDeductionChanged" Immediate="true"
+                                     Label="@LangService.GetString("Buy_DeductionPct")" Variant="Variant.Outlined" Dense="true" Min="0" Max="30" HideSpinButtons="true" Disabled="_isSuccessCompleted" />
+                </MudItem>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudTextField T="string" Value="@_calculatedAgreedPrice.ToString("N2")" ReadOnly="true"
+                                  Label="@LangService.GetString("Buy_FinalPrice")" Variant="Variant.Outlined" Dense="true" Disabled="true" />
+                </MudItem>
+            </MudGrid>
+
+            <MudDivider Class="my-4" />
+
+            <!-- 4. Weight / Amount -->
+            <MudGrid Spacing="3">
+                <MudItem xs="12" sm="6" md="3">
+                    <MudNumericField T="decimal" Value="@_model.weight" ValueChanged="OnWeightChanged" Immediate="true"
+                                     Label="@LangService.GetString("Buy_Weight")" Variant="Variant.Outlined" Dense="true" Min="0" HideSpinButtons="true" Disabled="_isSuccessCompleted" />
+                </MudItem>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudTextField T="string" Value="@_calculatedTotalAmount.ToString("N2")" ReadOnly="true"
+                                  Label="@LangService.GetString("Buy_TotalAmount")" Variant="Variant.Outlined" Dense="true" Disabled="true" />
+                </MudItem>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudTextField T="string" Value="@_model.advance_amount.ToString("N2")" ReadOnly="true"
+                                  Label="@LangService.GetString("Buy_Advance")" Variant="Variant.Outlined" Dense="true" Disabled="true" />
+                </MudItem>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudTextField T="string" Value="@_calculatedNetPayable.ToString("N2")" ReadOnly="true"
+                                  Label="@LangService.GetString("Buy_NetPayable")" Variant="Variant.Outlined" Dense="true" Disabled="true" />
+                </MudItem>
+            </MudGrid>
+
+            <MudDivider Class="my-4" />
+
+            <!-- 5. Payment Wallet -->
+            <MudGrid Spacing="3" AlignItems="Center">
+                <MudItem xs="12" md="6">
+                    <MudSelect T="string" @bind-Value="_model.wallet_id" Label="ငွေပေးချေမည့်အကောင့် (Payment Wallet)"
+                               Variant="Variant.Outlined" Dense="true" Required="true" Clearable="true" Disabled="_isSuccessCompleted">
+                        @if (_wallets != null)
+                        {
+                            @foreach (var wallet in _wallets)
+                            {
+                                <MudSelectItem Value="@wallet.Id">@wallet.WalletName (@wallet.WalletType) - ကျန်ငွေ: @wallet.Balance.ToString("N0")</MudSelectItem>
+                            }
+                        }
+                    </MudSelect>
+                </MudItem>
+
+                <!-- Actual Paid -->
+                <MudItem xs="12" md="6">
+                    <MudTextField T="decimal" Value="@_model.actual_paid" ValueChanged="OnActualPaidChanged" Immediate="true"
+                                  Format="N0" Label="@LangService.GetString("Buy_ActualPaid")" Variant="Variant.Outlined"
+                                  Dense="true" Min="0" Disabled="_isSuccessCompleted" />
+                </MudItem>
+            </MudGrid>
+
+            <!-- BUTTONS -->
+            <div class="d-flex justify-end gap-3 mt-6">
+                @if (!_isSuccessCompleted)
+                {
+                    <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" Class="px-6"
+                               Disabled="@_isSaving">
+                        @if (_isSaving)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+                        }
+                        else
+                        {
+                            <text>@(_isEditMode ? "ပြင်ဆင်မှုကို သိမ်းမည်" : LangService.GetString("Buy_SaveButton"))</text>
+                        }
+                    </MudButton>
+                }
+                else
+                {
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" Disabled="true" Size="Size.Large" Class="px-6">
+                        @LangService.GetString("Buy_SaveButton")
+                    </MudButton>
+                }
+
+                <MudButton Variant="Variant.Outlined" Color="Color.Secondary" Size="Size.Large" OnClick="PrintVoucher"
+                           Disabled="!_isSuccessCompleted">
+                    Print Voucher
+                </MudButton>
+
+                <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Large" OnClick="FinishTransaction"
+                           Disabled="!_isSuccessCompleted" Class="px-6">
+                    Finish
+                </MudButton>
+            </div>
+
+        </EditForm>
+    </MudPaper>
+</MudContainer>
+
+@code {
+    [Parameter]
+    [SupplyParameterFromQuery(Name = "id")]
+    public string? EditTransactionId { get; set; }
+
+    private string _currentVoucherNumber = string.Empty;
+    private bool _isUserModifiedPaid = false;
+    private bool _isSaving = false;
+    private bool _isSuccessCompleted = false;
+    private bool _isEditMode = false;
+
+    private RubberPurchaseModel _model = new()
+    {
+        purchase_location = "Truck"
+    };
+
+    private List<TruckModel> _trucks = new();
+    private List<Contact> _suppliers = new();
+    private List<RubberTypeModel> _rubberTypes = new();
+    private List<DailyPriceModel> _dailyPrices = new();
+    private List<WalletModel> _wallets = new();
+
+    private decimal _calculatedAgreedPrice
+    {
+        get
+        {
+            var price = _model.price_per_unit - _model.service_cost;
+            var deduction = 1m - (_model.deduction_percent / 100m);
+            var result = price * deduction;
+            return result < 0 ? 0 : result;
+        }
+    }
+
+    private decimal _calculatedTotalAmount
+    {
+        get
+        {
+            return _calculatedAgreedPrice * _model.weight;
+        }
+    }
+
+    private decimal _calculatedNetPayable
+    {
+        get
+        {
+            var net = _calculatedTotalAmount - _model.advance_amount;
+            return net < 0 ? 0 : net;
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        LangService.OnLanguageChanged += StateHasChanged;
+        await LoadInitialDataAsync();
+    }
+
+    public void Dispose()
+    {
+        LangService.OnLanguageChanged -= StateHasChanged;
+    }
+
+    private async Task LoadInitialDataAsync()
+    {
+        await LoadDropdownDataAsync();
+
+        if (!string.IsNullOrEmpty(EditTransactionId))
+        {
+            _isEditMode = true;
+            await LoadExistingTransactionDataAsync(EditTransactionId);
+        }
+        else
+        {
+            _isEditMode = false;
+            _currentVoucherNumber = await GenerateVoucherNumberAsync("PUR");
+        }
+    }
+
+    private async Task LoadExistingTransactionDataAsync(string txId)
+    {
+        try
+        {
+            var txList = await Http.GetFromJsonAsync<List<TransactionModel>>($"rest/v1/transactions?id=eq.{txId}&select=*");
+            if (txList != null && txList.Any())
+            {
+                var tx = txList.First();
+                _currentVoucherNumber = !string.IsNullOrEmpty(tx.voucher_number) ? tx.voucher_number : await GenerateVoucherNumberAsync("PUR");
+
+                _model.contact_id = tx.contact_id ?? "00000000-0000-0000-0000-000000000000";
+                _model.rubber_type_id = tx.rubber_type_id ?? string.Empty;
+                _model.truck_id = tx.vehicle_id;
+                _model.wallet_id = tx.wallet_id;
+                _model.weight = tx.quantity;
+                _model.price_per_unit = tx.agreed_price;
+                _model.deduction_percent = tx.deduction_percent;
+                _model.purchase_location = string.IsNullOrEmpty(tx.vehicle_id) ? "Shop" : "Truck";
+
+                _model.actual_paid = tx.paid_amount;
+                _isUserModifiedPaid = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading transaction for edit: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task LoadDropdownDataAsync()
+    {
+        try
+        {
+            _trucks = await Http.GetFromJsonAsync<List<TruckModel>>("rest/v1/trucks?select=*&status=eq.Available") ?? new();
+            var apiSuppliers = await Http.GetFromJsonAsync<List<Contact>>("rest/v1/contacts?select=*&contact_type=eq.Supplier") ?? new();
+
+            _suppliers = new List<Contact>
+            {
+                new Contact
+                {
+                    Id = "00000000-0000-0000-0000-000000000000",
+                    Name = "Walk-in Supplier (အမည်မသိ / တစ်ခါတရံလာရောင်းသူ)",
+                    Phone = "-",
+                    AdvanceBalance = 0
+                }
+            };
+            _suppliers.AddRange(apiSuppliers);
+
+            _rubberTypes = await Http.GetFromJsonAsync<List<RubberTypeModel>>("rest/v1/rubber_types?select=*") ?? new();
+            _dailyPrices = await Http.GetFromJsonAsync<List<DailyPriceModel>>("rest/v1/daily_prices?select=*") ?? new();
+            _wallets = await Http.GetFromJsonAsync<List<WalletModel>>("rest/v1/wallets?select=*") ?? new();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading data: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task<string> GenerateVoucherNumberAsync(string prefix)
+    {
+        string dateStr = DateTime.Now.ToString("yyyyMMdd");
+        string searchPattern = $"{prefix}-{dateStr}-";
+
+        try
+        {
+            var transactions = await Http.GetFromJsonAsync<List<TransactionResponseModel>>(
+                $"rest/v1/transactions?voucher_number=like.{searchPattern}*&select=voucher_number");
+
+            int nextSeq = 1;
+            if (transactions != null && transactions.Any())
+            {
+                var maxSeq = transactions
+                    .Where(t => !string.IsNullOrEmpty(t.voucher_number) && t.voucher_number.Contains("-"))
+                    .Select(t =>
+                    {
+                        string part = t.voucher_number!.Substring(t.voucher_number.LastIndexOf('-') + 1);
+                        return int.TryParse(part, out int val) ? val : 0;
+                    })
+                    .DefaultIfEmpty(0)
+                    .Max();
+
+                nextSeq = maxSeq + 1;
+            }
+            return $"{prefix}-{dateStr}-{nextSeq:D3}";
+        }
+        catch
+        {
+            return $"{prefix}-{dateStr}-001";
+        }
+    }
+
+    private void OnPriceChanged(decimal value) { _model.price_per_unit = value; Recalculate(); }
+    private void OnServiceCostChanged(decimal value) { _model.service_cost = value; Recalculate(); }
+    private void OnDeductionChanged(decimal value) { _model.deduction_percent = value; Recalculate(); }
+    private void OnWeightChanged(decimal value) { _model.weight = value; Recalculate(); }
+
+    private void OnActualPaidChanged(decimal value)
+    {
+        _model.actual_paid = value;
+        _isUserModifiedPaid = true;
+        StateHasChanged();
+    }
+
+    private void Recalculate()
+    {
+        if (!_isUserModifiedPaid)
+        {
+            _model.actual_paid = _calculatedNetPayable;
+        }
+        StateHasChanged();
+    }
+
+    private async Task OnFarmerSelected(IEnumerable<string> values)
+    {
+        var selectedId = values.FirstOrDefault();
+
+        if (!string.IsNullOrEmpty(selectedId) && selectedId != "00000000-0000-0000-0000-000000000000")
+        {
+            _model.advance_amount = await GetLatestBalanceForContact(selectedId);
+        }
+        else
+        {
+            _model.advance_amount = 0;
+        }
+
+        if (!_isEditMode) _isUserModifiedPaid = false;
+        Recalculate();
+    }
+
+    private void OnRubberTypeSelected(IEnumerable<string> values)
+    {
+        var selectedRubberTypeId = values.FirstOrDefault();
+
+        if (!string.IsNullOrEmpty(selectedRubberTypeId))
+        {
+            _model.rubber_type_id = selectedRubberTypeId;
+            var matchingPrice = _dailyPrices.FirstOrDefault(p => p.rubber_type_id == selectedRubberTypeId);
+            _model.price_per_unit = matchingPrice != null ? matchingPrice.price_per_unit : 0;
+        }
+
+        Recalculate();
+    }
+
+    private async Task OpenAddTruckDialog()
+    {
+        var parameters = new DialogParameters { ["Model"] = new TruckModel(), ["IsNew"] = true };
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<TruckStockDialog>("ကားအသစ်ထည့်ရန်", parameters, options);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled) await LoadDropdownDataAsync();
+    }
+
+    private Task OpenAddContactDialog()
+    {
+        Snackbar.Add("Contact Dialog ဖွင့်ရန် ချိတ်ဆက်ထားပါသည်။", Severity.Info);
+        return Task.CompletedTask;
+    }
+
+    private async Task OpenAddRubberTypeDialog()
+    {
+        var parameters = new DialogParameters { ["Model"] = new RubberTypeModel(), ["IsNew"] = true };
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<RubberTypeDialog>("ရာဘာအမျိုးအစားအသစ်ထည့်ရန်", parameters, options);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled) await LoadDropdownDataAsync();
+    }
+
+    private async Task SavePurchaseAsync()
+    {
+        _isSaving = true;
+        try
+        {
+            if (_isEditMode && !string.IsNullOrEmpty(EditTransactionId))
+            {
+                await DeleteOldTransactionAsync(EditTransactionId);
+            }
+
+            var ownerId = await UserContext.GetCurrentOwnerIdAsync();
+            var staffId = await UserContext.GetCurrentStaffIdAsync();
+
+            _model.owner_id = ownerId;
+            _model.staff_id = staffId;
+
+            string? contactIdToSave = (_model.contact_id == "00000000-0000-0000-0000-000000000000") ? null : _model.contact_id;
+
+            decimal totalAmount = _calculatedTotalAmount;
+            decimal advanceDeducted = _model.advance_amount;
+            decimal paidAmount = _model.actual_paid;
+
+            decimal dueAmount = _calculatedNetPayable - paidAmount;
+            if (dueAmount < 0) dueAmount = 0;
+
+            string paymentStatus = "Paid";
+            if (paidAmount <= 0 && advanceDeducted <= 0) paymentStatus = "Credit";
+            else if (dueAmount > 0) paymentStatus = "Partial";
+            else paymentStatus = "Paid";
+
+            var transactionPayload = new
+            {
+                owner_id = _model.owner_id,
+                staff_id = _model.staff_id,
+                contact_id = contactIdToSave,
+                rubber_type_id = _model.rubber_type_id,
+                vehicle_id = !string.IsNullOrEmpty(_model.truck_id) ? _model.truck_id : null,
+                wallet_id = _model.wallet_id,
+                transaction_type = "Purchase",
+                voucher_number = _currentVoucherNumber,
+                total_amount = totalAmount,
+                agreed_price = _calculatedAgreedPrice,
+                quantity = _model.weight,
+                deduction_percent = _model.deduction_percent,
+                gross_weight = _model.weight,
+                net_weight = _model.weight,
+                paid_amount = paidAmount + advanceDeducted,
+                due_amount = dueAmount,
+                payment_status = paymentStatus,
+                description = $"Rubber Purchase - {_model.purchase_location} (Voucher: {_currentVoucherNumber})"
+            };
+
+            var requestMessage = new HttpRequestMessage(HttpMethod.Post, "rest/v1/transactions")
+            {
+                Content = JsonContent.Create(transactionPayload)
+            };
+            requestMessage.Headers.Add("Prefer", "return=representation");
+
+            var txResponse = await Http.SendAsync(requestMessage);
+
+            if (txResponse.IsSuccessStatusCode)
+            {
+                var createdTransactions = await txResponse.Content.ReadFromJsonAsync<List<TransactionResponseModel>>();
+                string? generatedTransactionId = createdTransactions?.FirstOrDefault()?.id;
+
+                var voucherPayload = new
+                {
+                    owner_id = _model.owner_id,
+                    staff_id = _model.staff_id,
+                    voucher_number = _currentVoucherNumber,
+                    voucher_type = "Purchase",
+                    reference_id = generatedTransactionId
+                };
+                await Http.PostAsJsonAsync("rest/v1/vouchers", voucherPayload);
+
+                if (!string.IsNullOrEmpty(contactIdToSave))
+                {
+                    decimal previousBalance = await GetLatestBalanceForContact(contactIdToSave);
+                    decimal debitVal = totalAmount;
+                    decimal creditVal = paidAmount;
+                    decimal currentRunningBalance = previousBalance - debitVal + creditVal;
+                    string entryType = debitVal >= creditVal ? "Debit" : "Credit";
+
+                    var ledgerPayload = new
+                    {
+                        owner_id = _model.owner_id,
+                        staff_id = _model.staff_id,
+                        contact_id = contactIdToSave,
+                        transaction_id = generatedTransactionId,
+                        voucher_number = _currentVoucherNumber,
+                        entry_type = entryType,
+                        debit_amount = debitVal,
+                        credit_amount = creditVal,
+                        balance_after = currentRunningBalance,
+                        ref_type = "Purchase",
+                        description = $"Voucher {_currentVoucherNumber} - ရာဘာဝယ်ယူမှု (တန်ဖိုး: {debitVal:N0}, ပေးငွေ: {creditVal:N0})"
+                    };
+                    await Http.PostAsJsonAsync("rest/v1/ledgers", ledgerPayload);
+                }
+
+                if (!string.IsNullOrEmpty(_model.wallet_id) && paidAmount > 0)
+                {
+                    var selectedWallet = _wallets.FirstOrDefault(w => w.Id == _model.wallet_id);
+                    if (selectedWallet != null)
+                    {
+                        decimal newWalletBalance = selectedWallet.Balance - paidAmount;
+                        var walletUpdatePayload = new { balance = newWalletBalance };
+                        await Http.PatchAsync($"rest/v1/wallets?id=eq.{_model.wallet_id}", JsonContent.Create(walletUpdatePayload));
+                    }
+                }
+
+                if (_model.purchase_location == "Truck" && !string.IsNullOrEmpty(_model.truck_id))
+                {
+                    var truckStockPayload = new
+                    {
+                        owner_id = _model.owner_id,
+                        staff_id = _model.staff_id,
+                        vehicle_id = _model.truck_id,
+                        rubber_type_id = _model.rubber_type_id,
+                        quantity = _model.weight,
+                        trip_date = DateTime.Today.ToString("yyyy-MM-dd"),
+                        status = "Active",
+                        transaction_id = generatedTransactionId
+                    };
+                    await Http.PostAsJsonAsync("rest/v1/truck_stocks", truckStockPayload);
+                }
+                else
+                {
+                    var tempStockPayload = new
+                    {
+                        owner_id = _model.owner_id,
+                        staff_id = _model.staff_id,
+                        contact_id = contactIdToSave,
+                        rubber_type_id = _model.rubber_type_id,
+                        gross_weight = _model.weight,
+                        moisture_percent = _model.deduction_percent,
+                        net_weight = _model.weight,
+                        source_type = "Shop",
+                        status = "Pending",
+                        transaction_id = generatedTransactionId
+                    };
+                    await Http.PostAsJsonAsync("rest/v1/temp_stocks", tempStockPayload);
+                }
+
+                Snackbar.Add(_isEditMode ? "ဝယ်ယူမှု အချက်အလက်များ အောင်မြင်စွာ ပြင်ဆင်ပြီးပါပြီ။" : LangService.GetString("Buy_SaveSuccess"), Severity.Success);
+                _isSuccessCompleted = true;
+            }
+            else
+            {
+                var err = await txResponse.Content.ReadAsStringAsync();
+                Snackbar.Add($"Failed to save: {err}", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Exception: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private async Task DeleteOldTransactionAsync(string txId)
+    {
+        try
+        {
+            // 1. Wallet Balance Refund လုပ်ခြင်း
+            var txList = await Http.GetFromJsonAsync<List<TransactionDetailModel>>($"rest/v1/transactions?id=eq.{txId}&select=wallet_id,paid_amount");
+            if (txList != null && txList.Any())
+            {
+                var tx = txList.First();
+                if (!string.IsNullOrEmpty(tx.wallet_id) && tx.paid_amount > 0)
+                {
+                    var wallets = await Http.GetFromJsonAsync<List<WalletModel>>($"rest/v1/wallets?id=eq.{tx.wallet_id}");
+                    if (wallets != null && wallets.Any())
+                    {
+                        var wallet = wallets.First();
+                        decimal restoredBalance = wallet.Balance + tx.paid_amount;
+                        await Http.PatchAsync($"rest/v1/wallets?id=eq.{tx.wallet_id}", JsonContent.Create(new { balance = restoredBalance }));
+                    }
+                }
+            }
+
+            // 2. transaction_id ဖြင့် တိုက်ရိုက် လိုက်လံဖျက်ခြင်း (အလွန်လွယ်ကူသန့်ရှင်းသည်)
+            await Http.DeleteAsync($"rest/v1/truck_stocks?transaction_id=eq.{txId}");
+            await Http.DeleteAsync($"rest/v1/temp_stocks?transaction_id=eq.{txId}");
+            await Http.DeleteAsync($"rest/v1/ledgers?transaction_id=eq.{txId}");
+            await Http.DeleteAsync($"rest/v1/vouchers?reference_id=eq.{txId}");
+            await Http.DeleteAsync($"rest/v1/transactions?id=eq.{txId}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error cleaning transaction: {ex.Message}");
+        }
+    }
+
+    private void PrintVoucher()
+    {
+        Snackbar.Add($"ဘောင်ချာအမှတ် {_currentVoucherNumber} ကို Print ထုတ်နေပါပြီ...", Severity.Info);
+    }
+
+    private void FinishTransaction()
+    {
+        if (_isEditMode)
+        {
+            Navigation.NavigateTo("/rubber-purchases-list");
+        }
+        else
+        {
+            Navigation.NavigateTo("/rubber-purchase", forceLoad: true);
+        }
+    }
+
+    private async Task<decimal> GetLatestBalanceForContact(string contactId)
+    {
+        try
+        {
+            var ledgers = await Http.GetFromJsonAsync<List<LedgerModel>>($"rest/v1/ledgers?contact_id=eq.{contactId}&order=created_at.desc&limit=1");
+            return ledgers?.FirstOrDefault()?.balance_after ?? 0m;
+        }
+        catch
+        {
+            return 0m;
+        }
+    }
+
+    private class TransactionModel
+    {
+        public string id { get; set; } = string.Empty;
+        public string? voucher_number { get; set; }
+        public string? contact_id { get; set; }
+        public string? rubber_type_id { get; set; }
+        public string? vehicle_id { get; set; }
+        public string? wallet_id { get; set; }
+        public decimal quantity { get; set; }
+        public decimal agreed_price { get; set; }
+        public decimal deduction_percent { get; set; }
+        public decimal total_amount { get; set; }
+        public decimal paid_amount { get; set; }
+    }
+
+    private class TransactionResponseModel
+    {
+        public string id { get; set; } = string.Empty;
+        public string? voucher_number { get; set; }
+    }
+
+    private class TransactionDetailModel
+    {
+        public string? wallet_id { get; set; }
+        public decimal paid_amount { get; set; }
+    }
+}

@@ -1,0 +1,218 @@
+﻿@page "/other-incomes"
+@using MudBlazor
+@using RubberTradingSystem.Models
+@using RubberTradingSystem.Services
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@inject LanguageService LangService
+@implements IDisposable
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4 mb-6">
+    <MudText Typo="Typo.h5" Color="Color.Primary" Class="mb-4 font-weight-bold">
+        @LangService.GetString("Income_ListTitle")
+    </MudText>
+
+    <MudTable Items="@_items"
+              Dense="true"
+              Hover="true"
+              Bordered="true"
+              Striped="true"
+              Filter="new Func<OtherIncomeModel,bool>(FilterFunc)"
+              @bind-SelectedItem="_selectedItem"
+              RowClassFunc="SelectedRowClassFunc"
+              Elevation="2">
+
+        <ToolBarContent>
+            <MudSpacer />
+            <MudTextField @bind-Value="_searchString"
+                          Placeholder="@LangService.GetString("Income_SearchPlaceholder")"
+                          Immediate="true"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search"
+                          Class="mt-0"
+                          Clearable="true">
+            </MudTextField>
+        </ToolBarContent>
+
+        <HeaderContent>
+            <MudTh>@LangService.GetString("Income_ColDesc")</MudTh>
+            <MudTh>@LangService.GetString("Income_ColAmount")</MudTh>
+            <MudTh>@LangService.GetString("Income_ColPaymentMethod")</MudTh>
+            <MudTh>@LangService.GetString("Income_ColDate")</MudTh>
+            <MudTh>@LangService.GetString("Income_ColNote")</MudTh>
+        </HeaderContent>
+
+        <RowTemplate>
+            <MudTd DataLabel="Description"><b>@context.description</b></MudTd>
+            <MudTd DataLabel="Amount"><b style="color: var(--mud-palette-success-text);">@context.amount.ToString("N0")</b></MudTd>
+            <MudTd DataLabel="Payment Method">
+                <MudChip T="string" Color="@(context.payment_method == "Cash" ? Color.Success : Color.Info)" Size="Size.Small">
+                    @context.payment_method
+                </MudChip>
+            </MudTd>
+            <MudTd DataLabel="Date">@context.received_date.ToString("dd/MM/yyyy")</MudTd>
+            <MudTd DataLabel="Note">@context.note</MudTd>
+        </RowTemplate>
+
+        <PagerContent>
+            <MudTablePager PageSizeOptions="new int[] { 10, 25, 50 }" />
+        </PagerContent>
+    </MudTable>
+
+    <MudPaper Class="d-flex justify-end pa-4 mt-4" Elevation="2">
+        <MudButton Variant="Variant.Filled" Color="Color.Success" StartIcon="@Icons.Material.Filled.Add"
+                   OnClick="OpenAddDialog" Class="mr-2">
+            @LangService.GetString("Income_AddButton")
+        </MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Warning" StartIcon="@Icons.Material.Filled.Edit"
+                   Disabled="@(_selectedItem == null)" OnClick="OpenEditDialog" Class="mr-2">
+            @LangService.GetString("Income_EditButton")
+        </MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete"
+                   Disabled="@(_selectedItem == null)" OnClick="DeleteAsync">
+            @LangService.GetString("Income_DeleteButton")
+        </MudButton>
+    </MudPaper>
+</MudContainer>
+
+<style>
+    .selected-row {
+        background-color: rgba(33, 150, 243, 0.2) !important;
+    }
+</style>
+
+@code {
+    private List<OtherIncomeModel> _items = new();
+    private OtherIncomeModel? _selectedItem;
+    private string _searchString = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        LangService.OnLanguageChanged += StateHasChanged;
+        await LoadDataAsync();
+    }
+
+    public void Dispose() => LangService.OnLanguageChanged -= StateHasChanged;
+
+    private async Task LoadDataAsync()
+    {
+        try
+        {
+            _items = await Http.GetFromJsonAsync<List<OtherIncomeModel>>("rest/v1/other_incomes?select=*&order=received_date.desc") ?? new();
+            _selectedItem = null;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private string SelectedRowClassFunc(OtherIncomeModel item, int rowNumber)
+    {
+        if (_selectedItem != null && _selectedItem.id == item.id)
+        {
+            return "selected-row";
+        }
+        return string.Empty;
+    }
+
+    private bool FilterFunc(OtherIncomeModel item)
+    {
+        if (string.IsNullOrWhiteSpace(_searchString)) return true;
+        return item.description.Contains(_searchString, StringComparison.OrdinalIgnoreCase) ||
+               item.payment_method.Contains(_searchString, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private async Task OpenAddDialog()
+    {
+        var parameters = new DialogParameters { ["Model"] = new OtherIncomeModel(), ["IsNew"] = true };
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<OtherIncomeDialog>(LangService.GetString("Income_AddTitle"), parameters, options);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled) await LoadDataAsync();
+    }
+
+    private async Task OpenEditDialog()
+    {
+        if (_selectedItem == null) return;
+        var editModel = new OtherIncomeModel
+        {
+            id = _selectedItem.id,
+            owner_id = _selectedItem.owner_id,
+            staff_id = _selectedItem.staff_id,
+            description = _selectedItem.description,
+            amount = _selectedItem.amount,
+            payment_method = _selectedItem.payment_method,
+            received_date = _selectedItem.received_date,
+            note = _selectedItem.note
+        };
+
+        var parameters = new DialogParameters { ["Model"] = editModel, ["IsNew"] = false };
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<OtherIncomeDialog>(LangService.GetString("Income_EditTitle"), parameters, options);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled) await LoadDataAsync();
+    }
+
+    private async Task DeleteAsync()
+    {
+        if (_selectedItem == null) return;
+
+        var confirmed = await DialogService.ShowMessageBoxAsync(
+            LangService.GetString("Confirm_Title"),
+            LangService.GetString("Confirm_DeleteMessage"),
+            yesText: LangService.GetString("Btn_Yes"), cancelText: LangService.GetString("Btn_Cancel"));
+
+        if (confirmed == true)
+        {
+            try
+            {
+                var transactions = await Http.GetFromJsonAsync<List<TransactionLookupModel>>(
+                    $"rest/v1/transactions?description=like.*{_selectedItem.description}*&select=id,wallet_id,total_amount");
+
+                if (transactions != null && transactions.Any())
+                {
+                    foreach (var tx in transactions)
+                    {
+                        // ဝင်ငွေဖျက်လျှင် Wallet ထဲမှ ငွေကို ပြန်လည်နှုတ်ယူရမည်
+                        if (!string.IsNullOrEmpty(tx.wallet_id) && tx.total_amount > 0)
+                        {
+                            var wallets = await Http.GetFromJsonAsync<List<WalletFullModel>>($"rest/v1/wallets?id=eq.{tx.wallet_id}&select=balance");
+                            if (wallets != null && wallets.Any())
+                            {
+                                decimal currentBal = wallets.First().balance;
+                                decimal restoredBal = currentBal - tx.total_amount;
+                                await Http.PatchAsync($"rest/v1/wallets?id=eq.{tx.wallet_id}", JsonContent.Create(new { balance = restoredBal }));
+                            }
+                        }
+
+                        await Http.DeleteAsync($"rest/v1/ledgers?transaction_id=eq.{tx.id}");
+                        await Http.DeleteAsync($"rest/v1/vouchers?reference_id=eq.{tx.id}");
+                        await Http.DeleteAsync($"rest/v1/transactions?id=eq.{tx.id}");
+                    }
+                }
+
+                var response = await Http.DeleteAsync($"rest/v1/other_incomes?id=eq.{_selectedItem.id}");
+                if (response.IsSuccessStatusCode)
+                {
+                    Snackbar.Add(LangService.GetString("Income_DeleteSuccess"), Severity.Success);
+                    await LoadDataAsync();
+                }
+                else
+                {
+                    Snackbar.Add("Failed to delete income.", Severity.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Delete Error: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+
+    private class TransactionLookupModel { public string id { get; set; } = string.Empty; public string? wallet_id { get; set; } public decimal total_amount { get; set; } }
+    private class WalletFullModel { public string id { get; set; } = string.Empty; public decimal balance { get; set; } }
+}

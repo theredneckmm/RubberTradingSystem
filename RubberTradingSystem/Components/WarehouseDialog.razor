@@ -1,0 +1,134 @@
+﻿@using MudBlazor
+@using RubberTradingSystem.Models
+@using RubberTradingSystem.Services
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject LanguageService LangService
+@inject UserContextService UserContext
+@implements IDisposable
+
+<MudDialog>
+    <DialogContent>
+        <EditForm Model="@Model" OnValidSubmit="SaveAsync">
+            <DataAnnotationsValidator />
+
+            <MudTextField @bind-Value="Model.warehouse_name"
+                          Label="@LangService.GetString("Wh_NameLabel")"
+                          Variant="Variant.Outlined"
+                          Class="mb-4"
+                          Required="true" />
+
+            <MudTextField @bind-Value="Model.location"
+                          Label="@LangService.GetString("Wh_LocationLabel")"
+                          Variant="Variant.Outlined"
+                          Class="mb-4"
+                          Required="true" />
+
+            <MudTextField @bind-Value="Model.manager_name"
+                          Label="@LangService.GetString("Wh_ManagerLabel")"
+                          Variant="Variant.Outlined"
+                          Class="mb-4" />
+
+            <MudTextField @bind-Value="Model.phone"
+                          Label="@LangService.GetString("Wh_PhoneLabel")"
+                          Variant="Variant.Outlined"
+                          Class="mb-4" />
+
+            <MudTextField @bind-Value="Model.capacity_desc"
+                          Label="@LangService.GetString("Wh_CapacityLabel")"
+                          Variant="Variant.Outlined"
+                          Lines="2"
+                          Class="mb-4" />
+
+            <div class="d-flex justify-end">
+                <MudButton OnClick="Cancel" Variant="Variant.Text" Class="mr-2">
+                    @LangService.GetString("Rubber_Cancel")
+                </MudButton>
+                <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary">
+                    @(IsNew ? LangService.GetString("Rubber_Save") : LangService.GetString("Rubber_Update"))
+                </MudButton>
+            </div>
+        </EditForm>
+    </DialogContent>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public WarehouseModel Model { get; set; } = new();
+    [Parameter] public bool IsNew { get; set; }
+
+    protected override void OnInitialized() => LangService.OnLanguageChanged += StateHasChanged;
+    public void Dispose() => LangService.OnLanguageChanged -= StateHasChanged;
+
+    private async Task SaveAsync()
+    {
+        try
+        {
+            // 💡 UserContext မှ owner_id နှင့် staff_id ကို သေချာ ရယူမည်
+            var ownerId = await UserContext.GetCurrentOwnerIdAsync();
+            var staffId = await UserContext.GetCurrentStaffIdAsync();
+
+            if (string.IsNullOrEmpty(ownerId))
+            {
+                Snackbar.Add("User Owner ID not found. Please login again.", Severity.Error);
+                return;
+            }
+
+            if (IsNew)
+            {
+                // 💡 Supabase ဇယားနှင့် ကိုက်ညီသော Payload သီးသန့်ဆောက်ပို့ခြင်း
+                var newWarehouse = new
+                {
+                    owner_id = ownerId,
+                    staff_id = string.IsNullOrEmpty(staffId) ? null : staffId,
+                    warehouse_name = Model.warehouse_name,
+                    location = Model.location,
+                    manager_name = Model.manager_name,
+                    phone = Model.phone,
+                    capacity_desc = Model.capacity_desc
+                };
+
+                var response = await Http.PostAsJsonAsync("rest/v1/warehouses", newWarehouse);
+                if (response.IsSuccessStatusCode)
+                {
+                    Snackbar.Add(LangService.GetString("Wh_SaveSuccess"), Severity.Success);
+                    MudDialog.Close(DialogResult.Ok(true));
+                }
+                else
+                {
+                    var errorDetails = await response.Content.ReadAsStringAsync();
+                    Snackbar.Add($"Failed to save: {errorDetails}", Severity.Error);
+                }
+            }
+            else
+            {
+                var updatePayload = new
+                {
+                    warehouse_name = Model.warehouse_name,
+                    location = Model.location,
+                    manager_name = Model.manager_name,
+                    phone = Model.phone,
+                    capacity_desc = Model.capacity_desc
+                };
+
+                var response = await Http.PatchAsync($"rest/v1/warehouses?id=eq.{Model.id}", JsonContent.Create(updatePayload));
+                if (response.IsSuccessStatusCode)
+                {
+                    Snackbar.Add(LangService.GetString("Wh_UpdateSuccess"), Severity.Success);
+                    MudDialog.Close(DialogResult.Ok(true));
+                }
+                else
+                {
+                    var errorDetails = await response.Content.ReadAsStringAsync();
+                    Snackbar.Add($"Failed to update: {errorDetails}", Severity.Error);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Exception: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

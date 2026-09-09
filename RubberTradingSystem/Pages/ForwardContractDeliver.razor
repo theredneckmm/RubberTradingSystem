@@ -1,0 +1,154 @@
+﻿@page "/forward-contract/deliver"
+@using MudBlazor
+@using RubberTradingSystem.Models
+@using RubberTradingSystem.Services
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+@inject LanguageService Lang
+@inject UserContextService UserContext
+@implements IDisposable
+
+<MudContainer MaxWidth="MaxWidth.Medium" Class="mt-6">
+    <MudPaper Elevation="3" Class="pa-6">
+        <MudText Typo="Typo.h5" Color="Color.Primary" Class="fw-bold mb-6">@Lang.GetString("Title_ContractDelivery")</MudText>
+
+        <!-- လက်ရှိ Active ဖြစ်နေသော ကြိုပွိုင့်စာချုပ်များဇယား -->
+        <MudTable Items="@_activeContracts" Hover="true" Breakpoint="Breakpoint.Sm" Loading="@_isLoading">
+            <HeaderContent>
+                <MudTh>@Lang.GetString("Th_MerchantName")</MudTh>
+                <MudTh>@Lang.GetString("Th_DueDate")</MudTh>
+                <MudTh>@Lang.GetString("Th_ContractQty")</MudTh>
+                <MudTh>@Lang.GetString("Th_DeliveredQty")</MudTh>
+                <MudTh>@Lang.GetString("Th_RemainingQty")</MudTh>
+                <MudTh>@Lang.GetString("Th_Action")</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd>@context.MerchantName</MudTd>
+                <MudTd>@context.DueDate?.ToString("yyyy-MM-dd")</MudTd>
+                <MudTd>@context.ContractQuantity.ToString("N0")</MudTd>
+                <MudTd>@context.DeliveredQuantity.ToString("N0")</MudTd>
+                <MudTd><strong>@((context.ContractQuantity - context.DeliveredQuantity).ToString("N0"))</strong></MudTd>
+                <MudTd>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                               OnClick="() => OpenDeliveryDialog(context)">
+                        @Lang.GetString("Btn_AddDelivery")
+                    </MudButton>
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    </MudPaper>
+</MudContainer>
+
+<!-- ကုန်သွင်းရန် Dialog ပုံစံ -->
+@if (_selectedContract != null)
+{
+    <MudDialog @bind-IsVisible="_isDialogOpen" Options="new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Small }">
+        <TitleContent>
+            <MudText Typo="Typo.h6">@Lang.GetString("Title_RecordDelivery")</MudText>
+        </TitleContent>
+        <DialogContent>
+            <MudNumericField @bind-Value="_deliveryQuantity" Label="@Lang.GetString("Lbl_DeliveryQuantity")"
+                             Variant="Variant.Outlined" Adornment="Adornment.End" AdornmentText="ပိဿာ" Min="0" Class="mb-4" />
+            <MudTextField @bind-Value="_deliveryNote" Label="@Lang.GetString("Lbl_Note")" Variant="Variant.Outlined" Lines="2" />
+        </DialogContent>
+        <DialogActions> <!-- ရှေ့တွင် ထည့်ရန် မမေ့ပါနှင့် -->
+            <MudButton OnClick="CloseDialog">@Lang.GetString("Btn_Cancel")</MudButton>
+            <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SubmitDeliveryAsync">@Lang.GetString("Btn_Confirm")</MudButton>
+        </DialogActions>
+    </MudDialog>
+}
+
+@code {
+    private List<ForwardContractViewModel> _activeContracts = new();
+    private bool _isLoading = true;
+    private bool _isDialogOpen = false;
+    private ForwardContractViewModel? _selectedContract;
+    private decimal _deliveryQuantity;
+    private string _deliveryNote = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        Lang.OnLanguageChanged += StateHasChanged;
+        await LoadContractsAsync();
+    }
+
+    private async Task LoadContractsAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            // Forward contracts နှင့် contacts များကို Join ၍ ဆွဲထုတ်ခြင်း
+            _activeContracts = await Http.GetFromJsonAsync<List<ForwardContractViewModel>>("rest/v1/forward_contracts?status=eq.Active&select=*,contacts(name)") ?? new();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"အမှားအယွင်း: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void OpenDeliveryDialog(ForwardContractViewModel contract)
+    {
+        _selectedContract = contract;
+        _deliveryQuantity = 0;
+        _deliveryNote = "";
+        _isDialogOpen = true;
+    }
+
+    private void CloseDialog() => _isDialogOpen = false;
+
+    private async Task SubmitDeliveryAsync()
+    {
+        if (_selectedContract == null || _deliveryQuantity <= 0) return;
+
+        try
+        {
+            decimal newDeliveredQty = _selectedContract.DeliveredQuantity + _deliveryQuantity;
+            string newStatus = newDeliveredQty >= _selectedContract.ContractQuantity ? "Completed" : "Active";
+
+            // Supabase တွင် စာချုပ်၏ သွင်းပြီးပိဿာချိန်ကို Update လုပ်ခြင်း
+            var updatePayload = new
+            {
+                delivered_quantity = newDeliveredQty,
+                status = newStatus
+            };
+
+            var response = await Http.PatchAsJsonAsync($"rest/v1/forward_contracts?id=eq.{_selectedContract.Id}", updatePayload);
+            if (response.IsSuccessStatusCode)
+            {
+                Snackbar.Add(Lang.GetString("Msg_Success"), Severity.Success);
+                _isDialogOpen = false;
+                await LoadContractsAsync();
+            }
+            else
+            {
+                Snackbar.Add("မအောင်မြင်ပါ", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"အမှားအယွင်း: {ex.Message}", Severity.Error);
+        }
+    }
+
+    public class ForwardContractViewModel
+    {
+        public string Id { get; set; } = string.Empty;
+        public string MerchantName => Contacts?.name ?? "Unknown";
+        public DateTime? DueDate { get; set; }
+        public decimal ContractQuantity { get; set; }
+        public decimal DeliveredQuantity { get; set; }
+        public ContactObj? Contacts { get; set; }
+    }
+
+    public class ContactObj
+    {
+        public string? name { get; set; }
+    }
+
+    public void Dispose() => Lang.OnLanguageChanged -= StateHasChanged;
+}
