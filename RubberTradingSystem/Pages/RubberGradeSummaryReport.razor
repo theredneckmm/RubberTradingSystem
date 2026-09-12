@@ -1,0 +1,63 @@
+﻿@page "/reports/rubber-grade-summary"
+@using MudBlazor
+@using RubberTradingSystem.Models
+@using RubberTradingSystem.Services
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject LanguageService LangService
+@inject IJSRuntime JS
+@implements IDisposable
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4 mb-6">
+    <MudText Typo="Typo.h5" Color="Color.Primary" Class="mb-4">@LangService.GetString("Title_RubberGradeSummaryReport")</MudText>
+
+    <MudTable Items="@_items" Dense="true" Hover="true" Bordered="true" Striped="true" Loading="@_isLoading" Elevation="2">
+        <HeaderContent>
+            <MudTh>@LangService.GetString("Th_RubberType")</MudTh>
+            <MudTh>@LangService.GetString("Th_TotalPurchaseQty")</MudTh>
+            <MudTh>@LangService.GetString("Th_TotalPurchaseAmount")</MudTh>
+            <MudTh>@LangService.GetString("Th_TotalSaleQty")</MudTh>
+            <MudTh>@LangService.GetString("Th_TotalSaleAmount")</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd><b>@context.RubberTypeName</b></MudTd>
+            <MudTd>@context.TotalPurchaseQty.ToString("N2")</MudTd>
+            <MudTd>@context.TotalPurchaseAmount.ToString("N0")</MudTd>
+            <MudTd>@context.TotalSaleQty.ToString("N2")</MudTd>
+            <MudTd><b>@context.TotalSaleAmount.ToString("N0")</b></MudTd>
+        </RowTemplate>
+        <PagerContent><MudTablePager PageSizeOptions="new int[] { 10, 25, 50 }" /></PagerContent>
+    </MudTable>
+</MudContainer>
+
+@code {
+    private bool _isLoading = false;
+    private List<RubberSummaryModel> _items = new();
+
+    protected override async Task OnInitializedAsync() { LangService.OnLanguageChanged += StateHasChanged; await LoadDataAsync(); }
+    public void Dispose() => LangService.OnLanguageChanged -= StateHasChanged;
+
+    private async Task LoadDataAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            var txs = await Http.GetFromJsonAsync<List<TxRawModel>>("rest/v1/transactions?select=transaction_type,quantity,total_amount,rubber_types(name,grade)") ?? new();
+            _items = txs.GroupBy(t => t.rubber_types != null ? $"{t.rubber_types.name} ({t.rubber_types.grade})" : "Unknown")
+                .Select(g => new RubberSummaryModel
+                {
+                    RubberTypeName = g.Key,
+                    TotalPurchaseQty = g.Where(x => x.transaction_type == "Purchase").Sum(x => x.quantity),
+                    TotalPurchaseAmount = g.Where(x => x.transaction_type == "Purchase").Sum(x => x.total_amount),
+                    TotalSaleQty = g.Where(x => x.transaction_type == "Sale" || x.transaction_type == "ForwardContractSale").Sum(x => x.quantity),
+                    TotalSaleAmount = g.Where(x => x.transaction_type == "Sale" || x.transaction_type == "ForwardContractSale").Sum(x => x.total_amount)
+                }).ToList();
+        }
+        catch (Exception ex) { Snackbar.Add($"Error: {ex.Message}", Severity.Error); }
+        finally { _isLoading = false; }
+    }
+
+    public class RubberSummaryModel { public string RubberTypeName { get; set; } = string.Empty; public decimal TotalPurchaseQty { get; set; } public decimal TotalPurchaseAmount { get; set; } public decimal TotalSaleQty { get; set; } public decimal TotalSaleAmount { get; set; } }
+    private class TxRawModel { public string transaction_type { get; set; } = string.Empty; public decimal quantity { get; set; } public decimal total_amount { get; set; } public RubberObj? rubber_types { get; set; } }
+    private class RubberObj { public string name { get; set; } = string.Empty; public string grade { get; set; } = string.Empty; }
+}

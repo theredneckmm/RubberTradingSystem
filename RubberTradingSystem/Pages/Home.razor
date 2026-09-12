@@ -1,4 +1,9 @@
 ﻿@page "/"
+@using MudBlazor
+@using RubberTradingSystem.Models
+@using RubberTradingSystem.Services
+@inject HttpClient Http
+@inject ISnackbar Snackbar
 @inject LanguageService LangService
 @implements IDisposable
 
@@ -11,7 +16,7 @@
         </MudText>
     </div>
     <MudButton Variant="Variant.Outlined" Color="Color.Warning" StartIcon="@Icons.Material.Filled.CloudOff" Size="Size.Medium" Class="rounded-pill px-4">
-        @string.Format(LangService.GetString("OfflinePending"), 5)
+        @string.Format(LangService.GetString("OfflinePending"), _offlinePendingCount)
     </MudButton>
 </div>
 
@@ -21,7 +26,7 @@
     <MudItem xs="12" sm="6" md="3">
         <MudPaper Elevation="4" Class="pa-6 rounded-xl" Style="border-top: 4px solid var(--mud-palette-primary);">
             <MudText Typo="Typo.subtitle2" Class="mud-text-secondary mb-2">@LangService.GetString("TodayPurchaseWet")</MudText>
-            <MudText Typo="Typo.h6" Color="Color.Primary" Style="font-weight: 400;">၁၂,၅၀၀ @LangService.GetString("Pound")</MudText>
+            <MudText Typo="Typo.h6" Color="Color.Primary" Style="font-weight: 400;"><b>@_todayPurchaseQty.ToString("N2")</b> @LangService.GetString("Pound")</MudText>
             <div class="d-flex align-center mt-3">
                 <MudIcon Icon="@Icons.Material.Filled.TrendingUp" Color="Color.Success" Size="Size.Small" Class="mr-1" />
                 <MudText Typo="Typo.caption" Color="Color.Success">@LangService.GetString("PurchaseIncrease")</MudText>
@@ -29,11 +34,11 @@
         </MudPaper>
     </MudItem>
 
-    <!-- Production -->
+    <!-- Production (or Forward Contract / Total Sales) -->
     <MudItem xs="12" sm="6" md="3">
         <MudPaper Elevation="4" Class="pa-6 rounded-xl" Style="border-top: 4px solid var(--mud-palette-warning);">
             <MudText Typo="Typo.subtitle2" Class="mud-text-secondary mb-2">@LangService.GetString("RSSProduction")</MudText>
-            <MudText Typo="Typo.h6" Color="Color.Warning" Style="font-weight: 400;">၄,၂၀၀ @LangService.GetString("Pound")</MudText>
+            <MudText Typo="Typo.h6" Color="Color.Warning" Style="font-weight: 400;"><b>@_todaySaleQty.ToString("N2")</b> @LangService.GetString("Pound")</MudText>
             <div class="d-flex align-center mt-3">
                 <MudIcon Icon="@Icons.Material.Filled.TrendingDown" Color="Color.Error" Size="Size.Small" Class="mr-1" />
                 <MudText Typo="Typo.caption" Color="Color.Error">@LangService.GetString("Shrinkage")</MudText>
@@ -41,11 +46,11 @@
         </MudPaper>
     </MudItem>
 
-    <!-- Cash -->
+    <!-- Cash & Bank Balance -->
     <MudItem xs="12" sm="6" md="3">
         <MudPaper Elevation="4" Class="pa-6 rounded-xl" Style="border-top: 4px solid var(--mud-palette-success);">
             <MudText Typo="Typo.subtitle2" Class="mud-text-secondary mb-2">@LangService.GetString("CashBankBalance")</MudText>
-            <MudText Typo="Typo.h6" Color="Color.Success" Style="font-weight: 400;">၄၅,၀၀၀,၀၀၀ @LangService.GetString("Kyat")</MudText>
+            <MudText Typo="Typo.h6" Color="Color.Success" Style="font-weight: 400;"><b>@_totalWalletBalance.ToString("N0")</b> @LangService.GetString("Kyat")</MudText>
             <div class="d-flex align-center mt-3">
                 <MudIcon Icon="@Icons.Material.Filled.AccountBalanceWallet" Class="mud-text-secondary mr-1" Size="Size.Small" />
                 <MudText Typo="Typo.caption" Class="mud-text-secondary">@LangService.GetString("TotalKPayCash")</MudText>
@@ -53,11 +58,11 @@
         </MudPaper>
     </MudItem>
 
-    <!-- Stock -->
+    <!-- Warehouse Stock -->
     <MudItem xs="12" sm="6" md="3">
         <MudPaper Elevation="4" Class="pa-6 rounded-xl" Style="border-top: 4px solid var(--mud-palette-secondary);">
             <MudText Typo="Typo.subtitle2" Class="mud-text-secondary mb-2">@LangService.GetString("WarehouseStock")</MudText>
-            <MudText Typo="Typo.h6" Color="Color.Secondary" Style="font-weight: 400;">၈၅,၂၀၀ @LangService.GetString("Pound")</MudText>
+            <MudText Typo="Typo.h6" Color="Color.Secondary" Style="font-weight: 400;"><b>@_totalStockQty.ToString("N2")</b> @LangService.GetString("Pound")</MudText>
             <div class="d-flex align-center mt-3">
                 <MudIcon Icon="@Icons.Material.Filled.Warehouse" Class="mud-text-secondary mr-1" Size="Size.Small" />
                 <MudText Typo="Typo.caption" Class="mud-text-secondary">@LangService.GetString("TotalAllWarehouses")</MudText>
@@ -70,7 +75,7 @@
 <MudGrid Class="mb-6">
     <!-- Chart -->
     <MudItem xs="12" md="8">
-        <MudCard Elevation="4" Class="rounded-xl h-100 pa-2">
+        <MudCard Elevation="4" Class="rounded-xl h-90 pa-2">
             <MudCardHeader>
                 <CardHeaderContent>
                     <MudText Typo="Typo.h6" Style="font-weight: 600;">@LangService.GetString("WeeklyPurchaseTrend")</MudText>
@@ -91,34 +96,43 @@
                 </CardHeaderContent>
             </MudCardHeader>
             <MudCardContent>
-                <MudGrid Spacing="2">
+                <MudGrid Spacing="5">
                     <MudItem xs="6">
-                        <MudButton Href="/purchase" Variant="Variant.Filled" Color="Color.Primary" Class="rounded-lg py-3 w-100 d-flex flex-column" Style="height: 90px;">
+                        <MudButton Href="/rubber-purchase" Variant="Variant.Filled" Color="Color.Primary" Class="rounded-lg py-3 w-100 d-flex flex-column" Style="height: 90px;">
                             <MudIcon Icon="@Icons.Material.Filled.AddShoppingCart" Size="Size.Medium" Class="mb-1" />
                             <MudText Typo="Typo.caption">@LangService.GetString("BuyWetRubber")</MudText>
                         </MudButton>
                     </MudItem>
                     <MudItem xs="6">
-                        <MudButton Href="/expenses" Variant="Variant.Filled" Color="Color.Error" Class="rounded-lg py-3 w-100 d-flex flex-column" Style="height: 90px;">
-                            <MudIcon Icon="@Icons.Material.Filled.MoneyOff" Size="Size.Medium" Class="mb-1" />
-                            <MudText Typo="Typo.caption">@LangService.GetString("RecordExpense")</MudText>
+                        <MudButton Href="/rubber-sales" Variant="Variant.Filled" Color="Color.Error" Class="rounded-lg py-3 w-100 d-flex flex-column" Style="height: 90px;">
+                            <MudIcon Icon="@Icons.Material.Filled.Sell" Size="Size.Medium" Class="mb-1" />
+                            <MudText Typo="Typo.caption">@LangService.GetString("Menu_Sales")</MudText>
                         </MudButton>
                     </MudItem>
                     <MudItem xs="6">
-                        <MudButton Href="/farm-owners/add" Variant="Variant.Outlined" Color="Color.Info" Class="rounded-lg py-3 w-100 d-flex flex-column" Style="height: 90px; border-width: 2px;">
+                        <MudButton Href="/contacts" Variant="Variant.Outlined" Color="Color.Info" Class="rounded-lg py-3 w-100 d-flex flex-column" Style="height: 90px; border-width: 2px;">
                             <MudIcon Icon="@Icons.Material.Filled.PersonAdd" Size="Size.Medium" Class="mb-1" />
                             <MudText Typo="Typo.caption">@LangService.GetString("AddNewSupplier")</MudText>
                         </MudButton>
                     </MudItem>
                     <MudItem xs="6">
-                        <MudButton Href="/sync" Variant="Variant.Outlined" Color="Color.Warning" Class="rounded-lg py-3 w-100 d-flex flex-column" Style="height: 90px; border-width: 2px;">
-                            <MudIcon Icon="@Icons.Material.Filled.Sync" Size="Size.Medium" Class="mb-1" />
-                            <MudText Typo="Typo.caption">@LangService.GetString("ManualSyncBtn")</MudText>
+                        <MudButton Href="/forward-contract/create" Variant="Variant.Outlined" Color="Color.Warning" Class="rounded-lg py-3 w-100 d-flex flex-column" Style="height: 90px; border-width: 2px;">
+                            <MudIcon Icon="@Icons.Material.Filled.Assignment" Size="Size.Medium" Class="mb-1" />
+                            <MudText Typo="Typo.caption">@LangService.GetString("Menu_CreateContract")</MudText>
                         </MudButton>
                     </MudItem>
-                    <MudButton Href="/daily-notes" Icon="@Icons.Material.Filled.NoteAlt" Match="NavLinkMatch.All">
-                        @LangService.GetString("Note_ListTitle")
+                    <MudItem xs="6">
+                    <MudButton Href="/expenses" Variant="Variant.Filled" Color="Color.Surface" Class="rounded-lg py-3 w-100 d-flex flex-column" Style="height: 90px;">
+                        <MudIcon Icon="@Icons.Material.Filled.MoneyOff" Size="Size.Medium" Class="mb-1" />
+                        <MudText Typo="Typo.caption">@LangService.GetString("RecordExpense")</MudText>
                     </MudButton>
+                    </MudItem>
+                    <MudItem xs="6">
+                    <MudButton Href="/truck-expenses" Variant="Variant.Filled" Color="Color.Secondary" Class="rounded-lg py-3 w-100 d-flex flex-column" Style="height: 90px;">
+                        <MudIcon Icon="@Icons.Material.Filled.LocalGasStation" Size="Size.Medium" Class="mb-1" />
+                        <MudText Typo="Typo.caption">@LangService.GetString("Menu_Fuel")</MudText>
+                    </MudButton>
+                    </MudItem>
                 </MudGrid>
             </MudCardContent>
         </MudCard>
@@ -136,7 +150,7 @@
                 </CardHeaderContent>
             </MudCardHeader>
             <MudCardContent>
-                <MudTable Items="@MockData" Hover="true" Breakpoint="Breakpoint.Sm" Elevation="0">
+                <MudTable Items="@_recentTransactions" Hover="true" Breakpoint="Breakpoint.Sm" Elevation="0" Loading="@_isLoading">
                     <HeaderContent>
                         <MudTh>@LangService.GetString("Voucher")</MudTh>
                         <MudTh>@LangService.GetString("NameDescription")</MudTh>
@@ -144,21 +158,11 @@
                         <MudTh>@LangService.GetString("Status")</MudTh>
                     </HeaderContent>
                     <RowTemplate>
-                        <MudTd DataLabel="Voucher"><MudText Color="Color.Primary" Style="font-weight: 600;">@context.Voucher</MudText></MudTd>  <MudTd DataLabel="Name">@context.Name</MudTd>
-                        <MudTd DataLabel="Amount">@context.Amount</MudTd>
+                        <MudTd DataLabel="Voucher"><MudText Color="Color.Primary" Style="font-weight: 600;">@context.voucher_number</MudText></MudTd>
+                        <MudTd DataLabel="Name">@context.contact_name</MudTd>
+                        <MudTd DataLabel="Amount">@context.total_amount.ToString("N0")</MudTd>
                         <MudTd DataLabel="Status">
-                            @if (context.Status == "Cleared")
-                            {
-                                <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Outlined">@LangService.GetString("Cleared")</MudChip>
-                            }
-                            else if (context.Status == "Pending")
-                            {
-                                <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Outlined">@LangService.GetString("Pending")</MudChip>
-                            }
-                            else
-                            {
-                                <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Outlined">@LangService.GetString("ClearedKpay")</MudChip>
-                            }
+                            <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Outlined">@context.sync_status</MudChip>
                         </MudTd>
                     </RowTemplate>
                 </MudTable>
@@ -172,7 +176,7 @@
             <MudCardHeader>
                 <CardHeaderContent>
                     <div class="d-flex align-center">
-                        <MudIcon Icon="@Icons.Material.Filled.NotificationsActive" Color="Color.Error" Class="mr-2"/>
+                        <MudIcon Icon="@Icons.Material.Filled.NotificationsActive" Color="Color.Error" Class="mr-2" />
                         <MudText Typo="Typo.h6" Color="Color.Error" Style="font-weight: 600;">@LangService.GetString("Alerts")</MudText>
                     </div>
                 </CardHeaderContent>
@@ -193,30 +197,92 @@
 </MudGrid>
 
 @code {
+    private bool _isLoading = false;
+    private decimal _todayPurchaseQty = 0m;
+    private decimal _todaySaleQty = 0m;
+    private decimal _totalWalletBalance = 0m;
+    private decimal _totalStockQty = 0m;
+    private int _offlinePendingCount = 0;
+
+    private List<RecentTxModel> _recentTransactions = new();
+
     private void UpdateUI() => InvokeAsync(StateHasChanged);
 
-    protected override void OnInitialized() => LangService.OnLanguageChanged += UpdateUI;
+    protected override async Task OnInitializedAsync()
+    {
+        LangService.OnLanguageChanged += UpdateUI;
+        await LoadRealDashboardDataAsync();
+    }
+
     public void Dispose() => LangService.OnLanguageChanged -= UpdateUI;
 
-    // Chart Data
+    private async Task LoadRealDashboardDataAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            string todayStr = DateTime.Today.ToString("yyyy-MM-dd");
+
+            // ၁။ ယနေ့ ဝင်ငွေနှင့် ဝယ်ယူမှု Data များကို transactions မှ ဆွဲထုတ်ခြင်း
+            var txs = await Http.GetFromJsonAsync<List<TransactionRaw>>($"rest/v1/transactions?created_at=gte.{todayStr}T00:00:00&select=id,voucher_number,transaction_type,total_amount,quantity,sync_status,contacts(name)&order=created_at.desc") ?? new();
+
+            _todayPurchaseQty = txs.Where(t => t.transaction_type == "Purchase").Sum(t => t.quantity);
+            _todaySaleQty = txs.Where(t => t.transaction_type == "Sale" || t.transaction_type == "ForwardContractSale").Sum(t => t.quantity);
+            _offlinePendingCount = txs.Count(t => t.sync_status != "Synced");
+
+            _recentTransactions = txs.Take(5).Select(t => new RecentTxModel
+            {
+                voucher_number = t.voucher_number ?? "N/A",
+                contact_name = t.contacts?.name ?? t.transaction_type,
+                total_amount = t.total_amount,
+                sync_status = t.sync_status ?? "Synced"
+            }).ToList();
+
+            // ၂. Wallets မှ စုစုပေါင်း လက်ကျန်ငွေ
+            var wallets = await Http.GetFromJsonAsync<List<WalletModel>>("rest/v1/wallets?select=balance") ?? new();
+            _totalWalletBalance = wallets.Sum(w => w.Balance);
+
+            // ၃. စုစုပေါင်း ဝယ်ယူထားသည့် Stock ပမာဏ (Total Purchase - Total Sale)
+            var allTxs = await Http.GetFromJsonAsync<List<TransactionRaw>>("rest/v1/transactions?select=transaction_type,quantity") ?? new();
+            decimal totalPurchased = allTxs.Where(t => t.transaction_type == "Purchase").Sum(t => t.quantity);
+            decimal totalSold = allTxs.Where(t => t.transaction_type == "Sale" || t.transaction_type == "ForwardContractSale").Sum(t => t.quantity);
+            _totalStockQty = totalPurchased - totalSold;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Dashboard Error: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    // Chart Data (Mock or dynamic from weekly transactions)
     public List<ChartSeries<double>> _series = new List<ChartSeries<double>>()
     {
         new ChartSeries<double>() { Name = "ဝယ်ယူမှုပမာဏ (ပေါင်)", Data = new double[] { 4000, 3000, 5400, 6500, 4200, 7800, 12500 } }
     };
     public string[] _xAxisLabels = { "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun" };
-    // Mock Data for Table
-    private List<Transaction> MockData = new()
-    {
-        new Transaction { Voucher = "V-1024", Name = "ဦးဘမောင်", Amount = "၅၀၀", Status = "Cleared" },
-        new Transaction { Voucher = "V-1025", Name = "ရွှေဝါကုမ္ပဏီ သို့", Amount = "၃၀၀၀", Status = "Pending" },
-        new Transaction { Voucher = "E-005", Name = "ကားဆီဖိုး", Amount = "၈၀,၀၀၀", Status = "ClearedKpay" }
-    };
 
-    class Transaction
+    private class TransactionRaw
     {
-        public string Voucher { get; set; } = "";
-        public string Name { get; set; } = "";
-        public string Amount { get; set; } = "";
-        public string Status { get; set; } = "";
+        public string id { get; set; } = string.Empty;
+        public string? voucher_number { get; set; }
+        public string transaction_type { get; set; } = string.Empty;
+        public decimal total_amount { get; set; }
+        public decimal quantity { get; set; }
+        public string? sync_status { get; set; }
+        public ContactObj? contacts { get; set; }
+    }
+
+    private class ContactObj { public string name { get; set; } = string.Empty; }
+
+    private class RecentTxModel
+    {
+        public string voucher_number { get; set; } = string.Empty;
+        public string contact_name { get; set; } = string.Empty;
+        public decimal total_amount { get; set; }
+        public string sync_status { get; set; } = string.Empty;
     }
 }

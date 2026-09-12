@@ -1,0 +1,149 @@
+﻿@page "/reports/forward-contract-sales"
+@using MudBlazor
+@using RubberTradingSystem.Models
+@using RubberTradingSystem.Services
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject LanguageService LangService
+@inject IJSRuntime JS
+@implements IDisposable
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4 mb-6">
+    <MudText Typo="Typo.h5" Color="Color.Primary" Class="mb-4">@LangService.GetString("Title_FCContractSaleReport")</MudText>
+
+    <!-- Filter & Date Range Selection Paper -->
+    <MudPaper Class="pa-4 mb-4" Elevation="2">
+        <MudGrid AlignItems="Center">
+            <MudItem xs="12" sm="4" md="4">
+                <MudDatePicker Label="@LangService.GetString("Lbl_FromDate")" @bind-Date="_fromDate" Variant="Variant.Outlined" Dense="true" Clearable="true" />
+            </MudItem>
+            <MudItem xs="12" sm="4" md="4">
+                <MudDatePicker Label="@LangService.GetString("Lbl_ToDate")" @bind-Date="_toDate" Variant="Variant.Outlined" Dense="true" Clearable="true" />
+            </MudItem>
+            <MudItem xs="12" sm="4" md="4" Class="d-flex gap-2">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" OnClick="LoadDataAsync">
+                    @LangService.GetString("Btn_Search")
+                </MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Success" FullWidth="true" StartIcon="@Icons.Material.Filled.TableChart" OnClick="ExportToExcelAsync">
+                    Excel
+                </MudButton>
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
+
+    <!-- Summary Cards -->
+    <MudGrid Class="mb-4">
+        <MudItem xs="12" sm="4" md="4">
+            <MudPaper Class="pa-4 d-flex flex-column" Elevation="2">
+                <MudText Typo="Typo.subtitle2" Color="Color.Secondary">@LangService.GetString("Lbl_TotalTransactions")</MudText>
+                <MudText Typo="Typo.h5"><b>@_items.Count</b> ခု</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="4" md="4">
+            <MudPaper Class="pa-4 d-flex flex-column" Elevation="2">
+                <MudText Typo="Typo.subtitle2" Color="Color.Secondary">@LangService.GetString("Lbl_TotalQuantity")</MudText>
+                <MudText Typo="Typo.h5"><b>@_items.Sum(x => x.quantity).ToString("N2")</b></MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="4" md="4">
+            <MudPaper Class="pa-4 d-flex flex-column" Elevation="2">
+                <MudText Typo="Typo.subtitle2" Color="Color.Secondary">@LangService.GetString("Lbl_TotalAmount")</MudText>
+                <MudText Typo="Typo.h5" Color="Color.Primary"><b>@_items.Sum(x => x.total_amount).ToString("N0")</b> MMK</MudText>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    <!-- Table -->
+    <MudTable Items="@_items" Dense="true" Hover="true" Bordered="true" Striped="true" Loading="@_isLoading" Elevation="2">
+        <HeaderContent>
+            <MudTh>@LangService.GetString("Th_Voucher")</MudTh>
+            <MudTh>@LangService.GetString("Th_BuyerName")</MudTh>
+            <MudTh>@LangService.GetString("Th_RubberType")</MudTh>
+            <MudTh>@LangService.GetString("Th_Weight")</MudTh>
+            <MudTh>@LangService.GetString("Th_Price")</MudTh>
+            <MudTh>@LangService.GetString("Th_TotalAmount")</MudTh>
+            <MudTh>@LangService.GetString("Th_Date")</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Voucher"><b>@context.voucher_number</b></MudTd>
+            <MudTd DataLabel="Buyer">@context.contact_name</MudTd>
+            <MudTd DataLabel="Type"><MudChip T="string" Color="Color.Primary" Size="Size.Small">@context.rubber_type</MudChip></MudTd>
+            <MudTd DataLabel="Weight">@context.quantity.ToString("N2")</MudTd>
+            <MudTd DataLabel="Price">@context.agreed_price.ToString("N0")</MudTd>
+            <MudTd DataLabel="Total"><b>@context.total_amount.ToString("N0")</b></MudTd>
+            <MudTd DataLabel="Date">@context.created_at.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</MudTd>
+        </RowTemplate>
+        <PagerContent>
+            <MudTablePager PageSizeOptions="new int[] { 10, 25, 50, 100 }" />
+        </PagerContent>
+    </MudTable>
+</MudContainer>
+
+@code {
+    private DateTime? _fromDate = DateTime.Today.AddDays(-30);
+    private DateTime? _toDate = DateTime.Today;
+    private bool _isLoading = false;
+    private List<ReportItemModel> _items = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        LangService.OnLanguageChanged += StateHasChanged;
+        await LoadDataAsync();
+    }
+
+    public void Dispose() => LangService.OnLanguageChanged -= StateHasChanged;
+
+    private async Task LoadDataAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            // ForwardContractSale transaction များကို သီးသန့်ဆွဲထုတ်ခြင်း
+            string query = "rest/v1/transactions?transaction_type=eq.ForwardContractSale&select=id,voucher_number,quantity,agreed_price,total_amount,created_at,contacts(name),rubber_types(name,grade)";
+
+            if (_fromDate.HasValue) query += $"&created_at=gte.{_fromDate.Value:yyyy-MM-dd}";
+            if (_toDate.HasValue) query += $"&created_at=lte.{_toDate.Value.AddDays(1):yyyy-MM-dd}";
+
+            query += "&order=created_at.desc";
+
+            var rawList = await Http.GetFromJsonAsync<List<TransactionRawModel>>(query) ?? new();
+            _items = rawList.Select(x => new ReportItemModel
+            {
+                id = x.id,
+                voucher_number = x.voucher_number ?? "N/A",
+                contact_name = x.contacts?.name ?? "N/A",
+                rubber_type = x.rubber_types != null ? $"{x.rubber_types.name} ({x.rubber_types.grade})" : "N/A",
+                quantity = x.quantity,
+                agreed_price = x.agreed_price,
+                total_amount = x.total_amount,
+                created_at = x.created_at
+            }).ToList();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+        finally { _isLoading = false; }
+    }
+
+    private async Task ExportToExcelAsync()
+    {
+        try
+        {
+            var csv = new System.Text.StringBuilder();
+            csv.AppendLine("Voucher,Buyer Name,Rubber Type,Weight,Price,Total Amount,Date");
+            foreach (var i in _items)
+                csv.AppendLine($"\"{i.voucher_number}\",\"{i.contact_name}\",\"{i.rubber_type}\",{i.quantity},{i.agreed_price},{i.total_amount},\"{i.created_at:yyyy-MM-dd HH:mm}\"");
+
+            var bytes = System.Text.Encoding.UTF8.GetBytes(csv.ToString());
+            await JS.InvokeVoidAsync("downloadFileFromBytes", $"Forward_Contract_Sale_Report_{DateTime.Now:yyyyMMddHHmmss}.csv", "text/csv", bytes);
+            Snackbar.Add("Excel (CSV) ဖိုင် Download ဆွဲပြီးပါပြီ။", Severity.Success);
+        }
+        catch (Exception ex) { Snackbar.Add($"Error: {ex.Message}", Severity.Error); }
+    }
+
+    public class ReportItemModel { public string id { get; set; } = string.Empty; public string voucher_number { get; set; } = string.Empty; public string contact_name { get; set; } = string.Empty; public string rubber_type { get; set; } = string.Empty; public decimal quantity { get; set; } public decimal agreed_price { get; set; } public decimal total_amount { get; set; } public DateTime created_at { get; set; } }
+    private class TransactionRawModel { public string id { get; set; } = string.Empty; public string? voucher_number { get; set; } public decimal quantity { get; set; } public decimal agreed_price { get; set; } public decimal total_amount { get; set; } public DateTime created_at { get; set; } public ContactObj? contacts { get; set; } public RubberObj? rubber_types { get; set; } }
+    private class ContactObj { public string name { get; set; } = string.Empty; }
+    private class RubberObj { public string name { get; set; } = string.Empty; public string grade { get; set; } = string.Empty; }
+}

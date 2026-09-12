@@ -1,0 +1,46 @@
+﻿@page "/reports/wallet-ledger"
+@using MudBlazor
+@using RubberTradingSystem.Models
+@using RubberTradingSystem.Services
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject LanguageService LangService
+@inject IJSRuntime JS
+@implements IDisposable
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4 mb-6">
+    <MudText Typo="Typo.h5" Color="Color.Primary" Class="mb-4">@LangService.GetString("Title_WalletLedgerReport")</MudText>
+
+    <MudTable Items="@_items" Dense="true" Hover="true" Bordered="true" Striped="true" Loading="@_isLoading" Elevation="2">
+        <HeaderContent>
+            <MudTh>@LangService.GetString("Th_WalletName")</MudTh>
+            <MudTh>@LangService.GetString("Th_WalletType")</MudTh>
+            <MudTh>@LangService.GetString("Th_CurrentBalance")</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd><b>@context.WalletName</b></MudTd>
+            <MudTd><MudChip T="string" Color="Color.Primary" Size="Size.Small">@context.WalletType</MudChip></MudTd>
+            <MudTd><b>@context.Balance.ToString("N0") MMK</b></MudTd>
+        </RowTemplate>
+        <PagerContent><MudTablePager PageSizeOptions="new int[] { 10, 25, 50 }" /></PagerContent>
+    </MudTable>
+</MudContainer>
+
+@code {
+    private bool _isLoading = false;
+    private List<WalletModel> _items = new();
+
+    protected override async Task OnInitializedAsync() { LangService.OnLanguageChanged += StateHasChanged; await LoadDataAsync(); }
+    public void Dispose() => LangService.OnLanguageChanged -= StateHasChanged;
+
+    private async Task LoadDataAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            _items = await Http.GetFromJsonAsync<List<WalletModel>>("rest/v1/wallets?select=*") ?? new();
+        }
+        catch (Exception ex) { Snackbar.Add($"Error: {ex.Message}", Severity.Error); }
+        finally { _isLoading = false; }
+    }
+}

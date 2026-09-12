@@ -1,0 +1,80 @@
+﻿@page "/reports/expenses"
+@using MudBlazor
+@using RubberTradingSystem.Models
+@using RubberTradingSystem.Services
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject LanguageService LangService
+@inject IJSRuntime JS
+@implements IDisposable
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4 mb-6">
+    <MudText Typo="Typo.h5" Color="Color.Primary" Class="mb-4">@LangService.GetString("Title_ExpenseReport")</MudText>
+
+    <MudPaper Class="pa-4 mb-4" Elevation="2">
+        <MudGrid AlignItems="Center">
+            <MudItem xs="12" sm="4" md="4"><MudDatePicker Label="@LangService.GetString("Lbl_FromDate")" @bind-Date="_fromDate" Variant="Variant.Outlined" Dense="true" Clearable="true" /></MudItem>
+            <MudItem xs="12" sm="4" md="4"><MudDatePicker Label="@LangService.GetString("Lbl_ToDate")" @bind-Date="_toDate" Variant="Variant.Outlined" Dense="true" Clearable="true" /></MudItem>
+            <MudItem xs="12" sm="4" md="4" Class="d-flex gap-2">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" OnClick="LoadDataAsync">@LangService.GetString("Btn_Search")</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Success" FullWidth="true" StartIcon="@Icons.Material.Filled.TableChart" OnClick="ExportToExcelAsync">Excel</MudButton>
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
+
+    <MudGrid Class="mb-4">
+        <MudItem xs="12" sm="6" md="6"><MudPaper Class="pa-4" Elevation="2"><MudText Typo="Typo.subtitle2">@LangService.GetString("Lbl_TotalTransactions")</MudText><MudText Typo="Typo.h5"><b>@_items.Count</b></MudText></MudPaper></MudItem>
+        <MudItem xs="12" sm="6" md="6"><MudPaper Class="pa-4" Elevation="2"><MudText Typo="Typo.subtitle2">@LangService.GetString("Lbl_TotalAmount")</MudText><MudText Typo="Typo.h5" Color="Color.Error"><b>@_items.Sum(x => x.total_amount).ToString("N0")</b> MMK</MudText></MudPaper></MudItem>
+    </MudGrid>
+
+    <MudTable Items="@_items" Dense="true" Hover="true" Bordered="true" Striped="true" Loading="@_isLoading" Elevation="2">
+        <HeaderContent>
+            <MudTh>@LangService.GetString("Th_Voucher")</MudTh>
+            <MudTh>@LangService.GetString("Th_Description")</MudTh>
+            <MudTh>@LangService.GetString("Th_TotalAmount")</MudTh>
+            <MudTh>@LangService.GetString("Th_Date")</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd><b>@context.voucher_number</b></MudTd>
+            <MudTd>@context.description</MudTd>
+            <MudTd><b style="color:red;">@context.total_amount.ToString("N0")</b></MudTd>
+            <MudTd>@context.created_at.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</MudTd>
+        </RowTemplate>
+        <PagerContent><MudTablePager PageSizeOptions="new int[] { 10, 25, 50 }" /></PagerContent>
+    </MudTable>
+</MudContainer>
+
+@code {
+    private DateTime? _fromDate = DateTime.Today.AddDays(-30);
+    private DateTime? _toDate = DateTime.Today;
+    private bool _isLoading = false;
+    private List<ReportModel> _items = new();
+
+    protected override async Task OnInitializedAsync() { LangService.OnLanguageChanged += StateHasChanged; await LoadDataAsync(); }
+    public void Dispose() => LangService.OnLanguageChanged -= StateHasChanged;
+
+    private async Task LoadDataAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            string query = "rest/v1/transactions?transaction_type=eq.Expense&select=id,voucher_number,total_amount,description,created_at";
+            if (_fromDate.HasValue) query += $"&created_at=gte.{_fromDate.Value:yyyy-MM-dd}";
+            if (_toDate.HasValue) query += $"&created_at=lte.{_toDate.Value.AddDays(1):yyyy-MM-dd}";
+            query += "&order=created_at.desc";
+            _items = await Http.GetFromJsonAsync<List<ReportModel>>(query) ?? new();
+        }
+        catch (Exception ex) { Snackbar.Add($"Error: {ex.Message}", Severity.Error); }
+        finally { _isLoading = false; }
+    }
+
+    private async Task ExportToExcelAsync()
+    {
+        var csv = new System.Text.StringBuilder();
+        csv.AppendLine("Voucher,Description,Amount,Date");
+        foreach (var i in _items) csv.AppendLine($"\"{i.voucher_number}\",\"{i.description}\",{i.total_amount},\"{i.created_at:yyyy-MM-dd HH:mm}\"");
+        await JS.InvokeVoidAsync("downloadFileFromBytes", $"Expense_Report_{DateTime.Now:yyyyMMdd}.csv", "text/csv", System.Text.Encoding.UTF8.GetBytes(csv.ToString()));
+    }
+
+    public class ReportModel { public string id { get; set; } = string.Empty; public string voucher_number { get; set; } = string.Empty; public string description { get; set; } = string.Empty; public decimal total_amount { get; set; } public DateTime created_at { get; set; } }
+}

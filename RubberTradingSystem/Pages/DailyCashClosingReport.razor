@@ -1,0 +1,210 @@
+﻿@page "/reports/daily-cash-closing"
+@using MudBlazor
+@using RubberTradingSystem.Models
+@using RubberTradingSystem.Services
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject LanguageService LangService
+@inject IJSRuntime JS
+@implements IDisposable
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4 mb-6">
+    <MudText Typo="Typo.h5" Color="Color.Primary" Class="mb-4">@LangService.GetString("Title_DailyCashClosing")</MudText>
+
+    <!-- Date & Wallet Selection Paper -->
+    <MudPaper Class="pa-4 mb-4" Elevation="2">
+        <MudGrid AlignItems="Center">
+            <MudItem xs="12" sm="4" md="4">
+                <MudDatePicker Label="@LangService.GetString("Lbl_SelectDate")" @bind-Date="_selectedDate" Variant="Variant.Outlined" Dense="true" />
+            </MudItem>
+            <MudItem xs="12" sm="4" md="4">
+                <MudSelect T="string" @bind-Value="_selectedWalletId" Label="@LangService.GetString("Lbl_SelectWallet")" Variant="Variant.Outlined" Dense="true" Clearable="true">
+                    @if (_wallets != null)
+                    {
+                        @foreach (var w in _wallets)
+                        {
+                            <MudSelectItem Value="@w.Id">@w.WalletName (@w.WalletType)</MudSelectItem>
+                        }
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="4" md="4">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" OnClick="CalculateCashClosingAsync">
+                    @LangService.GetString("Btn_Calculate")
+                </MudButton>
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
+
+    <!-- Cash Reconciliation Summary Dashboard -->
+    <MudGrid Class="mb-4">
+        <!-- 1. စာရင်းဖွင့်ငွေ (Opening Balance) -->
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Class="pa-4 d-flex flex-column" Elevation="2">
+                <MudText Typo="Typo.subtitle2" Color="Color.Secondary">@LangService.GetString("Lbl_OpeningBalance")</MudText>
+                <MudText Typo="Typo.h5"><b>@_openingBalance.ToString("N0")</b> MMK</MudText>
+            </MudPaper>
+        </MudItem>
+
+        <!-- 2. တစ်နေ့တာ ဝင်ငွေစုစုပေါင်း (Total Inflow) -->
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Class="pa-4 d-flex flex-column" Elevation="2">
+                <MudText Typo="Typo.subtitle2" Color="Color.Secondary">@LangService.GetString("Lbl_TotalInflow")</MudText>
+                <MudText Typo="Typo.h5" Color="Color.Success"><b>+ @_totalInflow.ToString("N0")</b> MMK</MudText>
+            </MudPaper>
+        </MudItem>
+
+        <!-- 3. တစ်နေ့တာ ထွက်ငွေစုစုပေါင်း (Total Outflow) -->
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Class="pa-4 d-flex flex-column" Elevation="2">
+                <MudText Typo="Typo.subtitle2" Color="Color.Secondary">@LangService.GetString("Lbl_TotalOutflow")</MudText>
+                <MudText Typo="Typo.h5" Color="Color.Error"><b>- @_totalOutflow.ToString("N0")</b> MMK</MudText>
+            </MudPaper>
+        </MudItem>
+
+        <!-- 4. စာရင်းအရ မဖြစ်မနေရှိရမည့်ငွေ (Expected Closing Balance) -->
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Class="pa-4 d-flex flex-column" Elevation="3" Style="background-color: #f5f5f5;">
+                <MudText Typo="Typo.subtitle2" Color="Color.Primary"><b>@LangService.GetString("Lbl_ExpectedBalance")</b></MudText>
+                <MudText Typo="Typo.h5" Color="Color.Primary"><b>@_expectedClosingBalance.ToString("N0")</b> MMK</MudText>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    <!-- Actual Physical Count & Difference Entry -->
+    <MudPaper Class="pa-4 mb-4" Elevation="3">
+        <MudGrid AlignItems="Center">
+            <MudItem xs="12" sm="6" md="6">
+                <MudNumericField T="decimal" @bind-Value="_actualPhysicalCash" Immediate="true" Format="N0"
+                                 Label="@LangService.GetString("Lbl_ActualPhysicalCash")" Variant="Variant.Outlined" Dense="true" />
+            </MudItem>
+            <MudItem xs="12" sm="6" md="6">
+                <div class="d-flex flex-column">
+                    <MudText Typo="Typo.subtitle2">@LangService.GetString("Lbl_Difference")</MudText>
+                    <MudText Typo="Typo.h6" Color="@(_difference == 0 ? Color.Success : (_difference > 0 ? Color.Info : Color.Error))">
+                        <b>@_difference.ToString("N0") MMK</b> @(_difference == 0 ? "(ကိုက်ညီသည်)" : (_difference > 0 ? "(ငွေပိုနေသည်)" : "(ငွေလျော့နေသည်)"))
+                    </MudText>
+                </div>
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
+
+    <!-- Transactions Table for Selected Date -->
+    <MudText Typo="Typo.h6" Class="mb-2">@LangService.GetString("Title_DayTransactions")</MudText>
+    <MudTable Items="@_dailyTransactions" Dense="true" Hover="true" Bordered="true" Striped="true" Loading="@_isLoading" Elevation="2">
+        <HeaderContent>
+            <MudTh>@LangService.GetString("Th_Voucher")</MudTh>
+            <MudTh>@LangService.GetString("Th_Type")</MudTh>
+            <MudTh>@LangService.GetString("Th_TotalAmount")</MudTh>
+            <MudTh>@LangService.GetString("Th_Date")</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd><b>@context.voucher_number</b></MudTd>
+            <MudTd><MudChip T="string" Color="Color.Primary" Size="Size.Small">@context.transaction_type</MudChip></MudTd>
+            <MudTd><b>@context.total_amount.ToString("N0")</b></MudTd>
+            <MudTd>@context.created_at.ToLocalTime().ToString("HH:mm:ss")</MudTd>
+        </RowTemplate>
+        <PagerContent><MudTablePager PageSizeOptions="new int[] { 10, 25, 50 }" /></PagerContent>
+    </MudTable>
+</MudContainer>
+
+@code {
+    private DateTime? _selectedDate = DateTime.Today;
+    private string? _selectedWalletId;
+    private bool _isLoading = false;
+
+    private List<WalletModel> _wallets = new();
+    private List<TransactionRawModel> _dailyTransactions = new();
+
+    private decimal _openingBalance = 0m;
+    private decimal _totalInflow = 0m;
+    private decimal _totalOutflow = 0m;
+    private decimal _expectedClosingBalance => _openingBalance + _totalInflow - _totalOutflow;
+    private decimal _actualPhysicalCash = 0m;
+    private decimal _difference => _actualPhysicalCash - _expectedClosingBalance;
+
+    protected override async Task OnInitializedAsync()
+    {
+        LangService.OnLanguageChanged += StateHasChanged;
+        await LoadWalletsAsync();
+        await CalculateCashClosingAsync();
+    }
+
+    public void Dispose() => LangService.OnLanguageChanged -= StateHasChanged;
+
+    private async Task LoadWalletsAsync()
+    {
+        try
+        {
+            _wallets = await Http.GetFromJsonAsync<List<WalletModel>>("rest/v1/wallets?select=*") ?? new();
+            if (_wallets.Any() && string.IsNullOrEmpty(_selectedWalletId))
+            {
+                _selectedWalletId = _wallets.First().Id;
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading wallets: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task CalculateCashClosingAsync()
+    {
+        if (!_selectedDate.HasValue) return;
+
+        _isLoading = true;
+        try
+        {
+            string dateStr = _selectedDate.Value.ToString("yyyy-MM-dd");
+
+            // ၁။ ရွေးချယ်ထားသော ရက်စွဲမတိုင်မီအထိ စာရင်းဖွင့်ငွေ (Opening Balance) ကို တွက်ချက်ခြင်း
+            // (သို့မဟုတ် Wallet ၏ လက်ရှိလက်ကျန်မှ တစ်နေ့တာ ဝင်/ထွက်ငွေများကို နှုတ်၍ ရှာနိုင်သည်)
+            string txQuery = $"rest/v1/transactions?created_at=gte.{dateStr}T00:00:00&created_at=lte.{dateStr}T23:59:59&select=*";
+            if (!string.IsNullOrEmpty(_selectedWalletId))
+            {
+                txQuery += $"&wallet_id=eq.{_selectedWalletId}";
+            }
+
+            _dailyTransactions = await Http.GetFromJsonAsync<List<TransactionRawModel>>(txQuery) ?? new();
+
+            // ဝင်ငွေ အမျိုးအစားများ (ဥပမာ - Purchase, BuyerAdvanceIn, ForwardContractSale, AdvanceReturnCash စသည်ဖြင့် ငွေဝင်လာသော Type များ)
+            var inflowTypes = new[] { "BuyerAdvanceIn", "ForwardContractSale", "AdvanceReturnCash", "Sale" };
+            // ထွက်ငွေ အမျိုးအစားများ (ဥပမာ - AdvanceOut, Expense, TruckExpense, BuyerAdvanceReturn စသည်ဖြင့် ငွေထွက်သွားသော Type များ)
+            var outflowTypes = new[] { "AdvanceOut", "Expense", "TruckExpense", "BuyerAdvanceReturn", "Purchase" };
+
+            _totalInflow = _dailyTransactions.Where(t => inflowTypes.Contains(t.transaction_type)).Sum(t => t.total_amount);
+            _totalOutflow = _dailyTransactions.Where(t => outflowTypes.Contains(t.transaction_type)).Sum(t => t.total_amount);
+
+            // ယာယီအနေဖြင့် Opening Balance ကို Wallet လက်ကျန် သို့မဟုတ် တွက်ချက်မှုမှ ရယူခြင်း
+            // (စနစ်တွင် မူလ Opening Balance သတ်မှတ်ချက်ရှိပါက ထိုတန်ဖိုးကို ထည့်သွင်းနိုင်သည်)
+            _openingBalance = 0m;
+            if (!string.IsNullOrEmpty(_selectedWalletId))
+            {
+                var targetWallet = _wallets.FirstOrDefault(w => w.Id == _selectedWalletId);
+                if (targetWallet != null)
+                {
+                    // ဥပမာ - လက်ရှိ Wallet Balance မှ တစ်နေ့တာ ဝင်/ထွက်ငွေများကို ပြန်နှုတ်၍ နေ့စွဲအစ Opening Balance ကို ခန့်မှန်းနိုင်သည်
+                    _openingBalance = targetWallet.Balance - _totalInflow + _totalOutflow;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error calculating cash closing: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private class TransactionRawModel
+    {
+        public string id { get; set; } = string.Empty;
+        public string? voucher_number { get; set; }
+        public string transaction_type { get; set; } = string.Empty;
+        public decimal total_amount { get; set; }
+        public DateTime created_at { get; set; }
+        public string? wallet_id { get; set; }
+    }
+}

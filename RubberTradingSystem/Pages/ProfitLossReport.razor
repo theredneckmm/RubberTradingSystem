@@ -1,0 +1,68 @@
+﻿@page "/reports/profit-loss"
+@using MudBlazor
+@using RubberTradingSystem.Models
+@using RubberTradingSystem.Services
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject LanguageService LangService
+@implements IDisposable
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4 mb-6">
+    <MudText Typo="Typo.h5" Color="Color.Primary" Class="mb-4">@LangService.GetString("Title_ProfitLossReport")</MudText>
+
+    <MudPaper Class="pa-6" Elevation="3">
+        <MudGrid Spacing="3">
+            <MudItem xs="12"><MudText Typo="Typo.h6" Color="Color.Success"><b>ဝင်ငွေနှင့် အရောင်းဆိုင်ရာများ (Incomes)</b></MudText></MudItem>
+            <MudItem xs="8">စုစုပေါင်း ရောင်းအားတန်ဖိုး (Total Sales)</MudItem>
+            <MudItem xs="4" Class="text-right"><b>@_totalSales.ToString("N0") MMK</b></MudItem>
+
+            <MudItem xs="12"><MudDivider /></MudItem>
+            <MudItem xs="12"><MudText Typo="Typo.h6" Color="Color.Error"><b>ကုန်ကျစရိတ်များနှင့် အဝယ်များ (Expenses & Purchases)</b></MudText></MudItem>
+            <MudItem xs="8">စုစုပေါင်း အဝယ်တန်ဖိုး (Total Purchases)</MudItem>
+            <MudItem xs="4" Class="text-right"><b>@_totalPurchases.ToString("N0") MMK</b></MudItem>
+            <MudItem xs="8">စုစုပေါင်း အသုံးစရိတ် (Total Expenses)</MudItem>
+            <MudItem xs="4" Class="text-right"><b>@_totalExpenses.ToString("N0") MMK</b></MudItem>
+            <MudItem xs="8">စုစုပေါင်း ကားစရိတ် (Total Truck Expenses)</MudItem>
+            <MudItem xs="4" Class="text-right"><b>@_totalTruckExpenses.ToString("N0") MMK</b></MudItem>
+
+            <MudItem xs="12"><MudDivider /></MudItem>
+            <MudItem xs="8"><MudText Typo="Typo.h6"><b>အသားတင် အမြတ်/အရှုံး (Net Profit / Loss)</b></MudText></MudItem>
+            <MudItem xs="4" Class="text-right">
+                <MudText Typo="Typo.h6" Color="@(_netProfit >= 0 ? Color.Success : Color.Error)">
+                    <b>@_netProfit.ToString("N0") MMK</b>
+                </MudText>
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
+</MudContainer>
+
+@code {
+    private decimal _totalSales = 0m;
+    private decimal _totalPurchases = 0m;
+    private decimal _totalExpenses = 0m;
+    private decimal _totalTruckExpenses = 0m;
+    private decimal _netProfit => _totalSales - (_totalPurchases + _totalExpenses + _totalTruckExpenses);
+
+    protected override async Task OnInitializedAsync()
+    {
+        LangService.OnLanguageChanged += StateHasChanged;
+        await LoadDataAsync();
+    }
+
+    public void Dispose() => LangService.OnLanguageChanged -= StateHasChanged;
+
+    private async Task LoadDataAsync()
+    {
+        try
+        {
+            var txs = await Http.GetFromJsonAsync<List<TxRawModel>>("rest/v1/transactions?select=transaction_type,total_amount") ?? new();
+            _totalSales = txs.Where(x => x.transaction_type == "Sale" || x.transaction_type == "ForwardContractSale").Sum(x => x.total_amount);
+            _totalPurchases = txs.Where(x => x.transaction_type == "Purchase").Sum(x => x.total_amount);
+            _totalExpenses = txs.Where(x => x.transaction_type == "Expense").Sum(x => x.total_amount);
+            _totalTruckExpenses = txs.Where(x => x.transaction_type == "TruckExpense").Sum(x => x.total_amount);
+        }
+        catch (Exception ex) { Snackbar.Add($"Error: {ex.Message}", Severity.Error); }
+    }
+
+    private class TxRawModel { public string transaction_type { get; set; } = string.Empty; public decimal total_amount { get; set; } }
+}

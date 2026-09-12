@@ -31,5 +31,16 @@
     <script src="_content/MudBlazor/MudBlazor.min.js"></script>
     <!-- index.html -->
     <script src="js/site.js"></script>
+    <script>
+        window.downloadFileFromBytes = (fileName, contentType, byteData) => {
+            const blob = new Blob([byteData], { type: contentType });
+            const url = URL.createObjectURL(blob);
+            const anchorElement = document.createElement('a');
+            anchorElement.href = url;
+            anchorElement.download = fileName;
+            anchorElement.click();
+            URL.revokeObjectURL(url);
+        };
+    </script>
 </body>
 </html>

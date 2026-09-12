@@ -1,0 +1,65 @@
+﻿@page "/reports/executive-dashboard"
+@using MudBlazor
+@using RubberTradingSystem.Models
+@using RubberTradingSystem.Services
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject LanguageService LangService
+@implements IDisposable
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4 mb-6">
+    <MudText Typo="Typo.h5" Color="Color.Primary" Class="mb-4">@LangService.GetString("Title_ExecutiveDashboard")</MudText>
+
+    <MudGrid>
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Class="pa-4" Elevation="2"><MudText Typo="Typo.subtitle2">ယနေ့ ဝင်ငွေစုစုပေါင်း</MudText><MudText Typo="Typo.h5" Color="Color.Success"><b>@_todayInflow.ToString("N0") MMK</b></MudText></MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Class="pa-4" Elevation="2"><MudText Typo="Typo.subtitle2">ယနေ့ ထွက်ငွေစုစုပေါင်း</MudText><MudText Typo="Typo.h5" Color="Color.Error"><b>@_todayOutflow.ToString("N0") MMK</b></MudText></MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Class="pa-4" Elevation="2"><MudText Typo="Typo.subtitle2">စုစုပေါင်း Wallet လက်ကျန်</MudText><MudText Typo="Typo.h5" Color="Color.Primary"><b>@_totalWalletBalance.ToString("N0") MMK</b></MudText></MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Class="pa-4" Elevation="2"><MudText Typo="Typo.subtitle2">Active Forward Contracts</MudText><MudText Typo="Typo.h5"><b>@_activeContractsCount</b> ခု</MudText></MudPaper>
+        </MudItem>
+    </MudGrid>
+</MudContainer>
+
+@code {
+    private decimal _todayInflow = 0m;
+    private decimal _todayOutflow = 0m;
+    private decimal _totalWalletBalance = 0m;
+    private int _activeContractsCount = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        LangService.OnLanguageChanged += StateHasChanged;
+        await LoadDashboardDataAsync();
+    }
+
+    public void Dispose() => LangService.OnLanguageChanged -= StateHasChanged;
+
+    private async Task LoadDashboardDataAsync()
+    {
+        try
+        {
+            string todayStr = DateTime.Today.ToString("yyyy-MM-dd");
+            var todayTxs = await Http.GetFromJsonAsync<List<TxRawModel>>($"rest/v1/transactions?created_at=gte.{todayStr}T00:00:00&select=transaction_type,total_amount") ?? new();
+
+            var inflowTypes = new[] { "BuyerAdvanceIn", "ForwardContractSale", "AdvanceReturnCash", "Sale" };
+            _todayInflow = todayTxs.Where(t => inflowTypes.Contains(t.transaction_type)).Sum(t => t.total_amount);
+            _todayOutflow = todayTxs.Where(t => !inflowTypes.Contains(t.transaction_type)).Sum(t => t.total_amount);
+
+            var wallets = await Http.GetFromJsonAsync<List<WalletModel>>("rest/v1/wallets?select=balance") ?? new();
+            _totalWalletBalance = wallets.Sum(w => w.Balance);
+
+            var contracts = await Http.GetFromJsonAsync<List<ContractRawModel>>("rest/v1/forward_contracts?status=eq.Active&select=id") ?? new();
+            _activeContractsCount = contracts.Count;
+        }
+        catch (Exception ex) { Snackbar.Add($"Error: {ex.Message}", Severity.Error); }
+    }
+
+    private class TxRawModel { public string transaction_type { get; set; } = string.Empty; public decimal total_amount { get; set; } }
+    private class ContractRawModel { public string id { get; set; } = string.Empty; }
+}

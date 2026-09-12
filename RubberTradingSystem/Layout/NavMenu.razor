@@ -14,7 +14,7 @@
         <b>@LangService.GetString("Dashboard")</b>
     </MudNavLink>
 
-    <MudNavGroup Title="@LangService.GetString("Menu_Trading")" Icon="@Icons.Material.Filled.Storefront" Expanded="true">
+    <MudNavGroup Title="@LangService.GetString("Menu_Trading")" Icon="@Icons.Material.Filled.Storefront">
         <MudNavLink Href="/rubber-purchase" Icon="@Icons.Material.Filled.ShoppingCart">@LangService.GetString("Menu_Purchase")</MudNavLink>
         <MudNavLink Href="/rubber-purchases-list" Icon="@Icons.Material.Filled.ListAlt">@LangService.GetString("Menu_PurchaseList")</MudNavLink>
         <MudNavLink Href="/rubber-sales" Icon="@Icons.Material.Filled.Sell">@LangService.GetString("Menu_Sales")</MudNavLink>
@@ -60,7 +60,7 @@
         <MudNavLink Href="/advance/out" Icon="@Icons.Material.Filled.CreditScore">@LangService.GetString("Menu_Advances")</MudNavLink>
         <MudNavLink Href="/advance/in" Icon="@Icons.Material.Filled.CurrencyExchange">@LangService.GetString("Menu_Repayments")</MudNavLink>
 
-        <!-- ကုန်သည် (Buyer) Advance များနှင့် ပြန်ဆပ်ခြင်းများ (အသစ်ထည့်သွင်းခြင်း) -->
+        <!-- ကုန်သည် (Buyer) Advance များနှင့် ပြန်ဆပ်ခြင်းများ -->
         <MudNavLink Href="/advance/buyer-out" Icon="@Icons.Material.Filled.RequestQuote">@LangService.GetString("Menu_BuyerAdvanceOut")</MudNavLink>
         <MudNavLink Href="/advance/buyer-in" Icon="@Icons.Material.Filled.Payments">@LangService.GetString("Menu_BuyerAdvanceIn")</MudNavLink>
 
@@ -73,7 +73,7 @@
     </MudNavGroup>
 
     <!-- ကြိုပွိုင့် (Forward Contract) အုပ်စု -->
-    <MudNavGroup Title="@LangService.GetString("Menu_ForwardContract")" Icon="@Icons.Material.Filled.Assignment" Expanded="true">
+    <MudNavGroup Title="@LangService.GetString("Menu_ForwardContract")" Icon="@Icons.Material.Filled.Assignment">
         <MudNavLink Href="/forward-contract/create" Icon="@Icons.Material.Filled.NoteAdd">
             @LangService.GetString("Menu_CreateContract")
         </MudNavLink>
@@ -105,7 +105,45 @@
     </MudNavGroup>
 
     <MudNavGroup Title="@LangService.GetString("Menu_Reports")" Icon="@Icons.Material.Filled.BarChart">
-        <MudNavLink Href="/process" Icon="@Icons.Material.Filled.PieChart">@LangService.GetString("Menu_PnL")</MudNavLink>
+        <MudNavLink Href="/reports/purchases" Icon="@Icons.Material.Filled.ShoppingCart">
+            @LangService.GetString("Menu_PurchaseReport")
+        </MudNavLink>
+        <MudNavLink Href="/reports/sales" Icon="@Icons.Material.Filled.Sell">
+            @LangService.GetString("Menu_SaleReport")
+        </MudNavLink>
+        <MudNavLink Href="/reports/forward-contract-sales" Icon="@Icons.Material.Filled.AssignmentReturned">
+            @LangService.GetString("Menu_FCContractSaleReport")
+        </MudNavLink>
+        <MudNavLink Href="/reports/supplier-advances" Icon="@Icons.Material.Filled.AccountBalanceWallet">
+            @LangService.GetString("Menu_SupplierAdvanceReport")
+        </MudNavLink>
+        <MudNavLink Href="/reports/supplier-repayments" Icon="@Icons.Material.Filled.Payment">
+            @LangService.GetString("Menu_SupplierRepaymentReport")
+        </MudNavLink>
+        <MudNavLink Href="/reports/buyer-advances" Icon="@Icons.Material.Filled.RequestQuote">
+            @LangService.GetString("Menu_BuyerAdvanceReport")
+        </MudNavLink>
+        <MudNavLink Href="/reports/buyer-repayments" Icon="@Icons.Material.Filled.MoneyOff">
+            @LangService.GetString("Menu_BuyerRepaymentReport")
+        </MudNavLink>
+        <MudNavLink Href="/reports/forward-contracts" Icon="@Icons.Material.Filled.Description">
+            @LangService.GetString("Menu_ForwardContractReport")
+        </MudNavLink>
+        <MudNavLink Href="/reports/expenses" Icon="@Icons.Material.Filled.ReceiptLong">
+            @LangService.GetString("Menu_ExpenseReport")
+        </MudNavLink>
+        <MudNavLink Href="/reports/truck-expenses" Icon="@Icons.Material.Filled.LocalShipping">
+            @LangService.GetString("Menu_TruckExpenseReport")
+        </MudNavLink>
+        <MudNavLink Href="/reports/executive-dashboard" Icon="@Icons.Material.Filled.Dashboard">@LangService.GetString("Menu_Dashboard")</MudNavLink>
+        <MudNavLink Href="/reports/supplier-balance" Icon="@Icons.Material.Filled.AccountBalanceWallet">@LangService.GetString("Menu_SupplierBalance")</MudNavLink>
+        <MudNavLink Href="/reports/buyer-contract-status" Icon="@Icons.Material.Filled.Assignment">@LangService.GetString("Menu_BuyerContractStatus")</MudNavLink>
+        <MudNavLink Href="/reports/rubber-grade-summary" Icon="@Icons.Material.Filled.Category">@LangService.GetString("Menu_RubberGradeSummary")</MudNavLink>
+        <MudNavLink Href="/reports/wallet-ledger" Icon="@Icons.Material.Filled.AccountBalance">@LangService.GetString("Menu_WalletLedger")</MudNavLink>
+        <MudNavLink Href="/reports/profit-loss" Icon="@Icons.Material.Filled.TrendingUp">@LangService.GetString("Menu_ProfitLoss")</MudNavLink>
+        <MudNavLink Href="/reports/daily-cash-closing" Icon="@Icons.Material.Filled.AccountBalance">
+            @LangService.GetString("Menu_CashClosingReport")
+        </MudNavLink>
     </MudNavGroup>
 
     <MudDivider Class="my-2" />

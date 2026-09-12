@@ -1,0 +1,76 @@
+﻿@page "/reports/supplier-balance"
+@using MudBlazor
+@using RubberTradingSystem.Models
+@using RubberTradingSystem.Services
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject LanguageService LangService
+@inject IJSRuntime JS
+@implements IDisposable
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4 mb-6">
+    <MudText Typo="Typo.h5" Color="Color.Primary" Class="mb-4">@LangService.GetString("Title_SupplierBalanceReport")</MudText>
+
+    <MudPaper Class="pa-4 mb-4" Elevation="2">
+        <MudGrid AlignItems="Center">
+            <MudItem xs="12" sm="8" md="6">
+                <MudTextField T="string" @bind-Value="_searchString" Placeholder="@LangService.GetString("Placeholder_SearchSupplier")" Variant="Variant.Outlined" Dense="true" Clearable="true" />
+            </MudItem>
+            <MudItem xs="12" sm="4" md="6" Class="d-flex gap-2">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="LoadDataAsync">@LangService.GetString("Btn_Search")</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Success" StartIcon="@Icons.Material.Filled.TableChart" OnClick="ExportToExcelAsync">Excel</MudButton>
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
+
+    <MudTable Items="@_items" Dense="true" Hover="true" Bordered="true" Striped="true" Loading="@_isLoading" Elevation="2">
+        <HeaderContent>
+            <MudTh>@LangService.GetString("Th_SupplierName")</MudTh>
+            <MudTh>@LangService.GetString("Th_Phone")</MudTh>
+            <MudTh>@LangService.GetString("Th_AdvanceBalance")</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd><b>@context.Name</b></MudTd>
+            <MudTd>@context.Phone</MudTd>
+            <MudTd><b>@context.AdvanceBalance.ToString("N0") MMK</b></MudTd>
+        </RowTemplate>
+        <PagerContent><MudTablePager PageSizeOptions="new int[] { 10, 25, 50 }" /></PagerContent>
+    </MudTable>
+</MudContainer>
+
+@code {
+    private bool _isLoading = false;
+    private string _searchString = "";
+    private List<SupplierBalanceModel> _items = new();
+
+    protected override async Task OnInitializedAsync() { LangService.OnLanguageChanged += StateHasChanged; await LoadDataAsync(); }
+    public void Dispose() => LangService.OnLanguageChanged -= StateHasChanged;
+
+    private async Task LoadDataAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            var contacts = await Http.GetFromJsonAsync<List<ContactModel>>("rest/v1/contacts?contact_type=eq.Supplier&select=*") ?? new();
+            _items = contacts.Select(c => new SupplierBalanceModel
+            {
+                Name = c.Name,
+                Phone = c.Phone ?? "-",
+                AdvanceBalance = c.AdvanceBalance
+            }).ToList();
+        }
+        catch (Exception ex) { Snackbar.Add($"Error: {ex.Message}", Severity.Error); }
+        finally { _isLoading = false; }
+    }
+
+    private async Task ExportToExcelAsync()
+    {
+        var csv = new System.Text.StringBuilder();
+        csv.AppendLine("Supplier Name,Phone,Advance Balance");
+        foreach (var i in _items) csv.AppendLine($"\"{i.Name}\",\"{i.Phone}\",{i.AdvanceBalance}");
+        await JS.InvokeVoidAsync("downloadFileFromBytes", $"Supplier_Balance_{DateTime.Now:yyyyMMdd}.csv", "text/csv", System.Text.Encoding.UTF8.GetBytes(csv.ToString()));
+    }
+
+    public class SupplierBalanceModel { public string Name { get; set; } = string.Empty; public string Phone { get; set; } = string.Empty; public decimal AdvanceBalance { get; set; } }
+    private class ContactModel { public string Name { get; set; } = string.Empty; public string? Phone { get; set; } public decimal AdvanceBalance { get; set; } }
+}
