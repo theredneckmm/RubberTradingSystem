@@ -732,6 +732,8 @@ namespace RubberTradingSystem.Services
             ["Lbl_BasicSalary"] = "Basic Salary",
             ["Btn_Save"] = "Save",
             ["Btn_Cancel"] = "Cancel",
+            ["Title_EditStaff"] = "Edit Staff Information",
+            ["Btn_Update"] = "Update",
         };
 
         private static readonly Dictionary<string, string> Myanmar = new()
@@ -1443,6 +1445,8 @@ namespace RubberTradingSystem.Services
             ["Lbl_BasicSalary"] = "အခြေခံလစာ",
             ["Btn_Save"] = "သိမ်းဆည်းမည်",
             ["Btn_Cancel"] = "မလုပ်တော့ပါ",
+            ["Title_EditStaff"] = "ဝန်ထမ်းအချက်အလက် ပြင်ဆင်ရန်",
+            ["Btn_Update"] = "ပြင်ဆင်မည်",
         };
     }
 }
