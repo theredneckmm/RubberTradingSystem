@@ -1,0 +1,90 @@
+﻿@page "/payroll"
+@using MudBlazor
+@using RubberTradingSystem.Services
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject LanguageService LangService
+@implements IDisposable
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4 mb-6">
+    <MudText Typo="Typo.h5" Color="Color.Primary" Class="mb-4">@LangService.GetString("Title_Payroll")</MudText>
+
+    <MudPaper Class="pa-4 mb-4" Elevation="2">
+        <MudGrid AlignItems="Center">
+            <MudItem xs="12" sm="3" md="3">
+                <MudSelect T="string" @bind-Value="_selectedStaffId" Label="@LangService.GetString("Lbl_SelectStaff")" Variant="Variant.Outlined" Dense="true" SelectedValuesChanged="OnStaffSelected">
+                    @foreach (var s in _staffList)
+                    {
+                        <MudSelectItem Value="@s.id">@s.name (@s.position)</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="3" md="3"><MudTextField @bind-Value="_monthYear" Label="@LangService.GetString("Lbl_MonthYear")" Variant="Variant.Outlined" Dense="true" Placeholder="2026-09" /></MudItem>
+            <MudItem xs="12" sm="2" md="2"><MudNumericField T="decimal" @bind-Value="_bonus" Label="@LangService.GetString("Lbl_Bonus")" Variant="Variant.Outlined" Dense="true" /></MudItem>
+            <MudItem xs="12" sm="2" md="2"><MudNumericField T="decimal" @bind-Value="_deduction" Label="@LangService.GetString("Lbl_Deduction")" Variant="Variant.Outlined" Dense="true" /></MudItem>
+            <MudItem xs="12" sm="2" md="2"><MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" OnClick="SavePayrollAsync">@LangService.GetString("Btn_PaySalary")</MudButton></MudItem>
+        </MudGrid>
+    </MudPaper>
+
+    <MudTable Items="@_payrollList" Dense="true" Hover="true" Bordered="true" Striped="true" Elevation="2">
+        <HeaderContent>
+            <MudTh>@LangService.GetString("Th_MonthYear")</MudTh>
+            <MudTh>@LangService.GetString("Th_Name")</MudTh>
+            <MudTh>@LangService.GetString("Th_BasicSalary")</MudTh>
+            <MudTh>@LangService.GetString("Th_Bonus")</MudTh>
+            <MudTh>@LangService.GetString("Th_Deduction")</MudTh>
+            <MudTh>@LangService.GetString("Th_NetSalary")</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd>@context.month_year</MudTd>
+            <MudTd><b>@context.staffs?.name</b></MudTd>
+            <MudTd>@context.basic_salary.ToString("N0")</MudTd>
+            <MudTd>@context.bonus.ToString("N0")</MudTd>
+            <MudTd>@context.deduction.ToString("N0")</MudTd>
+            <MudTd><b>@context.net_salary.ToString("N0") MMK</b></MudTd>
+        </RowTemplate>
+    </MudTable>
+</MudContainer>
+
+@code {
+    private string? _selectedStaffId;
+    private string _monthYear = DateTime.Now.ToString("yyyy-MM");
+    private decimal _basicSalary = 0m;
+    private decimal _bonus = 0m;
+    private decimal _deduction = 0m;
+    private decimal _netSalary => _basicSalary + _bonus - _deduction;
+
+    private List<StaffModel> _staffList = new();
+    private List<PayrollModel> _payrollList = new();
+
+    protected override async Task OnInitializedAsync() { LangService.OnLanguageChanged += StateHasChanged; await LoadDataAsync(); }
+    public void Dispose() => LangService.OnLanguageChanged -= StateHasChanged;
+
+    private async Task LoadDataAsync()
+    {
+        try
+        {
+            _staffList = await Http.GetFromJsonAsync<List<StaffModel>>("rest/v1/staff?select=*") ?? new();
+            _payrollList = await Http.GetFromJsonAsync<List<PayrollModel>>("rest/v1/payrolls?select=id,month_year,basic_salary,bonus,deduction,net_salary,staffs(name)&order=created_at.desc") ?? new();
+        }
+        catch (Exception ex) { Snackbar.Add($"Error: {ex.Message}", Severity.Error); }
+    }
+
+    private void OnStaffSelected()
+    {
+        var staff = _staffList.FirstOrDefault(s => s.id == _selectedStaffId);
+        if (staff != null) _basicSalary = staff.basic_salary;
+    }
+
+    private async Task SavePayrollAsync()
+    {
+        if (string.IsNullOrEmpty(_selectedStaffId)) return;
+        var payload = new { staff_id = _selectedStaffId, month_year = _monthYear, basic_salary = _basicSalary, bonus = _bonus, deduction = _deduction, net_salary = _netSalary, status = "Paid" };
+        var resp = await Http.PostAsJsonAsync("rest/v1/payrolls", payload);
+        if (resp.IsSuccessStatusCode) { Snackbar.Add("လစာထုတ်ပေးမှု အောင်မြင်ပါသည်။", Severity.Success); await LoadDataAsync(); }
+    }
+
+    public class StaffModel { public string id { get; set; } = string.Empty; public string name { get; set; } = string.Empty; public string position { get; set; } = string.Empty; public decimal basic_salary { get; set; } }
+    public class PayrollModel { public string id { get; set; } = string.Empty; public string month_year { get; set; } = ""; public decimal basic_salary { get; set; } public decimal bonus { get; set; } public decimal deduction { get; set; } public decimal net_salary { get; set; } public StaffObj? staffs { get; set; } }
+    public class StaffObj { public string name { get; set; } = string.Empty; }
+}

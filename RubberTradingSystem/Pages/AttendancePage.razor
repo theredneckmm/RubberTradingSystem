@@ -1,0 +1,79 @@
+﻿@page "/attendance"
+@using MudBlazor
+@using RubberTradingSystem.Services
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject LanguageService LangService
+@implements IDisposable
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4 mb-6">
+    <MudText Typo="Typo.h5" Color="Color.Primary" Class="mb-4">@LangService.GetString("Title_Attendance")</MudText>
+
+    <MudPaper Class="pa-4 mb-4" Elevation="2">
+        <MudGrid AlignItems="Center">
+            <MudItem xs="12" sm="4" md="4"><MudDatePicker Label="@LangService.GetString("Lbl_Date")" @bind-Date="_attendanceDate" Variant="Variant.Outlined" Dense="true" /></MudItem>
+            <MudItem xs="12" sm="4" md="4">
+                <MudSelect T="string" @bind-Value="_selectedStaffId" Label="@LangService.GetString("Lbl_SelectStaff")" Variant="Variant.Outlined" Dense="true">
+                    @foreach (var s in _staffList)
+                    {
+                        <MudSelectItem Value="@s.id">@s.name (@s.position)</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="4" md="4">
+                <MudSelect T="string" @bind-Value="_status" Label="@LangService.GetString("Lbl_Status")" Variant="Variant.Outlined" Dense="true">
+                    <MudSelectItem Value="@("Present")">ရုံးတက် (Present)</MudSelectItem>
+                    <MudSelectItem Value="@("Absent")">ပျက်ကွက် (Absent)</MudSelectItem>
+                    <MudSelectItem Value="@("Leave")">ခွင့် (Leave)</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12"><MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAttendanceAsync">@LangService.GetString("Btn_SaveAttendance")</MudButton></MudItem>
+        </MudGrid>
+    </MudPaper>
+
+    <MudTable Items="@_attendanceList" Dense="true" Hover="true" Bordered="true" Striped="true" Elevation="2">
+        <HeaderContent>
+            <MudTh>@LangService.GetString("Th_Date")</MudTh>
+            <MudTh>@LangService.GetString("Th_Name")</MudTh>
+            <MudTh>@LangService.GetString("Th_Status")</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd>@context.attendance_date.ToString("dd/MM/yyyy")</MudTd>
+            <MudTd><b>@context.staffs?.name</b></MudTd>
+            <MudTd><MudChip T="string" Color="@(context.status == "Present" ? Color.Success : Color.Error)" Size="Size.Small">@context.status</MudChip></MudTd>
+        </RowTemplate>
+    </MudTable>
+</MudContainer>
+
+@code {
+    private DateTime? _attendanceDate = DateTime.Today;
+    private string? _selectedStaffId;
+    private string _status = "Present";
+    private List<StaffModel> _staffList = new();
+    private List<AttendanceModel> _attendanceList = new();
+
+    protected override async Task OnInitializedAsync() { LangService.OnLanguageChanged += StateHasChanged; await LoadDataAsync(); }
+    public void Dispose() => LangService.OnLanguageChanged -= StateHasChanged;
+
+    private async Task LoadDataAsync()
+    {
+        try
+        {
+            _staffList = await Http.GetFromJsonAsync<List<StaffModel>>("rest/v1/staff?select=*") ?? new();
+            _attendanceList = await Http.GetFromJsonAsync<List<AttendanceModel>>("rest/v1/attendance?select=id,attendance_date,status,staffs(name)&order=attendance_date.desc") ?? new();
+        }
+        catch (Exception ex) { Snackbar.Add($"Error: {ex.Message}", Severity.Error); }
+    }
+
+    private async Task SaveAttendanceAsync()
+    {
+        if (string.IsNullOrEmpty(_selectedStaffId) || !_attendanceDate.HasValue) return;
+        var payload = new { staff_id = _selectedStaffId, attendance_date = _attendanceDate.Value.ToString("yyyy-MM-dd"), status = _status };
+        var resp = await Http.PostAsJsonAsync("rest/v1/attendance", payload);
+        if (resp.IsSuccessStatusCode) { Snackbar.Add("အောင်မြင်ပါသည်။", Severity.Success); await LoadDataAsync(); }
+    }
+
+    public class StaffModel { public string id { get; set; } = string.Empty; public string name { get; set; } = string.Empty; public string position { get; set; } = string.Empty; }
+    public class AttendanceModel { public string id { get; set; } = string.Empty; public DateTime attendance_date { get; set; } public string status { get; set; } = ""; public StaffObj? staffs { get; set; } }
+    public class StaffObj { public string name { get; set; } = string.Empty; }
+}

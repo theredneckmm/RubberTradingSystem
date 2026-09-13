@@ -1,0 +1,220 @@
+﻿@page "/staff"
+@using MudBlazor
+@using RubberTradingSystem.Services
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject LanguageService LangService
+@inject UserContextService UserContext
+@implements IDisposable
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4 mb-6">
+    <!-- Header Title & Add Button -->
+    <div class="d-flex justify-space-between align-center mb-4">
+        <div>
+            <MudText Typo="Typo.h5" Color="Color.Primary" Class="font-weight-bold">
+                @LangService.GetString("Title_StaffList")
+            </MudText>
+            <MudText Typo="Typo.subtitle2" Class="mud-text-secondary">
+                ဝန်ထမ်းအချက်အလက်များနှင့် လစာနှုန်းထားများ စီမံခန့်ခွဲရန်
+            </MudText>
+        </div>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PersonAdd" Href="/employee/add">
+            @LangService.GetString("Btn_AddStaff")
+        </MudButton>
+    </div>
+
+    <!-- Staff Table connected with Supabase -->
+    <MudTable Items="@_staffList" Dense="true" Hover="true" Bordered="true" Striped="true" Loading="@_isLoading" Elevation="2">
+        <HeaderContent>
+            <MudTh>@LangService.GetString("Th_Name")</MudTh>
+            <MudTh>@LangService.GetString("Th_Position")</MudTh>
+            <MudTh>@LangService.GetString("Th_Phone")</MudTh>
+            <MudTh>@LangService.GetString("Th_BasicSalary")</MudTh>
+            <MudTh>@LangService.GetString("Th_Status")</MudTh>
+            <MudTh>@LangService.GetString("Th_Action")</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Name"><b>@context.name</b></MudTd>
+            <MudTd DataLabel="Position">@context.position</MudTd>
+            <MudTd DataLabel="Phone">@(context.phone ?? "-")</MudTd>
+            <MudTd DataLabel="Salary"><b>@context.basic_salary.ToString("N0")</b> MMK</MudTd>
+            <MudTd DataLabel="Status">
+                <MudChip T="string" Color="@(context.status == "Active" ? Color.Success : Color.Error)" Size="Size.Small">
+                    @context.status
+                </MudChip>
+            </MudTd>
+            <MudTd DataLabel="Action">
+                <div class="d-flex gap-1">
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" Size="Size.Small" OnClick="() => OpenEditDialog(context)" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small" OnClick="() => DeleteStaffAsync(context.id)" />
+                </div>
+            </MudTd>
+        </RowTemplate>
+        <PagerContent>
+            <MudTablePager PageSizeOptions="new int[] { 10, 25, 50, 100 }" />
+        </PagerContent>
+    </MudTable>
+</MudContainer>
+
+<!-- Edit Staff Dialog -->
+<MudDialog @bind-IsVisible="_isEditDialogOpen" Options="new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Small, FullWidth = true }">
+    <TitleContent>
+        <MudText Typo="Typo.h6"><b>@LangService.GetString("Title_EditStaff")</b></MudText>
+    </TitleContent>
+    <DialogContent>
+        <EditForm Model="@_editModel" OnValidSubmit="UpdateStaffAsync">
+            <DataAnnotationsValidator />
+            <MudGrid Spacing="3">
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="_editModel.name" Label="@LangService.GetString("Lbl_Name")" Variant="Variant.Outlined" Dense="true" Required="true" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudTextField @bind-Value="_editModel.position" Label="@LangService.GetString("Lbl_Position")" Variant="Variant.Outlined" Dense="true" Required="true" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudTextField @bind-Value="_editModel.phone" Label="@LangService.GetString("Lbl_Phone")" Variant="Variant.Outlined" Dense="true" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudNumericField T="decimal" @bind-Value="_editModel.basic_salary" Label="@LangService.GetString("Lbl_BasicSalary")" Variant="Variant.Outlined" Dense="true" Min="0" Format="N0" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudSelect T="string" @bind-Value="_editModel.status" Label="@LangService.GetString("Th_Status")" Variant="Variant.Outlined" Dense="true">
+                        <MudSelectItem Value="@("Active")">တက်ကြွ (Active)</MudSelectItem>
+                        <MudSelectItem Value="@("Resigned")">ထွက်ခွာ (Resigned)</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+            </MudGrid>
+        </EditForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Outlined" Color="Color.Secondary" OnClick="CloseEditDialog">@LangService.GetString("Btn_Cancel")</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="UpdateStaffAsync" Disabled="_isSaving">
+            @if (_isSaving)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+            }
+            else
+            {
+                <text>@LangService.GetString("Btn_Update")</text>
+            }
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private bool _isLoading = false;
+    private bool _isSaving = false;
+    private bool _isEditDialogOpen = false;
+    private List<StaffModel> _staffList = new();
+    private StaffModel _editModel = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        LangService.OnLanguageChanged += StateHasChanged;
+        await LoadStaffDataAsync();
+    }
+
+    public void Dispose() => LangService.OnLanguageChanged -= StateHasChanged;
+
+    private async Task LoadStaffDataAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            _staffList = await Http.GetFromJsonAsync<List<StaffModel>>("rest/v1/staff?select=*&order=created_at.desc") ?? new();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading staff: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void OpenEditDialog(StaffModel staff)
+    {
+        // ချက်ချင်း Edit ပြီးရင် Table ထဲမှာပါ အလိုအလျောက်ပြောင်းသွားစေရန် Object Clone လုပ်ပေးခြင်း
+        _editModel = new StaffModel
+        {
+            id = staff.id,
+            name = staff.name,
+            position = staff.position,
+            phone = staff.phone,
+            basic_salary = staff.basic_salary,
+            status = staff.status
+        };
+        _isEditDialogOpen = true;
+    }
+
+    private void CloseEditDialog() => _isEditDialogOpen = false;
+
+    private async Task UpdateStaffAsync()
+    {
+        _isSaving = true;
+        try
+        {
+            var payload = new
+            {
+                name = _editModel.name,
+                position = _editModel.position,
+                phone = _editModel.phone,
+                basic_salary = _editModel.basic_salary,
+                status = _editModel.status,
+                sync_status = "Synced"
+            };
+
+            var response = await Http.PatchAsync($"rest/v1/staff?id=eq.{_editModel.id}", JsonContent.Create(payload));
+            if (response.IsSuccessStatusCode)
+            {
+                Snackbar.Add("ဝန်ထမ်းအချက်အလက် ပြင်ဆင်ပြီးပါပြီ။", Severity.Success);
+                _isEditDialogOpen = false;
+                await LoadStaffDataAsync();
+            }
+            else
+            {
+                Snackbar.Add("ပြင်ဆင်ရန် မအောင်မြင်ပါ။", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private async Task DeleteStaffAsync(string id)
+    {
+        try
+        {
+            var response = await Http.DeleteAsync($"rest/v1/staff?id=eq.{id}");
+            if (response.IsSuccessStatusCode)
+            {
+                Snackbar.Add("ဝန်ထမ်းအချက်အလက် ဖျက်ဆီးပြီးပါပြီ။", Severity.Success);
+                await LoadStaffDataAsync();
+            }
+            else
+            {
+                Snackbar.Add("ဖျက်ဆီးရန် မအောင်မြင်ပါ။", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+
+    public class StaffModel
+    {
+        public string id { get; set; } = string.Empty;
+        public string name { get; set; } = string.Empty;
+        public string position { get; set; } = string.Empty;
+        public string? phone { get; set; }
+        public decimal basic_salary { get; set; }
+        public string status { get; set; } = "Active";
+    }
+}
