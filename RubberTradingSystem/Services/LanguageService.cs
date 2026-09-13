@@ -32,6 +32,7 @@ namespace RubberTradingSystem.Services
 
             ["Menu_Trading"] = "Trading & Procurement",
             ["Menu_Purchase"] = "Purchase Raw Rubber",
+            ["TodaySalesTotal"] = "Today Sales Total",
             ["Menu_Sales"] = "Sales & Export RSS",
             ["Menu_Vouchers"] = "Voucher History",
             ["Menu_Pricing"] = "Daily Price Settings",
@@ -734,6 +735,14 @@ namespace RubberTradingSystem.Services
             ["Btn_Cancel"] = "Cancel",
             ["Title_EditStaff"] = "Edit Staff Information",
             ["Btn_Update"] = "Update",
+            ["Lbl_Status"] = "Status",
+            ["Th_Status"] = "Status",
+            ["Th_Bonus"] = "Bonus",
+            ["Th_Deduction"] = "Deduction",
+            ["Placeholder_SearchStaff"] = "Search staff by name...",
+            ["Btn_AddStaffNew"] = "Add New Staff",
+            ["Btn_Edit"] = "Edit",
+            ["Btn_Delete"] = "Delete",
         };
 
         private static readonly Dictionary<string, string> Myanmar = new()
@@ -745,6 +754,7 @@ namespace RubberTradingSystem.Services
             ["Search"] = "ဘောက်ချာ (သို့) အမည် ရှာရန်...",
 
             ["Menu_Trading"] = "အရောင်းအဝယ် ကဏ္ဍ",
+            ["TodaySalesTotal"]="ယနေ့ ရောင်းချမှုစုစုပေါင်း",
             ["Menu_Purchase"] = "ရော်ဘာအစို ဝယ်ယူရန်",
             ["Menu_Sales"] = "မှိုင်းခံပြား (RSS) ရောင်းရန်",
             ["Menu_Vouchers"] = "ဘောက်ချာ မှတ်တမ်းများ",
@@ -1447,6 +1457,14 @@ namespace RubberTradingSystem.Services
             ["Btn_Cancel"] = "မလုပ်တော့ပါ",
             ["Title_EditStaff"] = "ဝန်ထမ်းအချက်အလက် ပြင်ဆင်ရန်",
             ["Btn_Update"] = "ပြင်ဆင်မည်",
+            ["Lbl_Status"] = "အခြေအနေ",
+            ["Th_Status"] = "အခြေအနေ",
+            ["Th_Bonus"] = "ဆုကြေး",
+            ["Th_Deduction"] = "ဖြတ်တောက်ငွေ",
+            ["Placeholder_SearchStaff"] = "ဝန်ထမ်းအမည်ဖြင့် ရှာရန်...",
+            ["Btn_AddStaffNew"] = "ဝန်ထမ်းအသစ်ထည့်မည်",
+            ["Btn_Edit"] = "ပြင်ဆင်မည်",
+            ["Btn_Delete"] = "ဖျက်မည်",
         };
     }
 }

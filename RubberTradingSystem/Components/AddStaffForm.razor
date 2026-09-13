@@ -9,9 +9,11 @@
 @implements IDisposable
 
 <MudContainer MaxWidth="MaxWidth.Medium" Class="mt-4 mb-6">
-    <MudText Typo="Typo.h5" Color="Color.Primary" Class="mb-4"><b>@LangService.GetString("Title_AddStaff")</b></MudText>
+    <MudText Typo="Typo.h5" Style="color: #4caf50; font-weight: 700;" Class="mb-4">
+        <b>@(_isEditMode ? LangService.GetString("Title_EditStaff") : LangService.GetString("Title_AddStaff"))</b>
+    </MudText>
 
-    <MudPaper Class="pa-6" Elevation="3">
+    <MudPaper Class="pa-6" Elevation="3" Style="background-color: #1e293b;">
         <EditForm Model="@_model" OnValidSubmit="SaveStaffAsync">
             <DataAnnotationsValidator />
 
@@ -55,14 +57,14 @@
                 <MudButton Variant="Variant.Outlined" Color="Color.Secondary" Href="/staff">
                     @LangService.GetString("Btn_Cancel")
                 </MudButton>
-                <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Disabled="_isSaving">
+                <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Style="background-color: #22c55e; color: white;" Disabled="_isSaving">
                     @if (_isSaving)
                     {
                         <MudProgressCircular Size="Size.Small" Indeterminate="true" />
                     }
                     else
                     {
-                        <text>@LangService.GetString("Btn_Save")</text>
+                        <text>@(_isEditMode ? LangService.GetString("Btn_Update") : LangService.GetString("Btn_Save"))</text>
                     }
                 </MudButton>
             </div>
@@ -72,10 +74,57 @@
 
 @code {
     private bool _isSaving = false;
-    private StaffCreateModel _model = new();
+    private bool _isEditMode = false;
+    private string? _staffId;
+    private StaffFormModel _model = new();
 
-    protected override void OnInitialized() => LangService.OnLanguageChanged += StateHasChanged;
+    protected override async Task OnInitializedAsync()
+    {
+        LangService.OnLanguageChanged += StateHasChanged;
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await CheckRouteQueryAsync();
+    }
+
     public void Dispose() => LangService.OnLanguageChanged -= StateHasChanged;
+
+    private async Task CheckRouteQueryAsync()
+    {
+        var uri = new Uri(Navigation.Uri);
+        var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
+        var idValue = query["id"];
+
+        if (!string.IsNullOrEmpty(idValue))
+        {
+            _staffId = idValue;
+            _isEditMode = true;
+            await LoadStaffForEditAsync(_staffId);
+        }
+        else
+        {
+            _isEditMode = false;
+            _model = new StaffFormModel();
+        }
+    }
+
+    private async Task LoadStaffForEditAsync(string id)
+    {
+        try
+        {
+            var list = await Http.GetFromJsonAsync<List<StaffFormModel>>($"rest/v1/staff?id=eq.{id}&select=*");
+            if (list != null && list.Any())
+            {
+                _model = list.First();
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading staff: {ex.Message}", Severity.Error);
+        }
+    }
 
     private async Task SaveStaffAsync()
     {
@@ -83,29 +132,49 @@
         try
         {
             var ownerId = await UserContext.GetCurrentOwnerIdAsync();
-            var staffId = await UserContext.GetCurrentStaffIdAsync();
+            var staffIdContext = await UserContext.GetCurrentStaffIdAsync();
 
-            var payload = new
+            if (_isEditMode && !string.IsNullOrEmpty(_staffId))
             {
-                owner_id = ownerId,
-                staff_id = string.IsNullOrEmpty(staffId) ? null : staffId,
-                name = _model.name,
-                position = _model.position,
-                phone = _model.phone,
-                basic_salary = _model.basic_salary,
-                status = _model.status,
-                sync_status = "Synced"
-            };
+                // Update Existing Staff
+                var payload = new
+                {
+                    name = _model.name,
+                    position = _model.position,
+                    phone = _model.phone,
+                    basic_salary = _model.basic_salary,
+                    status = _model.status,
+                    sync_status = "Synced"
+                };
 
-            var resp = await Http.PostAsJsonAsync("rest/v1/staff", payload);
-            if (resp.IsSuccessStatusCode)
-            {
-                Snackbar.Add("ဝန်ထမ်းအသစ် အောင်မြင်စွာ ထည့်သွင်းပြီးပါပြီ။", Severity.Success);
-                Navigation.NavigateTo("/staff");
+                var resp = await Http.PatchAsync($"rest/v1/staff?id=eq.{_staffId}", JsonContent.Create(payload));
+                if (resp.IsSuccessStatusCode)
+                {
+                    Snackbar.Add("ဝန်ထမ်းအချက်အလက် ပြင်ဆင်ပြီးပါပြီ။", Severity.Success);
+                    Navigation.NavigateTo("/staff");
+                }
             }
             else
             {
-                Snackbar.Add("ဝန်ထမ်းထည့်သွင်းရန် မအောင်မြင်ပါ။", Severity.Error);
+                // Create New Staff
+                var payload = new
+                {
+                    owner_id = ownerId,
+                    staff_id = string.IsNullOrEmpty(staffIdContext) ? null : staffIdContext,
+                    name = _model.name,
+                    position = _model.position,
+                    phone = _model.phone,
+                    basic_salary = _model.basic_salary,
+                    status = _model.status,
+                    sync_status = "Synced"
+                };
+
+                var resp = await Http.PostAsJsonAsync("rest/v1/staff", payload);
+                if (resp.IsSuccessStatusCode)
+                {
+                    Snackbar.Add("ဝန်ထမ်းအသစ် ထည့်သွင်းပြီးပါပြီ။", Severity.Success);
+                    Navigation.NavigateTo("/staff");
+                }
             }
         }
         catch (Exception ex)
@@ -118,7 +187,7 @@
         }
     }
 
-    public class StaffCreateModel
+    public class StaffFormModel
     {
         public string name { get; set; } = string.Empty;
         public string position { get; set; } = string.Empty;

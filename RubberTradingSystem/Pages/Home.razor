@@ -34,14 +34,14 @@
         </MudPaper>
     </MudItem>
 
-    <!-- Production (or Forward Contract / Total Sales) -->
+    <!-- Rubber Sales (ရာဘာအရောင်းစာရင်း) -->
     <MudItem xs="12" sm="6" md="3">
         <MudPaper Elevation="4" Class="pa-6 rounded-xl" Style="border-top: 4px solid var(--mud-palette-warning);">
-            <MudText Typo="Typo.subtitle2" Class="mud-text-secondary mb-2">@LangService.GetString("RSSProduction")</MudText>
+            <MudText Typo="Typo.subtitle2" Class="mud-text-secondary mb-2">@LangService.GetString("TodaySalesTotal")</MudText>
             <MudText Typo="Typo.h6" Color="Color.Warning" Style="font-weight: 400;"><b>@_todaySaleQty.ToString("N2")</b> @LangService.GetString("Pound")</MudText>
             <div class="d-flex align-center mt-3">
-                <MudIcon Icon="@Icons.Material.Filled.TrendingDown" Color="Color.Error" Size="Size.Small" Class="mr-1" />
-                <MudText Typo="Typo.caption" Color="Color.Error">@LangService.GetString("Shrinkage")</MudText>
+                <MudIcon Icon="@Icons.Material.Filled.Sell" Color="Color.Warning" Size="Size.Small" Class="mr-1" />
+                <MudText Typo="Typo.caption" Color="Color.Warning">ယနေ့ စုစုပေါင်းအရောင်း</MudText>
             </div>
         </MudPaper>
     </MudItem>
@@ -122,16 +122,16 @@
                         </MudButton>
                     </MudItem>
                     <MudItem xs="6">
-                    <MudButton Href="/expenses" Variant="Variant.Filled" Color="Color.Surface" Class="rounded-lg py-3 w-100 d-flex flex-column" Style="height: 90px;">
-                        <MudIcon Icon="@Icons.Material.Filled.MoneyOff" Size="Size.Medium" Class="mb-1" />
-                        <MudText Typo="Typo.caption">@LangService.GetString("RecordExpense")</MudText>
-                    </MudButton>
+                        <MudButton Href="/expenses" Variant="Variant.Filled" Color="Color.Surface" Class="rounded-lg py-3 w-100 d-flex flex-column" Style="height: 90px;">
+                            <MudIcon Icon="@Icons.Material.Filled.MoneyOff" Size="Size.Medium" Class="mb-1" />
+                            <MudText Typo="Typo.caption">@LangService.GetString("RecordExpense")</MudText>
+                        </MudButton>
                     </MudItem>
                     <MudItem xs="6">
-                    <MudButton Href="/truck-expenses" Variant="Variant.Filled" Color="Color.Secondary" Class="rounded-lg py-3 w-100 d-flex flex-column" Style="height: 90px;">
-                        <MudIcon Icon="@Icons.Material.Filled.LocalGasStation" Size="Size.Medium" Class="mb-1" />
-                        <MudText Typo="Typo.caption">@LangService.GetString("Menu_Fuel")</MudText>
-                    </MudButton>
+                        <MudButton Href="/truck-expenses" Variant="Variant.Filled" Color="Color.Secondary" Class="rounded-lg py-3 w-100 d-flex flex-column" Style="height: 90px;">
+                            <MudIcon Icon="@Icons.Material.Filled.LocalGasStation" Size="Size.Medium" Class="mb-1" />
+                            <MudText Typo="Typo.caption">@LangService.GetString("Menu_Fuel")</MudText>
+                        </MudButton>
                     </MudItem>
                 </MudGrid>
             </MudCardContent>
@@ -205,6 +205,8 @@
     private int _offlinePendingCount = 0;
 
     private List<RecentTxModel> _recentTransactions = new();
+    private List<ChartSeries<double>> _series = new();
+    private string[] _xAxisLabels = { "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun" };
 
     private void UpdateUI() => InvokeAsync(StateHasChanged);
 
@@ -221,32 +223,51 @@
         _isLoading = true;
         try
         {
+            var txs = await Http.GetFromJsonAsync<List<TransactionRaw>>("rest/v1/transactions?select=*&order=created_at.desc") ?? new();
+            var contacts = await Http.GetFromJsonAsync<List<ContactRaw>>("rest/v1/contacts?select=id,name") ?? new();
+
             string todayStr = DateTime.Today.ToString("yyyy-MM-dd");
 
-            // ၁။ ယနေ့ ဝင်ငွေနှင့် ဝယ်ယူမှု Data များကို transactions မှ ဆွဲထုတ်ခြင်း
-            var txs = await Http.GetFromJsonAsync<List<TransactionRaw>>($"rest/v1/transactions?created_at=gte.{todayStr}T00:00:00&select=id,voucher_number,transaction_type,total_amount,quantity,sync_status,contacts(name)&order=created_at.desc") ?? new();
+            // ယနေ့ ဝယ်ယူမှုနှင့် အရောင်း (Sales) ပမာဏများ တွက်ချက်ခြင်း
+            var todayTxs = txs.Where(t => t.created_at.ToString("yyyy-MM-dd") == todayStr).ToList();
+            _todayPurchaseQty = todayTxs.Where(t => t.transaction_type == "Purchase").Sum(t => t.quantity);
 
-            _todayPurchaseQty = txs.Where(t => t.transaction_type == "Purchase").Sum(t => t.quantity);
-            _todaySaleQty = txs.Where(t => t.transaction_type == "Sale" || t.transaction_type == "ForwardContractSale").Sum(t => t.quantity);
+            // ယနေ့ ရာဘာအရောင်း (Sale သို့မဟုတ် ForwardContractSale) ပမာဏကို တိုက်ရိုက်တွက်ချက်ခြင်း
+            _todaySaleQty = todayTxs.Where(t => t.transaction_type == "Sale" || t.transaction_type == "ForwardContractSale").Sum(t => t.quantity);
+
             _offlinePendingCount = txs.Count(t => t.sync_status != "Synced");
 
             _recentTransactions = txs.Take(5).Select(t => new RecentTxModel
             {
                 voucher_number = t.voucher_number ?? "N/A",
-                contact_name = t.contacts?.name ?? t.transaction_type,
+                contact_name = contacts.FirstOrDefault(c => c.id == t.contact_id)?.name ?? t.transaction_type,
                 total_amount = t.total_amount,
                 sync_status = t.sync_status ?? "Synced"
             }).ToList();
 
-            // ၂. Wallets မှ စုစုပေါင်း လက်ကျန်ငွေ
+            // Wallets မှ စုစုပေါင်း လက်ကျန်ငွေ
             var wallets = await Http.GetFromJsonAsync<List<WalletModel>>("rest/v1/wallets?select=balance") ?? new();
             _totalWalletBalance = wallets.Sum(w => w.Balance);
 
-            // ၃. စုစုပေါင်း ဝယ်ယူထားသည့် Stock ပမာဏ (Total Purchase - Total Sale)
-            var allTxs = await Http.GetFromJsonAsync<List<TransactionRaw>>("rest/v1/transactions?select=transaction_type,quantity") ?? new();
-            decimal totalPurchased = allTxs.Where(t => t.transaction_type == "Purchase").Sum(t => t.quantity);
-            decimal totalSold = allTxs.Where(t => t.transaction_type == "Sale" || t.transaction_type == "ForwardContractSale").Sum(t => t.quantity);
+            // စုစုပေါင်း Stock ပမာဏ (Total Purchase - Total Sale)
+            decimal totalPurchased = txs.Where(t => t.transaction_type == "Purchase").Sum(t => t.quantity);
+            decimal totalSold = txs.Where(t => t.transaction_type == "Sale" || t.transaction_type == "ForwardContractSale").Sum(t => t.quantity);
             _totalStockQty = totalPurchased - totalSold;
+
+            // Chart Data (ပြီးခဲ့သော ၇ ရက်အတွင်း ဝယ်ယူမှု Trend)
+            var weeklyPurchases = new double[7];
+            for (int i = 6; i >= 0; i--)
+            {
+                var targetDate = DateTime.Today.AddDays(-i);
+                weeklyPurchases[6 - i] = (double)txs
+                    .Where(t => t.transaction_type == "Purchase" && t.created_at.Date == targetDate.Date)
+                    .Sum(t => t.quantity);
+            }
+
+            _series = new List<ChartSeries<double>>()
+            {
+                new ChartSeries<double>() { Name = "ဝယ်ယူမှုပမာဏ (ပေါင်)", Data = weeklyPurchases }
+            };
         }
         catch (Exception ex)
         {
@@ -258,25 +279,23 @@
         }
     }
 
-    // Chart Data (Mock or dynamic from weekly transactions)
-    public List<ChartSeries<double>> _series = new List<ChartSeries<double>>()
-    {
-        new ChartSeries<double>() { Name = "ဝယ်ယူမှုပမာဏ (ပေါင်)", Data = new double[] { 4000, 3000, 5400, 6500, 4200, 7800, 12500 } }
-    };
-    public string[] _xAxisLabels = { "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun" };
-
     private class TransactionRaw
     {
         public string id { get; set; } = string.Empty;
         public string? voucher_number { get; set; }
         public string transaction_type { get; set; } = string.Empty;
+        public string? contact_id { get; set; }
         public decimal total_amount { get; set; }
         public decimal quantity { get; set; }
         public string? sync_status { get; set; }
-        public ContactObj? contacts { get; set; }
+        public DateTime created_at { get; set; }
     }
 
-    private class ContactObj { public string name { get; set; } = string.Empty; }
+    private class ContactRaw
+    {
+        public string id { get; set; } = string.Empty;
+        public string name { get; set; } = string.Empty;
+    }
 
     private class RecentTxModel
     {

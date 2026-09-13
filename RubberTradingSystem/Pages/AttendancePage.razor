@@ -13,7 +13,7 @@
         <MudGrid AlignItems="Center">
             <MudItem xs="12" sm="4" md="4"><MudDatePicker Label="@LangService.GetString("Lbl_Date")" @bind-Date="_attendanceDate" Variant="Variant.Outlined" Dense="true" /></MudItem>
             <MudItem xs="12" sm="4" md="4">
-                <MudSelect T="string" @bind-Value="_selectedStaffId" Label="@LangService.GetString("Lbl_SelectStaff")" Variant="Variant.Outlined" Dense="true">
+                <MudSelect T="string" @bind-Value="_selectedStaffId" Label="@LangService.GetString("Lbl_SelectStaff")" Variant="Variant.Outlined" Dense="true" Clearable="true">
                     @foreach (var s in _staffList)
                     {
                         <MudSelectItem Value="@s.id">@s.name (@s.position)</MudSelectItem>
@@ -31,7 +31,7 @@
         </MudGrid>
     </MudPaper>
 
-    <MudTable Items="@_attendanceList" Dense="true" Hover="true" Bordered="true" Striped="true" Elevation="2">
+    <MudTable Items="@_attendanceList" Dense="true" Hover="true" Bordered="true" Striped="true" Elevation="2" Loading="@_isLoading">
         <HeaderContent>
             <MudTh>@LangService.GetString("Th_Date")</MudTh>
             <MudTh>@LangService.GetString("Th_Name")</MudTh>
@@ -39,7 +39,7 @@
         </HeaderContent>
         <RowTemplate>
             <MudTd>@context.attendance_date.ToString("dd/MM/yyyy")</MudTd>
-            <MudTd><b>@context.staffs?.name</b></MudTd>
+            <MudTd><b>@context.staff_name</b></MudTd>
             <MudTd><MudChip T="string" Color="@(context.status == "Present" ? Color.Success : Color.Error)" Size="Size.Small">@context.status</MudChip></MudTd>
         </RowTemplate>
     </MudTable>
@@ -49,31 +49,43 @@
     private DateTime? _attendanceDate = DateTime.Today;
     private string? _selectedStaffId;
     private string _status = "Present";
+    private bool _isLoading = false;
     private List<StaffModel> _staffList = new();
-    private List<AttendanceModel> _attendanceList = new();
+    private List<AttendanceViewModel> _attendanceList = new();
 
     protected override async Task OnInitializedAsync() { LangService.OnLanguageChanged += StateHasChanged; await LoadDataAsync(); }
     public void Dispose() => LangService.OnLanguageChanged -= StateHasChanged;
 
     private async Task LoadDataAsync()
     {
+        _isLoading = true;
         try
         {
             _staffList = await Http.GetFromJsonAsync<List<StaffModel>>("rest/v1/staff?select=*") ?? new();
-            _attendanceList = await Http.GetFromJsonAsync<List<AttendanceModel>>("rest/v1/attendance?select=id,attendance_date,status,staffs(name)&order=attendance_date.desc") ?? new();
+            var rawAttendance = await Http.GetFromJsonAsync<List<AttendanceRawModel>>("rest/v1/attendance?select=*&order=attendance_date.desc") ?? new();
+
+            // Map staff name safely without failing 400 query errors
+            _attendanceList = rawAttendance.Select(a => new AttendanceViewModel
+            {
+                id = a.id,
+                attendance_date = a.attendance_date,
+                status = a.status,
+                staff_name = _staffList.FirstOrDefault(s => s.id == a.staff_id)?.name ?? "Unknown"
+            }).ToList();
         }
         catch (Exception ex) { Snackbar.Add($"Error: {ex.Message}", Severity.Error); }
+        finally { _isLoading = false; }
     }
 
     private async Task SaveAttendanceAsync()
     {
         if (string.IsNullOrEmpty(_selectedStaffId) || !_attendanceDate.HasValue) return;
-        var payload = new { staff_id = _selectedStaffId, attendance_date = _attendanceDate.Value.ToString("yyyy-MM-dd"), status = _status };
+        var payload = new { staff_id = _selectedStaffId, attendance_date = _attendanceDate.Value.ToString("yyyy-MM-dd"), status = _status, sync_status = "Synced" };
         var resp = await Http.PostAsJsonAsync("rest/v1/attendance", payload);
         if (resp.IsSuccessStatusCode) { Snackbar.Add("အောင်မြင်ပါသည်။", Severity.Success); await LoadDataAsync(); }
     }
 
     public class StaffModel { public string id { get; set; } = string.Empty; public string name { get; set; } = string.Empty; public string position { get; set; } = string.Empty; }
-    public class AttendanceModel { public string id { get; set; } = string.Empty; public DateTime attendance_date { get; set; } public string status { get; set; } = ""; public StaffObj? staffs { get; set; } }
-    public class StaffObj { public string name { get; set; } = string.Empty; }
+    public class AttendanceRawModel { public string id { get; set; } = string.Empty; public string staff_id { get; set; } = string.Empty; public DateTime attendance_date { get; set; } public string status { get; set; } = ""; }
+    public class AttendanceViewModel { public string id { get; set; } = string.Empty; public string staff_name { get; set; } = string.Empty; public DateTime attendance_date { get; set; } public string status { get; set; } = ""; }
 }
