@@ -1,0 +1,122 @@
+﻿@page "/farm-owner/advances"
+@using MudBlazor
+@using RubberTradingSystem.Services
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+@inject LanguageService Lang
+@implements IDisposable
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4 mb-6">
+    <div class="d-flex justify-space-between align-center mb-4">
+        <MudText Typo="Typo.h5" Color="Color.Primary" Class="font-weight-bold">
+            @Lang.GetString("Title_FarmOwnerAdvances")
+        </MudText>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="GoToCreate">
+            @Lang.GetString("Btn_CreateNew")
+        </MudButton>
+    </div>
+
+    <MudPaper Elevation="3" Class="pa-4">
+        <MudTable Items="_advanceList" Dense="true" Hover="true" Bordered="true" Filter="new Func<TransactionModel, bool>(FilterFunc)">
+            <ToolBarContent>
+                <MudTextField @bind-Value="_searchString" Placeholder="ရှာဖွေရန် (Voucher / ခြံရှင်အမည်)..." Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0"></MudTextField>
+            </ToolBarContent>
+            <HeaderContent>
+                <MudTh>@Lang.GetString("Col_VoucherNo")</MudTh>
+                <MudTh>@Lang.GetString("Col_FarmOwner")</MudTh>
+                <MudTh>@Lang.GetString("Lbl_Date")</MudTh>
+                <MudTh>@Lang.GetString("Col_Amount")</MudTh>
+                <MudTh>@Lang.GetString("Lbl_Note")</MudTh>
+                <MudTh style="text-align: right;">@Lang.GetString("Col_Actions")</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd><b>@context.voucher_number</b></MudTd>
+                <MudTd>@context.contact_name</MudTd>
+                <MudTd>@Convert.ToDateTime(context.created_at).ToString("dd/MM/yyyy")</MudTd>
+                <MudTd><b>@context.total_amount.ToString("N0") MMK</b></MudTd>
+                <MudTd>@context.description</MudTd>
+                <MudTd style="text-align: right;">
+                    <MudButtonGroup Size="Size.Small" Variant="Variant.Outlined">
+                        <MudButton Color="Color.Info" OnClick="() => EditRecord(context.id)">@Lang.GetString("Btn_Edit")</MudButton>
+                        <MudButton Color="Color.Error" OnClick="() => DeleteRecord(context.id)">@Lang.GetString("Btn_Delete")</MudButton>
+                        <MudButton Color="Color.Secondary" OnClick="() => PrintRecord(context.voucher_number)">@Lang.GetString("Btn_Print")</MudButton>
+                    </MudButtonGroup>
+                </MudTd>
+            </RowTemplate>
+            <PagerContent>
+                <MudTablePager />
+            </PagerContent>
+        </MudTable>
+    </MudPaper>
+</MudContainer>
+
+@code {
+    private List<TransactionModel> _advanceList = new();
+    private string _searchString = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        Lang.OnLanguageChanged += StateHasChanged;
+        await LoadDataAsync();
+    }
+
+    public void Dispose() => Lang.OnLanguageChanged -= StateHasChanged;
+
+    private async Task LoadDataAsync()
+    {
+        try
+        {
+            // transaction_type က AdvanceOut ဖြစ်သော စာရင်းများကို contacts ဇယားနှင့် Join ၍ ဆွဲထုတ်ခြင်း
+            _advanceList = await Http.GetFromJsonAsync<List<TransactionModel>>("rest/v1/transactions?transaction_type=eq.AdvanceOut&select=id,voucher_number,total_amount,description,created_at,contacts(name)&order=created_at.desc") ?? new();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading data: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private bool FilterFunc(TransactionModel item)
+    {
+        if (string.IsNullOrWhiteSpace(_searchString)) return true;
+        if (item.voucher_number?.Contains(_searchString, StringComparison.OrdinalIgnoreCase) == true) return true;
+        if (item.contact_name?.Contains(_searchString, StringComparison.OrdinalIgnoreCase) == true) return true;
+        return false;
+    }
+
+    private void GoToCreate() => Navigation.NavigateTo("/advance/out");
+    private void EditRecord(string id) => Navigation.NavigateTo($"/advance/out/edit/{id}");
+
+    private async Task DeleteRecord(string id)
+    {
+        var resp = await Http.DeleteAsync($"rest/v1/transactions?id=eq.{id}");
+        if (resp.IsSuccessStatusCode)
+        {
+            Snackbar.Add("အောင်မြင်စွာ ဖျက်ပြီးပါပြီ။", Severity.Success);
+            await LoadDataAsync();
+        }
+        else
+        {
+            Snackbar.Add("ဖျက်ရာတွင် အမှားအယွင်းရှိပါသည်။", Severity.Error);
+        }
+    }
+
+    private void PrintRecord(string voucherNo) => Navigation.NavigateTo($"/print-voucher/{voucherNo}");
+
+    public class TransactionModel
+    {
+        public string id { get; set; } = "";
+        public string voucher_number { get; set; } = "";
+        public decimal total_amount { get; set; }
+        public string? description { get; set; }
+        public DateTime? created_at { get; set; }
+        public ContactInfo? contacts { get; set; }
+        public string contact_name => contacts?.name ?? "-";
+    }
+
+    public class ContactInfo
+    {
+        public string name { get; set; } = "";
+    }
+}

@@ -228,12 +228,10 @@
 
             string todayStr = DateTime.Today.ToString("yyyy-MM-dd");
 
-            // ယနေ့ ဝယ်ယူမှုနှင့် အရောင်း (Sales) ပမာဏများ တွက်ချက်ခြင်း
+            // Nullable quantities များကို 0m သို့ ညှိ၍ တွက်ချက်ခြင်း
             var todayTxs = txs.Where(t => t.created_at.ToString("yyyy-MM-dd") == todayStr).ToList();
-            _todayPurchaseQty = todayTxs.Where(t => t.transaction_type == "Purchase").Sum(t => t.quantity);
-
-            // ယနေ့ ရာဘာအရောင်း (Sale သို့မဟုတ် ForwardContractSale) ပမာဏကို တိုက်ရိုက်တွက်ချက်ခြင်း
-            _todaySaleQty = todayTxs.Where(t => t.transaction_type == "Sale" || t.transaction_type == "ForwardContractSale").Sum(t => t.quantity);
+            _todayPurchaseQty = todayTxs.Where(t => t.transaction_type == "Purchase").Sum(t => t.quantity ?? 0m);
+            _todaySaleQty = todayTxs.Where(t => t.transaction_type == "Sale" || t.transaction_type == "ForwardContractSale").Sum(t => t.quantity ?? 0m);
 
             _offlinePendingCount = txs.Count(t => t.sync_status != "Synced");
 
@@ -250,8 +248,8 @@
             _totalWalletBalance = wallets.Sum(w => w.Balance);
 
             // စုစုပေါင်း Stock ပမာဏ (Total Purchase - Total Sale)
-            decimal totalPurchased = txs.Where(t => t.transaction_type == "Purchase").Sum(t => t.quantity);
-            decimal totalSold = txs.Where(t => t.transaction_type == "Sale" || t.transaction_type == "ForwardContractSale").Sum(t => t.quantity);
+            decimal totalPurchased = txs.Where(t => t.transaction_type == "Purchase").Sum(t => t.quantity ?? 0m);
+            decimal totalSold = txs.Where(t => t.transaction_type == "Sale" || t.transaction_type == "ForwardContractSale").Sum(t => t.quantity ?? 0m);
             _totalStockQty = totalPurchased - totalSold;
 
             // Chart Data (ပြီးခဲ့သော ၇ ရက်အတွင်း ဝယ်ယူမှု Trend)
@@ -261,7 +259,7 @@
                 var targetDate = DateTime.Today.AddDays(-i);
                 weeklyPurchases[6 - i] = (double)txs
                     .Where(t => t.transaction_type == "Purchase" && t.created_at.Date == targetDate.Date)
-                    .Sum(t => t.quantity);
+                    .Sum(t => t.quantity ?? 0m);
             }
 
             _series = new List<ChartSeries<double>>()
@@ -286,7 +284,7 @@
         public string transaction_type { get; set; } = string.Empty;
         public string? contact_id { get; set; }
         public decimal total_amount { get; set; }
-        public decimal quantity { get; set; }
+        public decimal? quantity { get; set; } // Nullable ဖြင့် Error တက်ခြင်းကို ကာကွယ်ထားသည်
         public string? sync_status { get; set; }
         public DateTime created_at { get; set; }
     }

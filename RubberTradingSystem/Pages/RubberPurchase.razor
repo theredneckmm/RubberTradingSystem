@@ -1,5 +1,6 @@
 ﻿@page "/rubber-purchase"
 @using MudBlazor
+@using RubberTradingSystem.Components
 @using RubberTradingSystem.Models
 @using RubberTradingSystem.Services
 @inject HttpClient Http
@@ -12,14 +13,27 @@
 
 <MudContainer MaxWidth="MaxWidth.Large" Class="mt-4 mb-6">
 
-    <div class="d-flex justify-space-between align-center mb-4">
+    <!-- ခေါင်းစဉ်၊ ရက်စွဲနှင့် ဘောင်ချာအမှတ်စဉ် (DateTimePicker ညာဘက်ကပ်ရန် d-flex justify-end သုံးထားသည်) -->
+    <div class="d-flex justify-space-between align-center mb-4 flex-wrap gap-3">
         <MudText Typo="Typo.h5" Color="Color.Primary" Class="font-weight-bold">
             @(_isEditMode ? "ဝယ်ယူမှု အချက်အလက် ပြင်ဆင်ခြင်း (Edit Purchase)" : LangService.GetString("Buy_Title"))
         </MudText>
-        <!-- ဘောင်ချာအမှတ်စဉ် -->
-        <MudChip T="string" Color="Color.Primary" Variant="Variant.Filled" Size="Size.Large">
-            <b>Voucher: @_currentVoucherNumber</b>
-        </MudChip>
+
+        <div class="d-flex align-center gap-3 justify-end" style="margin-left: auto;">
+            
+
+            <!-- ဘောင်ချာအမှတ်စဉ် -->
+            <MudChip T="string" Color="Color.Primary" Variant="Variant.Filled" Size="Size.Large">
+                <b>Voucher: @_currentVoucherNumber</b>
+            </MudChip>
+
+            <!-- DateTimePicker ကို ညာဘက်သို့ကပ်ရန် AnchorOrigin="Origin.BottomRight" သုံးထားသည် -->
+            <MudDatePicker Label="ရက်စွဲ (Date)" Date="@_selectedDate" DateChanged="OnDateChanged" DateFormat="dd/MM/yyyy"
+                           Variant="Variant.Outlined" Margin="Margin.Dense"
+                           AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight"
+                           Style="width: 300px; background-color: var(--mud-palette-surface);"
+                           Disabled="_isSuccessCompleted" />
+        </div>
     </div>
 
     <MudPaper Class="pa-6" Elevation="3">
@@ -78,7 +92,8 @@
                                 }
                             }
                         </MudSelect>
-                        <MudIconButton Icon="@Icons.Material.Filled.Add" Color="Color.Primary" Variant="Variant.Filled" Size="Size.Medium" OnClick="OpenAddContactDialog" Disabled="_isSuccessCompleted" />
+                        <!-- ခြံရှင်အသစ်ထည့်ရန် /contacts/add သို့သွားမည် -->
+                        <MudIconButton Icon="@Icons.Material.Filled.Add" Color="Color.Primary" Variant="Variant.Filled" Size="Size.Medium" OnClick="GoToAddContact" Disabled="_isSuccessCompleted" />
                     </div>
                 </MudItem>
 
@@ -102,55 +117,56 @@
 
             <MudDivider Class="my-4" />
 
-            <!-- 3. ဈေးနှုန်း -->
+            <!-- 3. ဈေးနှုန်း (ကိန်းပြည့် N0 သာသုံးမည်) -->
             <MudGrid Spacing="3">
                 <MudItem xs="12" sm="6" md="3">
                     <MudNumericField T="decimal" Value="@_model.price_per_unit" ValueChanged="OnPriceChanged" Immediate="true"
-                                     Label="@LangService.GetString("Buy_BasePrice")" Variant="Variant.Outlined" Dense="true" Min="0" HideSpinButtons="true" Disabled="_isSuccessCompleted" />
+                                     Format="N0" Label="@LangService.GetString("Buy_BasePrice")" Variant="Variant.Outlined" Dense="true" Min="0" HideSpinButtons="true" Disabled="_isSuccessCompleted" />
                 </MudItem>
                 <MudItem xs="12" sm="6" md="3">
                     <MudNumericField T="decimal" Value="@_model.service_cost" ValueChanged="OnServiceCostChanged" Immediate="true"
-                                     Label="@LangService.GetString("Buy_ServiceCost")" Variant="Variant.Outlined" Dense="true" Min="0" HideSpinButtons="true" Disabled="_isSuccessCompleted" />
+                                     Format="N0" Label="@LangService.GetString("Buy_ServiceCost")" Variant="Variant.Outlined" Dense="true" Min="0" HideSpinButtons="true" Disabled="_isSuccessCompleted" />
                 </MudItem>
                 <MudItem xs="12" sm="6" md="3">
                     <MudNumericField T="decimal" Value="@_model.deduction_percent" ValueChanged="OnDeductionChanged" Immediate="true"
-                                     Label="@LangService.GetString("Buy_DeductionPct")" Variant="Variant.Outlined" Dense="true" Min="0" Max="30" HideSpinButtons="true" Disabled="_isSuccessCompleted" />
+                                     Format="N0" Label="@LangService.GetString("Buy_DeductionPct")" Variant="Variant.Outlined" Dense="true" Min="0" Max="30" HideSpinButtons="true" Disabled="_isSuccessCompleted" />
                 </MudItem>
                 <MudItem xs="12" sm="6" md="3">
-                    <MudTextField T="string" Value="@_calculatedAgreedPrice.ToString("N2")" ReadOnly="true"
+                    <MudTextField T="string" Value="@_calculatedAgreedPrice.ToString("N0")" ReadOnly="true"
                                   Label="@LangService.GetString("Buy_FinalPrice")" Variant="Variant.Outlined" Dense="true" Disabled="true" />
                 </MudItem>
             </MudGrid>
 
             <MudDivider Class="my-4" />
 
-            <!-- 4. Weight / Amount -->
+            <!-- 4. Weight / Amount (Weight က 0 ဖြစ်နေပါက Save ခလုတ်ပိတ်မည်) -->
             <MudGrid Spacing="3">
                 <MudItem xs="12" sm="6" md="3">
                     <MudNumericField T="decimal" Value="@_model.weight" ValueChanged="OnWeightChanged" Immediate="true"
-                                     Label="@LangService.GetString("Buy_Weight")" Variant="Variant.Outlined" Dense="true" Min="0" HideSpinButtons="true" Disabled="_isSuccessCompleted" />
+                                     Format="N0" Label="@LangService.GetString("Buy_Weight")" Variant="Variant.Outlined" Dense="true" Min="0" HideSpinButtons="true" Disabled="_isSuccessCompleted" />
                 </MudItem>
                 <MudItem xs="12" sm="6" md="3">
-                    <MudTextField T="string" Value="@_calculatedTotalAmount.ToString("N2")" ReadOnly="true"
+                    <MudTextField T="string" Value="@_calculatedTotalAmount.ToString("N0")" ReadOnly="true"
                                   Label="@LangService.GetString("Buy_TotalAmount")" Variant="Variant.Outlined" Dense="true" Disabled="true" />
                 </MudItem>
                 <MudItem xs="12" sm="6" md="3">
-                    <MudTextField T="string" Value="@_model.advance_amount.ToString("N2")" ReadOnly="true"
+                    <MudTextField T="string" Value="@_model.advance_amount.ToString("N0")" ReadOnly="true"
                                   Label="@LangService.GetString("Buy_Advance")" Variant="Variant.Outlined" Dense="true" Disabled="true" />
                 </MudItem>
                 <MudItem xs="12" sm="6" md="3">
-                    <MudTextField T="string" Value="@_calculatedNetPayable.ToString("N2")" ReadOnly="true"
+                    <MudTextField T="string" Value="@_calculatedNetPayable.ToString("N0")" ReadOnly="true"
                                   Label="@LangService.GetString("Buy_NetPayable")" Variant="Variant.Outlined" Dense="true" Disabled="true" />
                 </MudItem>
             </MudGrid>
 
             <MudDivider Class="my-4" />
 
-            <!-- 5. Payment Wallet -->
+            <!-- 5. Payment Wallet (မရွေးရသေးပါက Error ပြမည်) -->
             <MudGrid Spacing="3" AlignItems="Center">
                 <MudItem xs="12" md="6">
-                    <MudSelect T="string" @bind-Value="_model.wallet_id" Label="ငွေပေးချေမည့်အကောင့် (Payment Wallet)"
-                               Variant="Variant.Outlined" Dense="true" Required="true" Clearable="true" Disabled="_isSuccessCompleted">
+                    <MudSelect T="string" @bind-Value="_model.wallet_id" Label="ငွေပေးချေမည့်အကောင့် (Payment Wallet)*"
+                               Variant="Variant.Outlined" Dense="true" Clearable="true" Disabled="_isSuccessCompleted"
+                               Error="@_walletError" ErrorText="ငွေပေးချေမည့် အကောင့်ကို မဖြစ်မနေ ရွေးချယ်ပါ။">
                         @if (_wallets != null)
                         {
                             @foreach (var wallet in _wallets)
@@ -169,12 +185,12 @@
                 </MudItem>
             </MudGrid>
 
-            <!-- BUTTONS -->
+            <!-- BUTTONS (အချက်အလက်မပြည့်စုံလျှင် / Weight 0 ဖြစ်နေလျှင် Disabled ဖြစ်မည်) -->
             <div class="d-flex justify-end gap-3 mt-6">
                 @if (!_isSuccessCompleted)
                 {
                     <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" Class="px-6"
-                               Disabled="@_isSaving">
+                               Disabled="@(!_isFormValid || _isSaving)">
                         @if (_isSaving)
                         {
                             <MudProgressCircular Size="Size.Small" Indeterminate="true" />
@@ -192,7 +208,7 @@
                     </MudButton>
                 }
 
-                <MudButton Variant="Variant.Outlined" Color="Color.Secondary" Size="Size.Large" OnClick="PrintVoucher"
+                <MudButton Variant="Variant.Outlined" Color="Color.Secondary" Size="Size.Large" OnClick="OpenPrintPreview"
                            Disabled="!_isSuccessCompleted">
                     Print Voucher
                 </MudButton>
@@ -212,11 +228,13 @@
     [SupplyParameterFromQuery(Name = "id")]
     public string? EditTransactionId { get; set; }
 
+    private DateTime? _selectedDate = DateTime.Today;
     private string _currentVoucherNumber = string.Empty;
     private bool _isUserModifiedPaid = false;
     private bool _isSaving = false;
     private bool _isSuccessCompleted = false;
     private bool _isEditMode = false;
+    private bool _walletError = false;
 
     private RubberPurchaseModel _model = new()
     {
@@ -229,6 +247,13 @@
     private List<DailyPriceModel> _dailyPrices = new();
     private List<WalletModel> _wallets = new();
 
+    // အချက်အလက်ပြည့်စုံမှု စစ်ဆေးခြင်း (Weight > 0 နှင့် Wallet ရွေးထားမှသာ Save ခလုတ်ပွင့်မည်)
+    private bool _isFormValid =>
+        _model.weight > 0 &&
+        !string.IsNullOrEmpty(_model.contact_id) &&
+        !string.IsNullOrEmpty(_model.rubber_type_id) &&
+        !string.IsNullOrEmpty(_model.wallet_id);
+
     private decimal _calculatedAgreedPrice
     {
         get
@@ -236,7 +261,7 @@
             var price = _model.price_per_unit - _model.service_cost;
             var deduction = 1m - (_model.deduction_percent / 100m);
             var result = price * deduction;
-            return result < 0 ? 0 : result;
+            return result < 0 ? 0 : Math.Round(result, 0);
         }
     }
 
@@ -244,7 +269,7 @@
     {
         get
         {
-            return _calculatedAgreedPrice * _model.weight;
+            return Math.Round(_calculatedAgreedPrice * _model.weight, 0);
         }
     }
 
@@ -253,7 +278,7 @@
         get
         {
             var net = _calculatedTotalAmount - _model.advance_amount;
-            return net < 0 ? 0 : net;
+            return net < 0 ? 0 : Math.Round(net, 0);
         }
     }
 
@@ -280,7 +305,16 @@
         else
         {
             _isEditMode = false;
-            _currentVoucherNumber = await GenerateVoucherNumberAsync("PUR");
+            _currentVoucherNumber = await GenerateVoucherNumberAsync("PUR", _selectedDate ?? DateTime.Today);
+        }
+    }
+
+    private async Task OnDateChanged(DateTime? newDate)
+    {
+        _selectedDate = newDate ?? DateTime.Today;
+        if (!_isEditMode && !_isSuccessCompleted)
+        {
+            _currentVoucherNumber = await GenerateVoucherNumberAsync("PUR", _selectedDate.Value);
         }
     }
 
@@ -292,7 +326,8 @@
             if (txList != null && txList.Any())
             {
                 var tx = txList.First();
-                _currentVoucherNumber = !string.IsNullOrEmpty(tx.voucher_number) ? tx.voucher_number : await GenerateVoucherNumberAsync("PUR");
+                _selectedDate = tx.created_at ?? DateTime.Today;
+                _currentVoucherNumber = !string.IsNullOrEmpty(tx.voucher_number) ? tx.voucher_number : await GenerateVoucherNumberAsync("PUR", _selectedDate.Value);
 
                 _model.contact_id = tx.contact_id ?? "00000000-0000-0000-0000-000000000000";
                 _model.rubber_type_id = tx.rubber_type_id ?? string.Empty;
@@ -342,9 +377,9 @@
         }
     }
 
-    private async Task<string> GenerateVoucherNumberAsync(string prefix)
+    private async Task<string> GenerateVoucherNumberAsync(string prefix, DateTime targetDate)
     {
-        string dateStr = DateTime.Now.ToString("yyyyMMdd");
+        string dateStr = targetDate.ToString("yyyyMMdd");
         string searchPattern = $"{prefix}-{dateStr}-";
 
         try
@@ -375,14 +410,14 @@
         }
     }
 
-    private void OnPriceChanged(decimal value) { _model.price_per_unit = value; Recalculate(); }
-    private void OnServiceCostChanged(decimal value) { _model.service_cost = value; Recalculate(); }
-    private void OnDeductionChanged(decimal value) { _model.deduction_percent = value; Recalculate(); }
-    private void OnWeightChanged(decimal value) { _model.weight = value; Recalculate(); }
+    private void OnPriceChanged(decimal value) { _model.price_per_unit = Math.Round(value, 0); Recalculate(); }
+    private void OnServiceCostChanged(decimal value) { _model.service_cost = Math.Round(value, 0); Recalculate(); }
+    private void OnDeductionChanged(decimal value) { _model.deduction_percent = Math.Round(value, 0); Recalculate(); }
+    private void OnWeightChanged(decimal value) { _model.weight = Math.Round(value, 0); Recalculate(); }
 
     private void OnActualPaidChanged(decimal value)
     {
-        _model.actual_paid = value;
+        _model.actual_paid = Math.Round(value, 0);
         _isUserModifiedPaid = true;
         StateHasChanged();
     }
@@ -421,7 +456,7 @@
         {
             _model.rubber_type_id = selectedRubberTypeId;
             var matchingPrice = _dailyPrices.FirstOrDefault(p => p.rubber_type_id == selectedRubberTypeId);
-            _model.price_per_unit = matchingPrice != null ? matchingPrice.price_per_unit : 0;
+            _model.price_per_unit = matchingPrice != null ? Math.Round(matchingPrice.price_per_unit, 0) : 0;
         }
 
         Recalculate();
@@ -437,10 +472,10 @@
         if (result != null && !result.Canceled) await LoadDropdownDataAsync();
     }
 
-    private Task OpenAddContactDialog()
+    private void GoToAddContact()
     {
-        Snackbar.Add("Contact Dialog ဖွင့်ရန် ချိတ်ဆက်ထားပါသည်။", Severity.Info);
-        return Task.CompletedTask;
+        // Farmer/Supplier ဘေးက အပေါင်း (+) နှိပ်လျှင် /contacts/add သို့သွားမည်
+        Navigation.NavigateTo("/contacts/add");
     }
 
     private async Task OpenAddRubberTypeDialog()
@@ -455,6 +490,15 @@
 
     private async Task SavePurchaseAsync()
     {
+        // Wallet မရွေးရသေးပါက Error ပြမည်
+        if (string.IsNullOrEmpty(_model.wallet_id))
+        {
+            _walletError = true;
+            Snackbar.Add("ငွေပေးချေမည့် အကောင့်ကို မဖြစ်မနေ ရွေးချယ်ပါ။", Severity.Warning);
+            return;
+        }
+        _walletError = false;
+
         _isSaving = true;
         try
         {
@@ -468,6 +512,9 @@
 
             _model.owner_id = ownerId;
             _model.staff_id = staffId;
+
+            DateTime recordDate = _selectedDate ?? DateTime.Today;
+            string isoFormattedDate = recordDate.ToString("yyyy-MM-ddTHH:mm:ssZ");
 
             string? contactIdToSave = (_model.contact_id == "00000000-0000-0000-0000-000000000000") ? null : _model.contact_id;
 
@@ -502,7 +549,8 @@
                 paid_amount = paidAmount + advanceDeducted,
                 due_amount = dueAmount,
                 payment_status = paymentStatus,
-                description = $"Rubber Purchase - {_model.purchase_location} (Voucher: {_currentVoucherNumber})"
+                description = $"Rubber Purchase - {_model.purchase_location} (Voucher: {_currentVoucherNumber})",
+                created_at = isoFormattedDate
             };
 
             var requestMessage = new HttpRequestMessage(HttpMethod.Post, "rest/v1/transactions")
@@ -524,7 +572,8 @@
                     staff_id = _model.staff_id,
                     voucher_number = _currentVoucherNumber,
                     voucher_type = "Purchase",
-                    reference_id = generatedTransactionId
+                    reference_id = generatedTransactionId,
+                    created_at = isoFormattedDate
                 };
                 await Http.PostAsJsonAsync("rest/v1/vouchers", voucherPayload);
 
@@ -548,7 +597,8 @@
                         credit_amount = creditVal,
                         balance_after = currentRunningBalance,
                         ref_type = "Purchase",
-                        description = $"Voucher {_currentVoucherNumber} - ရာဘာဝယ်ယူမှု (တန်ဖိုး: {debitVal:N0}, ပေးငွေ: {creditVal:N0})"
+                        description = $"Voucher {_currentVoucherNumber} - ရာဘာဝယ်ယူမှု",
+                        created_at = isoFormattedDate
                     };
                     await Http.PostAsJsonAsync("rest/v1/ledgers", ledgerPayload);
                 }
@@ -573,9 +623,10 @@
                         vehicle_id = _model.truck_id,
                         rubber_type_id = _model.rubber_type_id,
                         quantity = _model.weight,
-                        trip_date = DateTime.Today.ToString("yyyy-MM-dd"),
+                        trip_date = recordDate.ToString("yyyy-MM-dd"),
                         status = "Active",
-                        transaction_id = generatedTransactionId
+                        transaction_id = generatedTransactionId,
+                        created_at = isoFormattedDate
                     };
                     await Http.PostAsJsonAsync("rest/v1/truck_stocks", truckStockPayload);
                 }
@@ -592,7 +643,8 @@
                         net_weight = _model.weight,
                         source_type = "Shop",
                         status = "Pending",
-                        transaction_id = generatedTransactionId
+                        transaction_id = generatedTransactionId,
+                        created_at = isoFormattedDate
                     };
                     await Http.PostAsJsonAsync("rest/v1/temp_stocks", tempStockPayload);
                 }
@@ -620,7 +672,6 @@
     {
         try
         {
-            // 1. Wallet Balance Refund လုပ်ခြင်း
             var txList = await Http.GetFromJsonAsync<List<TransactionDetailModel>>($"rest/v1/transactions?id=eq.{txId}&select=wallet_id,paid_amount");
             if (txList != null && txList.Any())
             {
@@ -637,7 +688,6 @@
                 }
             }
 
-            // 2. transaction_id ဖြင့် တိုက်ရိုက် လိုက်လံဖျက်ခြင်း (အလွန်လွယ်ကူသန့်ရှင်းသည်)
             await Http.DeleteAsync($"rest/v1/truck_stocks?transaction_id=eq.{txId}");
             await Http.DeleteAsync($"rest/v1/temp_stocks?transaction_id=eq.{txId}");
             await Http.DeleteAsync($"rest/v1/ledgers?transaction_id=eq.{txId}");
@@ -650,9 +700,70 @@
         }
     }
 
-    private void PrintVoucher()
+    private async Task OpenPrintPreview()
     {
-        Snackbar.Add($"ဘောင်ချာအမှတ် {_currentVoucherNumber} ကို Print ထုတ်နေပါပြီ...", Severity.Info);
+        string paperSize = "A5";
+        int customWidth = 148;
+        int customHeight = 210;
+        string headerTitle = "ရွှေပြည်စိုး ရာဘာကုန်သွယ်လုပ်ငန်း";
+        string headerAddress = "";
+        string footerNote = "ကျေးဇူးတင်ပါသည်၊ ကုန်ပစ္စည်းလဲလှယ်ခွင့် မရှိပါ။";
+
+        try
+        {
+            // Supabase ရှိ printer_settings ဇယားမှ ဆက်တင်များကို ဆွဲထုတ်ခြင်း
+            var settings = await Http.GetFromJsonAsync<List<PrinterSettingsModel>>("rest/v1/printer_settings?select=*&limit=1");
+            if (settings != null && settings.Any())
+            {
+                var s = settings.First();
+                paperSize = string.IsNullOrEmpty(s.voucher_size) ? "A5" : s.voucher_size;
+                customWidth = s.custom_width > 0 ? s.custom_width : 148;
+                customHeight = s.custom_height > 0 ? s.custom_height : 210;
+                headerTitle = string.IsNullOrEmpty(s.header_title) ? headerTitle : s.header_title;
+                headerAddress = s.header_address ?? "";
+                footerNote = string.IsNullOrEmpty(s.footer_note) ? footerNote : s.footer_note;
+            }
+        }
+        catch
+        {
+            // Error တက်ပါက Default တန်ဖိုးများကိုသာ ဆက်သုံးမည်
+        }
+
+        var selectedSupplier = _suppliers.FirstOrDefault(s => s.Id == _model.contact_id);
+        var selectedRubber = _rubberTypes.FirstOrDefault(r => r.id == _model.rubber_type_id);
+
+        var parameters = new DialogParameters<PrintPreviewDialog>
+        {
+            { x => x.VoucherNumber, _currentVoucherNumber },
+            { x => x.PaperSize, paperSize },
+            { x => x.CustomWidthMm, customWidth },
+            { x => x.CustomHeightMm, customHeight },
+            { x => x.HeaderTitle, headerTitle },
+            { x => x.HeaderAddress, headerAddress },
+            { x => x.FooterNote, footerNote },
+            { x => x.BuyerName, selectedSupplier?.Name ?? "Walk-in Supplier" },
+            { x => x.RubberTypeName, selectedRubber?.name ?? "Standard Rubber" },
+            { x => x.Quantity, _model.weight },
+            { x => x.AgreedPrice, _calculatedAgreedPrice },
+            { x => x.TotalAmount, _calculatedTotalAmount },
+            { x => x.ContractDate, _selectedDate },
+           // { x => x.DueDate, _selectedDate },
+            { x => x.Description, $"Rubber Purchase ({_model.purchase_location})" }
+        };
+
+        var options = new DialogOptions { MaxWidth = MaxWidth.Large, FullWidth = true, CloseButton = true };
+        await DialogService.ShowAsync<PrintPreviewDialog>("Print Preview", parameters, options);
+    }
+
+    // Printer Settings အတွက် Model အသစ်ထည့်ရန်
+    private class PrinterSettingsModel
+    {
+        public string? voucher_size { get; set; }
+        public int custom_width { get; set; }
+        public int custom_height { get; set; }
+        public string? header_title { get; set; }
+        public string? header_address { get; set; }
+        public string? footer_note { get; set; }
     }
 
     private void FinishTransaction()
@@ -693,6 +804,7 @@
         public decimal deduction_percent { get; set; }
         public decimal total_amount { get; set; }
         public decimal paid_amount { get; set; }
+        public DateTime? created_at { get; set; }
     }
 
     private class TransactionResponseModel
