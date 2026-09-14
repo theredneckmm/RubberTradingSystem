@@ -440,8 +440,81 @@
         return 0m;
     }
 
-    private void PrintVoucher() => Snackbar.Add($"ဘောင်ချာအမှတ် {_currentVoucherNumber} ကို Print ထုတ်နေပါပြီ...", Severity.Info);
+    private async Task PrintVoucher()
+    {
+        string buyerName = _buyers.FirstOrDefault(b => b.Id == _model.contact_id)?.Name ?? "-";
+        string rubberName = _rubberTypes.FirstOrDefault(r => r.id == _model.rubber_type_id)?.name ?? "-";
 
+        string printHeaderTitle = "ရွှေပြည်စိုး ရာဘာကုန်သွယ်လုပ်ငန်း";
+        string printHeaderAddress = "";
+        string printFooterNote = "ကျေးဇူးတင်ပါသည်";
+        string printPaperSize = "A5";
+        int printCustomWidth = 100;
+        int printCustomHeight = 150;
+
+        try
+        {
+            // Supabase မှ printer_settings ဇယားကို လှမ်းခေါ်ခြင်း
+            var printerSettings = await Http.GetFromJsonAsync<List<PrinterSetupRaw>>("rest/v1/printer_settings?select=*");
+            if (printerSettings != null && printerSettings.Any())
+            {
+                var activeSetting = printerSettings.FirstOrDefault(p => p.is_default) ?? printerSettings.First();
+                printHeaderTitle = activeSetting.header_title ?? printHeaderTitle;
+                printHeaderAddress = activeSetting.header_address ?? "";
+                printFooterNote = activeSetting.footer_note ?? "";
+                printPaperSize = activeSetting.voucher_size ?? "A5";
+                printCustomWidth = activeSetting.custom_width;
+                printCustomHeight = activeSetting.custom_height;
+            }
+        }
+        catch { }
+
+        var parameters = new DialogParameters<Components.PrintPreviewDialog>
+    {
+        { x => x.VoucherNumber, _currentVoucherNumber },
+        { x => x.PaperSize, printPaperSize },
+        //{ x => x.CustomWidthMm, printCustomWidth },
+        //{ x => x.CustomHeightMm, printCustomHeight },
+        { x => x.HeaderTitle, printHeaderTitle },
+        { x => x.HeaderAddress, printHeaderAddress },
+        { x => x.FooterNote, printFooterNote },
+        { x => x.BuyerName, buyerName },
+        { x => x.RubberTypeName, rubberName },
+        { x => x.Quantity, _model.contract_quantity },
+        { x => x.AgreedPrice, _model.agreed_price },
+        { x => x.TotalAmount, _calculatedTotalAdvance },
+        { x => x.ContractDate, _contractDate },
+        { x => x.DueDate, _dueDate },
+        { x => x.Description, _model.description }
+    };
+
+        var options = new DialogOptions { MaxWidth = MaxWidth.Large, FullWidth = true, CloseButton = true };
+        await DialogService.ShowAsync<Components.PrintPreviewDialog>("Print Preview", parameters, options);
+    }
+
+    private class PrinterSetupRaw
+    {
+        public bool is_default { get; set; }
+        public string voucher_size { get; set; } = "A5";
+        public int custom_width { get; set; } = 100;
+        public int custom_height { get; set; } = 150;
+        public string? header_title { get; set; }
+        public string? header_address { get; set; }
+        public string? footer_note { get; set; }
+    }
+
+    // Model for fetching setup
+    private class PrinterSetupModel
+    {
+        public string SelectedPrinter { get; set; } = "";
+        public string VoucherSize { get; set; } = "A5";
+        public int CustomWidth { get; set; } = 100;
+        public int CustomHeight { get; set; } = 150;
+        public bool IsDefault { get; set; }
+        public string HeaderTitle { get; set; } = "";
+        public string HeaderAddress { get; set; } = "";
+        public string FooterNote { get; set; } = "";
+    }
     private async Task FinishTransaction()
     {
         _model = new ForwardContractModel();

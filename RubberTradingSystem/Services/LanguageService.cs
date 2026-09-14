@@ -743,6 +743,18 @@ namespace RubberTradingSystem.Services
             ["Btn_AddStaffNew"] = "Add New Staff",
             ["Btn_Edit"] = "Edit",
             ["Btn_Delete"] = "Delete",
+            ["Title_PrinterSetup"] = "Printer & Voucher Setup",
+            ["Section_DeviceConfig"] = "Device & Size Configuration",
+            ["Section_HeaderFooter"] = "Header & Footer Customization",
+            ["Lbl_SelectPrinter"] = "Select Printer",
+            ["Lbl_VoucherSize"] = "Voucher Size",
+            ["Lbl_WidthMM"] = "Width (mm)",
+            ["Lbl_HeightMM"] = "Height (mm)",
+            ["Lbl_SetAsDefault"] = "Set as Default",
+            ["Lbl_HeaderTitle"] = "Header / Company Title",
+            ["Lbl_HeaderAddress"] = "Address & Contact Info",
+            ["Lbl_FooterNote"] = "Footer Note",
+            ["Btn_SaveSettings"] = "Save Settings",
         };
 
         private static readonly Dictionary<string, string> Myanmar = new()
@@ -1465,6 +1477,18 @@ namespace RubberTradingSystem.Services
             ["Btn_AddStaffNew"] = "ဝန်ထမ်းအသစ်ထည့်မည်",
             ["Btn_Edit"] = "ပြင်ဆင်မည်",
             ["Btn_Delete"] = "ဖျက်မည်",
+            ["Title_PrinterSetup"] = "प्रिन्टर နှင့် ဘောက်ချာ ဆက်တင်များ (Printer & Voucher Setup)",
+            ["Section_DeviceConfig"] = "စက်ပစ္စည်းနှင့် အရွယ်အစား ရွေးချယ်ရန်",
+            ["Section_HeaderFooter"] = "ခေါင်းစီးနှင့် အောက်ခြေ စာသားများ သတ်မှတ်ရန်",
+            ["Lbl_SelectPrinter"] = "အသုံးမည့် Printer ရွေးချယ်ရန်",
+            ["Lbl_VoucherSize"] = "ဘောက်ချာ အရွယ်အစား (Voucher Size)",
+            ["Lbl_WidthMM"] = "အကျယ် (Width in mm)",
+            ["Lbl_HeightMM"] = "အမြင့် (Height in mm)",
+            ["Lbl_SetAsDefault"] = "Default အဖြစ် သတ်မှတ်မည်",
+            ["Lbl_HeaderTitle"] = "လုပ်ငန်းအမည် / ခေါင်းစီး",
+            ["Lbl_HeaderAddress"] = "လိပ်စာနှင့် ဆက်သွယ်ရန်အချက်အလက်",
+            ["Lbl_FooterNote"] = "အောက်ခြေ မှတ်စုစာသား (Footer Note)",
+            ["Btn_SaveSettings"] = "ဆက်တင်များကို သိမ်းဆည်းမည်",
         };
     }
 }

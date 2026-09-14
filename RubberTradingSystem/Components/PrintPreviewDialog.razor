@@ -1,0 +1,361 @@
+﻿@using MudBlazor
+@inject IJSRuntime JSRuntime
+
+<style>
+    .voucher-preview-wrapper {
+        background: #525659;
+        padding: 25px;
+        overflow: auto;
+        display: flex;
+        justify-content: center;
+        align-items: flex-start;
+        min-height: 450px;
+    }
+
+    .voucher-paper {
+        background: white;
+        color: black;
+        width: @GetPreviewWidth();
+        min-height: 400px;
+        padding: 24px;
+        box-sizing: border-box;
+        border: 1px solid #ccc;
+        box-shadow: 0 4px 15px rgba(0,0,0,.35);
+        font-family: "Noto Sans Myanmar", "Myanmar Text", Arial, sans-serif;
+        font-size: 13px;
+        line-height: 1.5;
+    }
+
+    .voucher-header {
+        text-align: center;
+        margin-bottom: 12px;
+    }
+
+    .voucher-title {
+        font-size: 20px;
+        font-weight: bold;
+        margin-bottom: 3px;
+    }
+
+    .voucher-address {
+        font-size: 12px;
+        white-space: pre-line;
+        color: #333;
+    }
+
+    .voucher-header-line {
+        border-bottom: 2px solid #000;
+        margin-top: 8px;
+        margin-bottom: 12px;
+    }
+
+    .voucher-meta {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 12px;
+        font-size: 13px;
+    }
+
+    .voucher-details {
+        margin-bottom: 15px;
+        font-size: 13px;
+        line-height: 1.6;
+    }
+
+    .voucher-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 18px;
+        font-size: 13px;
+    }
+
+        .voucher-table th {
+            padding: 7px 6px;
+            text-align: left;
+            border-top: 1px solid #000;
+            border-bottom: 2px solid #000;
+            font-weight: bold;
+        }
+
+        .voucher-table td {
+            padding: 7px 6px;
+            border-bottom: 1px solid #ddd;
+            vertical-align: top;
+        }
+
+        .voucher-table .text-right {
+            text-align: right;
+        }
+
+    .total-amount {
+        font-weight: bold;
+    }
+
+    .english-text {
+        font-size: 11px;
+    }
+
+    .voucher-description {
+        font-size: 13px;
+        margin-top: 10px;
+        margin-bottom: 25px;
+    }
+
+    .voucher-footer {
+        text-align: center;
+        border-top: 1px dashed #777;
+        padding-top: 12px;
+        margin-top: 30px;
+        font-size: 12px;
+    }
+</style>
+
+
+<MudDialog MaxWidth="MaxWidth.Large" FullWidth="true">
+
+    <TitleContent>
+        <div class="d-flex justify-space-between align-center">
+            <MudText Typo="Typo.h6">
+                <b>ဘောက်ချာ Print Preview (@PaperSize)</b>
+            </MudText>
+
+            <MudIconButton Icon="@Icons.Material.Filled.Close"
+                           OnClick="Close" />
+        </div>
+    </TitleContent>
+
+    <DialogContent>
+
+        <div class="voucher-preview-wrapper">
+
+            <div id="print-area" class="voucher-paper">
+
+                <div class="voucher-header">
+
+                    <div class="voucher-title">
+                        @HeaderTitle
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(HeaderAddress))
+                    {
+                        <div class="voucher-address">
+                            @HeaderAddress
+                        </div>
+                    }
+
+                    <div class="voucher-header-line"></div>
+
+                </div>
+
+
+                <div class="voucher-meta">
+
+                    <div>
+                        <b>ဘောက်ချာအမှတ်:</b>
+                        @VoucherNumber
+                    </div>
+
+                    <div>
+                        <b>ရက်စွဲ:</b>
+                        @ContractDate?.ToString("dd/MM/yyyy")
+                    </div>
+
+                </div>
+
+
+                <div class="voucher-details">
+
+                    <div>
+                        <b>ကုန်သည်/ကုမ္ပဏီ:</b>
+                        @BuyerName
+                    </div>
+
+                    <div>
+                        <b>ရာဘာအမျိုးအစား:</b>
+                        @RubberTypeName
+                    </div>
+
+                    <div>
+                        <b>သတ်မှတ်ရက် (Due Date):</b>
+                        @DueDate?.ToString("dd/MM/yyyy")
+                    </div>
+
+                </div>
+
+
+                <table class="voucher-table">
+
+                    <thead>
+                        <tr>
+                            <th>အကြောင်းအရာ</th>
+
+                            <th class="text-right">
+                                ပိဿာချိန်
+                            </th>
+
+                            <th class="text-right">
+                                သဘောတူဈေး
+                            </th>
+
+                            <th class="text-right">
+                                စုစုပေါင်းငွေ
+                            </th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        <tr>
+
+                            <td>
+                                ကြိုပွိုင့်စာချုပ်
+                                <br />
+                                <span class="english-text">
+                                    (Forward Contract Advance)
+                                </span>
+                            </td>
+
+                            <td class="text-right">
+                                @Quantity.ToString("N2")
+                            </td>
+
+                            <td class="text-right">
+                                @AgreedPrice.ToString("N0")
+                            </td>
+
+                            <td class="text-right total-amount">
+                                @TotalAmount.ToString("N0") MMK
+                            </td>
+
+                        </tr>
+                    </tbody>
+
+                </table>
+
+
+                @if (!string.IsNullOrWhiteSpace(Description))
+                {
+                    <div class="voucher-description">
+                        <b>မှတ်ချက်:</b>
+                        @Description
+                    </div>
+                }
+
+
+                <div class="voucher-footer">
+                    @FooterNote
+                </div>
+
+            </div>
+
+        </div>
+
+    </DialogContent>
+
+
+    <DialogActions>
+
+        <MudButton Variant="Variant.Outlined"
+                   Color="Color.Secondary"
+                   OnClick="Close">
+
+            ပိတ်မည်
+
+        </MudButton>
+
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.Print"
+                   OnClick="TriggerPrint">
+
+            တိုက်ရိုက်ထုတ်မည် (Print)
+
+        </MudButton>
+
+    </DialogActions>
+
+</MudDialog>
+
+
+@code {
+
+    [CascadingParameter]
+    public IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter] public string VoucherNumber { get; set; } = "";
+
+    [Parameter] public string PaperSize { get; set; } = "A5";
+
+    [Parameter] public int CustomWidthMm { get; set; } = 100;
+
+    [Parameter] public int CustomHeightMm { get; set; } = 150;
+
+    [Parameter]
+    public string HeaderTitle { get; set; }
+        = "ရွှေပြည်စိုး ရာဘာကုန်သွယ်လုပ်ငန်း";
+
+    [Parameter] public string HeaderAddress { get; set; } = "";
+
+    [Parameter]
+    public string FooterNote { get; set; }
+        = "ကျေးဇူးတင်ပါသည်";
+
+    [Parameter] public string BuyerName { get; set; } = "";
+
+    [Parameter] public string RubberTypeName { get; set; } = "";
+
+    [Parameter] public decimal Quantity { get; set; }
+
+    [Parameter] public decimal AgreedPrice { get; set; }
+
+    [Parameter] public decimal TotalAmount { get; set; }
+
+    [Parameter] public DateTime? ContractDate { get; set; }
+
+    [Parameter] public DateTime? DueDate { get; set; }
+
+    [Parameter] public string? Description { get; set; }
+
+
+    private void Close()
+    {
+        MudDialog.Close();
+    }
+
+
+    private string GetPreviewWidth()
+    {
+        return PaperSize switch
+        {
+            "A4" => "650px",
+            "A5" => "500px",
+            "A6" => "380px",
+            "Custom" =>
+                $"{Math.Min(
+                    Math.Max(CustomWidthMm * 3, 300),
+                    700
+                )}px",
+            _ => "500px"
+        };
+    }
+
+
+    private async Task TriggerPrint()
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync(
+                "printVoucher",
+                "print-area",
+                PaperSize,
+                CustomWidthMm,
+                CustomHeightMm
+            );
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(
+                $"Print error: {ex.Message}"
+            );
+        }
+    }
+}
