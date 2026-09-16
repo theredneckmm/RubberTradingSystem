@@ -3,6 +3,8 @@
 @using RubberTradingSystem.Components
 @using RubberTradingSystem.Models
 @using RubberTradingSystem.Services
+@using RubberTradingSystem.Models.Printing
+@inject PrintService PrintService
 @inject HttpClient Http
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
@@ -13,21 +15,19 @@
 
 <MudContainer MaxWidth="MaxWidth.Large" Class="mt-4 mb-6">
 
-    <!-- ခေါင်းစဉ်၊ ရက်စွဲနှင့် ဘောင်ချာအမှတ်စဉ် (DateTimePicker ညာဘက်ကပ်ရန် d-flex justify-end သုံးထားသည်) -->
+    <!-- ခေါင်းစဉ်၊ ရက်စွဲနှင့် ဘောင်ချာအမှတ်စဉ် -->
     <div class="d-flex justify-space-between align-center mb-4 flex-wrap gap-3">
         <MudText Typo="Typo.h5" Color="Color.Primary" Class="font-weight-bold">
             @(_isEditMode ? "ဝယ်ယူမှု အချက်အလက် ပြင်ဆင်ခြင်း (Edit Purchase)" : LangService.GetString("Buy_Title"))
         </MudText>
 
         <div class="d-flex align-center gap-3 justify-end" style="margin-left: auto;">
-            
-
             <!-- ဘောင်ချာအမှတ်စဉ် -->
             <MudChip T="string" Color="Color.Primary" Variant="Variant.Filled" Size="Size.Large">
                 <b>Voucher: @_currentVoucherNumber</b>
             </MudChip>
 
-            <!-- DateTimePicker ကို ညာဘက်သို့ကပ်ရန် AnchorOrigin="Origin.BottomRight" သုံးထားသည် -->
+            <!-- ရက်စွဲ -->
             <MudDatePicker Label="ရက်စွဲ (Date)" Date="@_selectedDate" DateChanged="OnDateChanged" DateFormat="dd/MM/yyyy"
                            Variant="Variant.Outlined" Margin="Margin.Dense"
                            AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight"
@@ -92,7 +92,6 @@
                                 }
                             }
                         </MudSelect>
-                        <!-- ခြံရှင်အသစ်ထည့်ရန် /contacts/add သို့သွားမည် -->
                         <MudIconButton Icon="@Icons.Material.Filled.Add" Color="Color.Primary" Variant="Variant.Filled" Size="Size.Medium" OnClick="GoToAddContact" Disabled="_isSuccessCompleted" />
                     </div>
                 </MudItem>
@@ -117,7 +116,7 @@
 
             <MudDivider Class="my-4" />
 
-            <!-- 3. ဈေးနှုန်း (ကိန်းပြည့် N0 သာသုံးမည်) -->
+            <!-- 3. ဈေးနှုန်း -->
             <MudGrid Spacing="3">
                 <MudItem xs="12" sm="6" md="3">
                     <MudNumericField T="decimal" Value="@_model.price_per_unit" ValueChanged="OnPriceChanged" Immediate="true"
@@ -139,7 +138,7 @@
 
             <MudDivider Class="my-4" />
 
-            <!-- 4. Weight / Amount (Weight က 0 ဖြစ်နေပါက Save ခလုတ်ပိတ်မည်) -->
+            <!-- 4. Weight / Amount -->
             <MudGrid Spacing="3">
                 <MudItem xs="12" sm="6" md="3">
                     <MudNumericField T="decimal" Value="@_model.weight" ValueChanged="OnWeightChanged" Immediate="true"
@@ -161,7 +160,7 @@
 
             <MudDivider Class="my-4" />
 
-            <!-- 5. Payment Wallet (မရွေးရသေးပါက Error ပြမည်) -->
+            <!-- 5. Payment Wallet -->
             <MudGrid Spacing="3" AlignItems="Center">
                 <MudItem xs="12" md="6">
                     <MudSelect T="string" @bind-Value="_model.wallet_id" Label="ငွေပေးချေမည့်အကောင့် (Payment Wallet)*"
@@ -179,44 +178,64 @@
 
                 <!-- Actual Paid -->
                 <MudItem xs="12" md="6">
-                    <MudTextField T="decimal" Value="@_model.actual_paid" ValueChanged="OnActualPaidChanged" Immediate="true"
-                                  Format="N0" Label="@LangService.GetString("Buy_ActualPaid")" Variant="Variant.Outlined"
-                                  Dense="true" Min="0" Disabled="_isSuccessCompleted" />
+                    <MudNumericField T="decimal" Value="@_model.actual_paid" ValueChanged="OnActualPaidChanged" Immediate="true"
+                                     Format="N0" Label="@LangService.GetString("Buy_ActualPaid")" Variant="Variant.Outlined"
+                                     Dense="true" Min="0" Disabled="_isSuccessCompleted" />
                 </MudItem>
             </MudGrid>
 
-            <!-- BUTTONS (အချက်အလက်မပြည့်စုံလျှင် / Weight 0 ဖြစ်နေလျှင် Disabled ဖြစ်မည်) -->
-            <div class="d-flex justify-end gap-3 mt-6">
-                @if (!_isSuccessCompleted)
-                {
-                    <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" Class="px-6"
-                               Disabled="@(!_isFormValid || _isSaving)">
-                        @if (_isSaving)
-                        {
-                            <MudProgressCircular Size="Size.Small" Indeterminate="true" />
-                        }
-                        else
-                        {
-                            <text>@(_isEditMode ? "ပြင်ဆင်မှုကို သိမ်းမည်" : LangService.GetString("Buy_SaveButton"))</text>
-                        }
-                    </MudButton>
-                }
-                else
-                {
-                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" Disabled="true" Size="Size.Large" Class="px-6">
-                        @LangService.GetString("Buy_SaveButton")
-                    </MudButton>
-                }
+            <!-- BUTTONS & ERROR MESSAGES (အောက်ဆုံး Save ခလုတ်၏ ဘယ်ဘက်အစွန်းတွင် အနီရောင် စာသားဖြင့် ပြသရန်) -->
+            <div class="d-flex justify-space-between align-center mt-6 flex-wrap gap-3">
+                <!-- ဘယ်ဘက်အစွန်းတွင် Error သို့မဟုတ် Dynamic Balance စာသားကို အနီရောင်ဖြင့်ပြရန် -->
+                <div>
+                    @if (_isWalkInInvalid)
+                    {
+                        <MudText Color="Color.Error" Typo="Typo.body2" Class="fw-bold">
+                            ⚠️ Walk-in ခြံရှင်အတွက် ကျသင့်ငွေနှင့် ပေးချေငွေ တူညီရပါမည်။<br />
+                            ⚠️ (ပိုပေးခြင်း သို့မဟုတ် အကြွေးဝယ်ယူခြင်း ခွင့်မပြုပါ)
+                        </MudText>
+                    }
+                    else if (_dynamicBalanceCalculation != 0)
+                    {
+                        <MudText Color="@(_dynamicBalanceCalculation < 0 ? Color.Error : Color.Primary)" Typo="Typo.body2" Class="fw-bold">
+                            @_dynamicBalanceLabel: @_displayAbsoluteBalance.ToString("N0") MMK
+                        </MudText>
+                    }
+                </div>
 
-                <MudButton Variant="Variant.Outlined" Color="Color.Secondary" Size="Size.Large" OnClick="OpenPrintPreview"
-                           Disabled="!_isSuccessCompleted">
-                    Print Voucher
-                </MudButton>
+                <!-- ညာဘက်တွင် ခလုတ်များ -->
+                <div class="d-flex justify-end gap-3">
+                    @if (!_isSuccessCompleted)
+                    {
+                        <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" Class="px-6"
+                                   Disabled="@(!_isFormValid || _isSaving || _isWalkInInvalid)">
+                            @if (_isSaving)
+                            {
+                                <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+                            }
+                            else
+                            {
+                                <text>@(_isEditMode ? "ပြင်ဆင်မှုကို သိမ်းမည်" : LangService.GetString("Buy_SaveButton"))</text>
+                            }
+                        </MudButton>
+                    }
+                    else
+                    {
+                        <MudButton Variant="Variant.Outlined" Color="Color.Primary" Disabled="true" Size="Size.Large" Class="px-6">
+                            @LangService.GetString("Buy_SaveButton")
+                        </MudButton>
+                    }
 
-                <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Large" OnClick="FinishTransaction"
-                           Disabled="!_isSuccessCompleted" Class="px-6">
-                    Finish
-                </MudButton>
+                    <MudButton Variant="Variant.Outlined" Color="Color.Secondary" Size="Size.Large" OnClick="OpenPrintPreview"
+                               Disabled="!_isSuccessCompleted">
+                        Print Voucher
+                    </MudButton>
+
+                    <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Large" OnClick="FinishTransaction"
+                               Disabled="!_isSuccessCompleted" Class="px-6">
+                        Finish
+                    </MudButton>
+                </div>
             </div>
 
         </EditForm>
@@ -247,12 +266,17 @@
     private List<DailyPriceModel> _dailyPrices = new();
     private List<WalletModel> _wallets = new();
 
-    // အချက်အလက်ပြည့်စုံမှု စစ်ဆေးခြင်း (Weight > 0 နှင့် Wallet ရွေးထားမှသာ Save ခလုတ်ပွင့်မည်)
+    private bool _isWalkInSelected => string.IsNullOrEmpty(_model.contact_id) || _model.contact_id == "00000000-0000-0000-0000-000000000000";
+
+    // Walk-in ဖြစ်ပြီး Actual Paid သည် Net Payable (ကျသင့်ငွေ) နှင့် မတူဘဲ ပိုနေလျှင် သို့မဟုတ် လျော့နေလျှင် True ဖြစ်မည်
+    private bool _isWalkInInvalid => _isWalkInSelected && (_model.actual_paid != _calculatedNetPayable);
+
     private bool _isFormValid =>
         _model.weight > 0 &&
         !string.IsNullOrEmpty(_model.contact_id) &&
         !string.IsNullOrEmpty(_model.rubber_type_id) &&
-        !string.IsNullOrEmpty(_model.wallet_id);
+        !string.IsNullOrEmpty(_model.wallet_id) &&
+        !_isWalkInInvalid;
 
     private decimal _calculatedAgreedPrice
     {
@@ -265,13 +289,7 @@
         }
     }
 
-    private decimal _calculatedTotalAmount
-    {
-        get
-        {
-            return Math.Round(_calculatedAgreedPrice * _model.weight, 0);
-        }
-    }
+    private decimal _calculatedTotalAmount => Math.Round(_calculatedAgreedPrice * _model.weight, 0);
 
     private decimal _calculatedNetPayable
     {
@@ -281,6 +299,33 @@
             return net < 0 ? 0 : Math.Round(net, 0);
         }
     }
+
+    private decimal _dynamicBalanceCalculation
+    {
+        get
+        {
+            if (_isWalkInSelected) return 0m;
+
+            decimal baseAdvance = _model.advance_amount;
+            decimal totalAmount = _calculatedTotalAmount;
+            decimal actualPaid = _model.actual_paid;
+
+            return baseAdvance - (totalAmount - actualPaid);
+        }
+    }
+
+    private string _dynamicBalanceLabel
+    {
+        get
+        {
+            decimal balance = _dynamicBalanceCalculation;
+            if (balance > 0) return "ခြံရှင်ဆီမှ ရရန်ငွေ";
+            if (balance < 0) return "ခြံရှင်သို့ ပေးရန်ရှိငွေ";
+            return string.Empty;
+        }
+    }
+
+    private decimal _displayAbsoluteBalance => Math.Abs(_dynamicBalanceCalculation);
 
     protected override async Task OnInitializedAsync()
     {
@@ -340,6 +385,15 @@
 
                 _model.actual_paid = tx.paid_amount;
                 _isUserModifiedPaid = true;
+
+                if (!string.IsNullOrEmpty(tx.contact_id))
+                {
+                    var contactList = await Http.GetFromJsonAsync<List<Contact>>($"rest/v1/contacts?id=eq.{tx.contact_id}&select=*");
+                    if (contactList != null && contactList.Any())
+                    {
+                        _model.advance_amount = contactList.First().AdvanceBalance;
+                    }
+                }
             }
         }
         catch (Exception ex)
@@ -437,7 +491,8 @@
 
         if (!string.IsNullOrEmpty(selectedId) && selectedId != "00000000-0000-0000-0000-000000000000")
         {
-            _model.advance_amount = await GetLatestBalanceForContact(selectedId);
+            var selectedSupplier = _suppliers.FirstOrDefault(s => s.Id == selectedId);
+            _model.advance_amount = selectedSupplier?.AdvanceBalance ?? 0m;
         }
         else
         {
@@ -474,7 +529,6 @@
 
     private void GoToAddContact()
     {
-        // Farmer/Supplier ဘေးက အပေါင်း (+) နှိပ်လျှင် /contacts/add သို့သွားမည်
         Navigation.NavigateTo("/contacts/add");
     }
 
@@ -490,7 +544,12 @@
 
     private async Task SavePurchaseAsync()
     {
-        // Wallet မရွေးရသေးပါက Error ပြမည်
+        if (_isWalkInInvalid)
+        {
+            Snackbar.Add("Walk-in ခြံရှင်အတွက် ကျသင့်ငွေနှင့် ပေးချေငွေ တိကျစွာ တူညီရပါမည်။", Severity.Error);
+            return;
+        }
+
         if (string.IsNullOrEmpty(_model.wallet_id))
         {
             _walletError = true;
@@ -516,7 +575,7 @@
             DateTime recordDate = _selectedDate ?? DateTime.Today;
             string isoFormattedDate = recordDate.ToString("yyyy-MM-ddTHH:mm:ssZ");
 
-            string? contactIdToSave = (_model.contact_id == "00000000-0000-0000-0000-000000000000") ? null : _model.contact_id;
+            string? contactIdToSave = _isWalkInSelected ? null : _model.contact_id;
 
             decimal totalAmount = _calculatedTotalAmount;
             decimal advanceDeducted = _model.advance_amount;
@@ -579,6 +638,8 @@
 
                 if (!string.IsNullOrEmpty(contactIdToSave))
                 {
+                    decimal newAdvanceBalance = _dynamicBalanceCalculation;
+
                     decimal previousBalance = await GetLatestBalanceForContact(contactIdToSave);
                     decimal debitVal = totalAmount;
                     decimal creditVal = paidAmount;
@@ -601,6 +662,14 @@
                         created_at = isoFormattedDate
                     };
                     await Http.PostAsJsonAsync("rest/v1/ledgers", ledgerPayload);
+
+                    await Http.PatchAsJsonAsync($"rest/v1/contacts?id=eq.{contactIdToSave}", new { advance_balance = newAdvanceBalance });
+
+                    var selectedContactObj = _suppliers.FirstOrDefault(s => s.Id == contactIdToSave);
+                    if (selectedContactObj != null)
+                    {
+                        selectedContactObj.AdvanceBalance = newAdvanceBalance;
+                    }
                 }
 
                 if (!string.IsNullOrEmpty(_model.wallet_id) && paidAmount > 0)
@@ -672,10 +741,11 @@
     {
         try
         {
-            var txList = await Http.GetFromJsonAsync<List<TransactionDetailModel>>($"rest/v1/transactions?id=eq.{txId}&select=wallet_id,paid_amount");
+            var txList = await Http.GetFromJsonAsync<List<TransactionModel>>($"rest/v1/transactions?id=eq.{txId}&select=*");
             if (txList != null && txList.Any())
             {
                 var tx = txList.First();
+
                 if (!string.IsNullOrEmpty(tx.wallet_id) && tx.paid_amount > 0)
                 {
                     var wallets = await Http.GetFromJsonAsync<List<WalletModel>>($"rest/v1/wallets?id=eq.{tx.wallet_id}");
@@ -705,57 +775,69 @@
         string paperSize = "A5";
         int customWidth = 148;
         int customHeight = 210;
+
         string headerTitle = "ရွှေပြည်စိုး ရာဘာကုန်သွယ်လုပ်ငန်း";
         string headerAddress = "";
         string footerNote = "ကျေးဇူးတင်ပါသည်၊ ကုန်ပစ္စည်းလဲလှယ်ခွင့် မရှိပါ။";
 
         try
         {
-            // Supabase ရှိ printer_settings ဇယားမှ ဆက်တင်များကို ဆွဲထုတ်ခြင်း
             var settings = await Http.GetFromJsonAsync<List<PrinterSettingsModel>>("rest/v1/printer_settings?select=*&limit=1");
             if (settings != null && settings.Any())
             {
                 var s = settings.First();
-                paperSize = string.IsNullOrEmpty(s.voucher_size) ? "A5" : s.voucher_size;
+                paperSize = string.IsNullOrWhiteSpace(s.voucher_size) ? "A5" : s.voucher_size;
                 customWidth = s.custom_width > 0 ? s.custom_width : 148;
                 customHeight = s.custom_height > 0 ? s.custom_height : 210;
-                headerTitle = string.IsNullOrEmpty(s.header_title) ? headerTitle : s.header_title;
+                headerTitle = string.IsNullOrWhiteSpace(s.header_title) ? headerTitle : s.header_title;
                 headerAddress = s.header_address ?? "";
-                footerNote = string.IsNullOrEmpty(s.footer_note) ? footerNote : s.footer_note;
+                footerNote = string.IsNullOrWhiteSpace(s.footer_note) ? footerNote : s.footer_note;
             }
         }
-        catch
-        {
-            // Error တက်ပါက Default တန်ဖိုးများကိုသာ ဆက်သုံးမည်
-        }
+        catch { }
 
         var selectedSupplier = _suppliers.FirstOrDefault(s => s.Id == _model.contact_id);
         var selectedRubber = _rubberTypes.FirstOrDefault(r => r.id == _model.rubber_type_id);
 
-        var parameters = new DialogParameters<PrintPreviewDialog>
+        var document = new PrintDocumentModel
         {
-            { x => x.VoucherNumber, _currentVoucherNumber },
-            { x => x.PaperSize, paperSize },
-            { x => x.CustomWidthMm, customWidth },
-            { x => x.CustomHeightMm, customHeight },
-            { x => x.HeaderTitle, headerTitle },
-            { x => x.HeaderAddress, headerAddress },
-            { x => x.FooterNote, footerNote },
-            { x => x.BuyerName, selectedSupplier?.Name ?? "Walk-in Supplier" },
-            { x => x.RubberTypeName, selectedRubber?.name ?? "Standard Rubber" },
-            { x => x.Quantity, _model.weight },
-            { x => x.AgreedPrice, _calculatedAgreedPrice },
-            { x => x.TotalAmount, _calculatedTotalAmount },
-            { x => x.ContractDate, _selectedDate },
-           // { x => x.DueDate, _selectedDate },
-            { x => x.Description, $"Rubber Purchase ({_model.purchase_location})" }
+            Title = "ရာဘာဝယ်ယူဘောင်ချာ",
+            PaperSize = paperSize,
+            CustomWidth = customWidth,
+            CustomHeight = customHeight,
+            HeaderTitle = headerTitle,
+            HeaderAddress = headerAddress,
+            FooterNote = footerNote
         };
 
-        var options = new DialogOptions { MaxWidth = MaxWidth.Large, FullWidth = true, CloseButton = true };
-        await DialogService.ShowAsync<PrintPreviewDialog>("Print Preview", parameters, options);
+        document.Fields.Add(new PrintFieldModel { Label = "ဘောင်ချာအမှတ်", Value = _currentVoucherNumber });
+        document.Fields.Add(new PrintFieldModel { Label = "ရောင်းသူ/ပိုင်ရှင်", Value = selectedSupplier?.Name ?? "Walk-in Supplier" });
+        document.Fields.Add(new PrintFieldModel { Label = "ရာဘာအမျိုးအစား", Value = selectedRubber?.name ?? "Standard Rubber" });
+        document.Fields.Add(new PrintFieldModel { Label = "ဝယ်ယူသည့်ရက်", Value = _selectedDate.HasValue ? _selectedDate.Value.ToString("dd/MM/yyyy") : "-" });
+        document.Fields.Add(new PrintFieldModel { Label = "ဝယ်ယူနေရာ", Value = _model.purchase_location ?? "-" });
+
+        if (_model.purchase_location == "Truck" && !string.IsNullOrWhiteSpace(_model.truck_id))
+        {
+            var selectedTruck = _trucks.FirstOrDefault(t => t.id == _model.truck_id);
+            if (selectedTruck != null)
+            {
+                document.Fields.Add(new PrintFieldModel { Label = "ကားနံပါတ်", Value = selectedTruck.truck_number });
+            }
+        }
+
+        document.Rows.Add(new PrintRowModel
+        {
+            Description = selectedRubber?.name ?? "Rubber",
+            Quantity = _model.weight,
+            Price = _calculatedAgreedPrice,
+            Amount = _calculatedTotalAmount
+        });
+
+        document.Fields.Add(new PrintFieldModel { Label = "မှတ်ချက်", Value = $"ရာဘာဝယ်ယူခြင်း - {_model.purchase_location}" });
+
+        await PrintService.ShowPrintPreview(document);
     }
 
-    // Printer Settings အတွက် Model အသစ်ထည့်ရန်
     private class PrinterSettingsModel
     {
         public string? voucher_size { get; set; }
@@ -811,11 +893,5 @@
     {
         public string id { get; set; } = string.Empty;
         public string? voucher_number { get; set; }
-    }
-
-    private class TransactionDetailModel
-    {
-        public string? wallet_id { get; set; }
-        public decimal paid_amount { get; set; }
     }
 }

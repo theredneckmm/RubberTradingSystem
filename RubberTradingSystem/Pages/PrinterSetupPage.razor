@@ -1,6 +1,7 @@
 ﻿@page "/settings/printer"
 @using MudBlazor
 @using RubberTradingSystem.Components
+@using RubberTradingSystem.Models.Printing
 @using RubberTradingSystem.Services
 @inject HttpClient Http
 @inject ISnackbar Snackbar
@@ -41,25 +42,43 @@
 
                         <!-- Voucher Size Selection -->
                         <MudItem xs="12">
-                            <MudSelect T="string" @bind-Value="_model.VoucherSize" Label="@LangService.GetString("Lbl_VoucherSize")"
-                                       Variant="Variant.Outlined" Dense="true">
-                                <MudSelectItem Value="@("A4")">A4 Size</MudSelectItem>
-                                <MudSelectItem Value="@("A5")">A5 Size</MudSelectItem>
-                                <MudSelectItem Value="@("A6")">A6 Size</MudSelectItem>
-                                <MudSelectItem Value="@("Custom")">Custom Size (စိတ်ကြိုက်)</MudSelectItem>
+                            <MudSelect T="string" Value="_model.PaperSize" ValueChanged="OnPaperSizeChanged" Label="@LangService.GetString("Lbl_VoucherSize")"
+                                       Variant="Variant.Outlined" Dense="true" ToStringFunc="@GetPaperSizeDisplayName">
+                                <MudSelectItem Value="@("A4_Portrait")">A4 Size (Portrait - 210 x 297 mm)</MudSelectItem>
+                                <MudSelectItem Value="@("A4_Landscape")">A4 Size (Landscape - 297 x 210 mm)</MudSelectItem>
+                                <MudSelectItem Value="@("A5_Portrait")">A5 Size (Portrait - 148 x 210 mm)</MudSelectItem>
+                                <MudSelectItem Value="@("A5_Landscape")">A5 Size (Landscape - 210 x 148 mm)</MudSelectItem>
+                                <MudSelectItem Value="@("A6_Portrait")">A6 Size (Portrait - 105 x 148 mm)</MudSelectItem>
+                                <MudSelectItem Value="@("A6_Landscape")">A6 Size (Landscape - 148 x 105 mm)</MudSelectItem>
+                                <MudSelectItem Value="@("Thermal_80mm")">POS Thermal Receipt (80 x 200 mm)</MudSelectItem>
+                                <MudSelectItem Value="@("Custom")">Custom Size (စိတ်ကြိုက်အလယ်အလတ်)</MudSelectItem>
                             </MudSelect>
                         </MudItem>
 
-                        <!-- Custom Size (Width & Height) if Custom is selected -->
-                        @if (_model.VoucherSize == "Custom")
+                        <!-- Live Dimension Indicator (Always Visible for All Paper Types) -->
+                        <MudItem xs="12">
+                            <MudPaper Class="pa-3" Elevation="0" Style="background-color: #0f172a; border: 1px dashed #475569;">
+                                <div class="d-flex justify-space-between align-center">
+                                    <MudText Typo="Typo.body2" Color="Color.Info">
+                                        <b>လက်ရှိ စာရွက်အတိုင်းအတာ (Dimensions):</b>
+                                    </MudText>
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Outlined">
+                                        <b>@_model.CustomWidth mm</b> × <b>@_model.CustomHeight mm</b>
+                                    </MudChip>
+                                </div>
+                            </MudPaper>
+                        </MudItem>
+
+                        <!-- Custom Size Inputs (Only editable when Custom is selected) -->
+                        @if (_model.PaperSize == "Custom")
                         {
                             <MudItem xs="12" sm="6">
                                 <MudNumericField T="int" @bind-Value="_model.CustomWidth" Label="@LangService.GetString("Lbl_WidthMM")"
-                                                 Variant="Variant.Outlined" Dense="true" Min="50" Max="500" />
+                                                 Variant="Variant.Outlined" Dense="true" Min="30" Max="500" />
                             </MudItem>
                             <MudItem xs="12" sm="6">
                                 <MudNumericField T="int" @bind-Value="_model.CustomHeight" Label="@LangService.GetString("Lbl_HeightMM")"
-                                                 Variant="Variant.Outlined" Dense="true" Min="50" Max="1000" />
+                                                 Variant="Variant.Outlined" Dense="true" Min="30" Max="1000" />
                             </MudItem>
                         }
 
@@ -80,7 +99,6 @@
                     </MudText>
 
                     <MudGrid Spacing="3">
-                        <!-- Header Text / Company Info -->
                         <MudItem xs="12">
                             <MudTextField @bind-Value="_model.HeaderTitle" Label="@LangService.GetString("Lbl_HeaderTitle")"
                                           Variant="Variant.Outlined" Dense="true" />
@@ -89,8 +107,6 @@
                             <MudTextField @bind-Value="_model.HeaderAddress" Label="@LangService.GetString("Lbl_HeaderAddress")"
                                           Variant="Variant.Outlined" Dense="true" Lines="2" />
                         </MudItem>
-
-                        <!-- Footer Note -->
                         <MudItem xs="12">
                             <MudTextField @bind-Value="_model.FooterNote" Label="@LangService.GetString("Lbl_FooterNote")"
                                           Variant="Variant.Outlined" Dense="true" />
@@ -99,7 +115,7 @@
                 </MudPaper>
             </MudItem>
 
-            <!-- Action Buttons (Save & Test Page) -->
+            <!-- Action Buttons -->
             <MudItem xs="12" Class="d-flex justify-end gap-3 mt-2">
                 <MudButton Variant="Variant.Outlined" Color="Color.Info" Size="Size.Large" StartIcon="@Icons.Material.Filled.Preview" OnClick="OpenTestPagePreview">
                     Test Page (စမ်းသပ်ကြည့်မည်)
@@ -133,11 +149,39 @@
 
     public void Dispose() => LangService.OnLanguageChanged -= StateHasChanged;
 
+    private void OnPaperSizeChanged(string selectedSize)
+    {
+        _model.PaperSize = selectedSize;
+        // Automatically update width and height based on selection
+        switch (selectedSize)
+        {
+            case "A4_Portrait": _model.CustomWidth = 210; _model.CustomHeight = 297; break;
+            case "A4_Landscape": _model.CustomWidth = 297; _model.CustomHeight = 210; break;
+            case "A5_Portrait": _model.CustomWidth = 148; _model.CustomHeight = 210; break;
+            case "A5_Landscape": _model.CustomWidth = 210; _model.CustomHeight = 148; break;
+            case "A6_Portrait": _model.CustomWidth = 105; _model.CustomHeight = 148; break;
+            case "A6_Landscape": _model.CustomWidth = 148; _model.CustomHeight = 105; break;
+            case "Thermal_80mm": _model.CustomWidth = 80; _model.CustomHeight = 200; break;
+        }
+    }
+
+    private string GetPaperSizeDisplayName(string sizeKey) => sizeKey switch
+    {
+        "A4_Portrait" => "A4 (Portrait)",
+        "A4_Landscape" => "A4 (Landscape)",
+        "A5_Portrait" => "A5 (Portrait)",
+        "A5_Landscape" => "A5 (Landscape)",
+        "A6_Portrait" => "A6 (Portrait)",
+        "A6_Landscape" => "A6 (Landscape)",
+        "Thermal_80mm" => "POS Thermal 80mm",
+        "Custom" => "Custom Size",
+        _ => sizeKey
+    };
+
     private async Task LoadSettingsAsync()
     {
         try
         {
-            // ၁။ ပထမဦးစွာ Supabase မှ ဆွဲထုတ်ရန် ကြိုးစားမည်
             var settings = await Http.GetFromJsonAsync<List<PrinterSetupModel>>("rest/v1/printer_settings?select=*&limit=1");
             if (settings != null && settings.Any())
             {
@@ -147,9 +191,6 @@
             }
         }
         catch { }
-
-        // ၂. Supabase တွင် မရှိပါက (သို့မဟုတ် offline ဖြစ်နေပါက) LocalStorage မှ ဆွဲထုတ်ရန်
-        // (Blazor WASM တွင် LocalStorage အသုံးပြုရန် IJSRuntime သုံးနိုင်ပါသည်)
     }
 
     private async Task SaveSettingsAsync()
@@ -165,7 +206,7 @@
                 owner_id = ownerId,
                 staff_id = string.IsNullOrEmpty(staffId) ? null : staffId,
                 selected_printer = _model.SelectedPrinter,
-                voucher_size = _model.VoucherSize,
+                voucher_size = _model.PaperSize,
                 custom_width = _model.CustomWidth,
                 custom_height = _model.CustomHeight,
                 is_default = _model.IsDefault,
@@ -198,7 +239,7 @@
 
             if (resp.IsSuccessStatusCode)
             {
-                Snackbar.Add("ပရင်တာနှင့် ဘောက်ချာ ဆက်တင်များကို Supabase နှင့် Local သို့ အောင်မြင်စွာ သိမ်းဆည်းပြီးပါပြီ။", Severity.Success);
+                Snackbar.Add("ပရင်တာနှင့် ဘောက်ချာ ဆက်တင်များကို အောင်မြင်စွာ သိမ်းဆည်းပြီးပါပြီ။", Severity.Success);
             }
             else
             {
@@ -207,7 +248,7 @@
         }
         catch (Exception ex)
         {
-            Snackbar.Add(@"Error: {ex.Message}", Severity.Error);
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
         }
         finally
         {
@@ -217,27 +258,46 @@
 
     private async Task OpenTestPagePreview()
     {
-        // Test Page နှိပ်လိုက်ပါက လက်ရှိ Setting တွေအတိုင်း PrintPreviewDialog သို့ ပို့ပေးမည်
-        var parameters = new DialogParameters<PrintPreviewDialog>
+        var testDocument = new PrintDocumentModel
         {
-            { x => x.VoucherNumber, "TEST-VOUCHER-001" },
-            { x => x.PaperSize, _model.VoucherSize },
-            //{ x => x.CustomWidthMm, _model.CustomWidth },
-            //{ x => x.CustomHeightMm, _model.CustomHeight },
-            { x => x.HeaderTitle, _model.HeaderTitle },
-            { x => x.HeaderAddress, _model.HeaderAddress },
-            { x => x.FooterNote, _model.FooterNote },
-            { x => x.BuyerName, "စမ်းသပ် ကုမ္ပဏီ (Test Buyer Co.Ltd)" },
-            { x => x.RubberTypeName, "RSS-3 (Test Grade)" },
-            { x => x.Quantity, 1000.00m },
-            { x => x.AgreedPrice, 4500m },
-            { x => x.TotalAmount, 4500000m },
-            { x => x.ContractDate, DateTime.Today },
-            { x => x.DueDate, DateTime.Today.AddDays(30) },
-            { x => x.Description, "ဒါဟာ Test Page စမ်းသပ်ချက် ဖြစ်ပါတယ်။" }
+            Title = "Print Test Page Preview",
+            DocumentType = "Test Voucher",
+            PaperSize = _model.PaperSize,
+            CustomWidth = _model.CustomWidth,
+            CustomHeight = _model.CustomHeight,
+            HeaderTitle = string.IsNullOrEmpty(_model.HeaderTitle) ? "RUBBER TRADING SYSTEM" : _model.HeaderTitle,
+            HeaderAddress = string.IsNullOrEmpty(_model.HeaderAddress) ? "No. 123, Main Road, Yangon" : _model.HeaderAddress,
+            FooterNote = string.IsNullOrEmpty(_model.FooterNote) ? "စမ်းသပ်မှုအောင်မြင်ပါသည်။ ကျေးဇူးတင်ပါသည်။" : _model.FooterNote,
+            
+            Fields = new List<PrintFieldModel>
+            {
+                new() { Label = "Voucher No", Value = "TEST-001" },
+                new() { Label = "Date", Value = DateTime.Today.ToString("dd/MM/yyyy") },
+                new() { Label = "Customer", Value = "ဦးဘေဝ (စမ်းသပ်ဝယ်ယူသူ)" },
+                new() { Label = "Grade", Value = "RSS-3 Standard" }
+            },
+
+            Rows = new List<PrintRowModel>
+            {
+                new() { Description = "ရော်ဘာအမျိုးအစား RSS-3", Quantity = 500, Price = 4500, Amount = 2250000 },
+                new() { Description = "ရော်ဘာအမျိုးအစား MTR", Quantity = 300, Price = 4000, Amount = 1200000 }
+            }
         };
 
-        var options = new DialogOptions { MaxWidth = MaxWidth.Large, FullWidth = true, CloseButton = true };
+        var parameters = new DialogParameters
+        {
+            ["Document"] = testDocument
+        };
+
+        var options = new DialogOptions 
+        { 
+            MaxWidth = MaxWidth.Large, 
+            FullWidth = true, 
+            CloseButton = true,
+            CloseOnEscapeKey = true,
+            Position = DialogPosition.Center
+        };
+
         await DialogService.ShowAsync<PrintPreviewDialog>("Test Page Preview", parameters, options);
     }
 
@@ -245,9 +305,9 @@
     {
         public string? id { get; set; }
         public string SelectedPrinter { get; set; } = "Microsoft Print to PDF";
-        public string VoucherSize { get; set; } = "A5";
-        public int CustomWidth { get; set; } = 100;
-        public int CustomHeight { get; set; } = 150;
+        public string PaperSize { get; set; } = "A6_Portrait";
+        public int CustomWidth { get; set; } = 105;
+        public int CustomHeight { get; set; } = 148;
         public bool IsDefault { get; set; } = true;
         public string HeaderTitle { get; set; } = string.Empty;
         public string HeaderAddress { get; set; } = string.Empty;

@@ -61,8 +61,8 @@
             <!-- 2. Buyer & Rubber Type -->
             <MudGrid Spacing="3">
                 <MudItem xs="12" md="6">
-                    <MudSelect T="string" @bind-Value="_model.buyer_id" Label="@LangService.GetString("Sale_Buyer")"
-                               Variant="Variant.Outlined" Dense="true" Required="true" Clearable="true" Disabled="_isSuccessCompleted">
+                    <MudSelect T="string" @bind-Value="_model.buyer_id" SelectedValuesChanged="OnBuyerSelected"
+                               Label="@LangService.GetString("Sale_Buyer")" Variant="Variant.Outlined" Dense="true" Required="true" Clearable="true" Disabled="_isSuccessCompleted">
                         @if (_buyers != null)
                         {
                             @foreach (var buyer in _buyers)
@@ -135,12 +135,22 @@
                 </MudItem>
             </MudGrid>
 
+            <!-- Dynamic Balance Alert (ဝယ်သူရွေးထားမှသာပေါ်မည်) -->
+            @if (_dynamicBalanceCalculation != 0 && !string.IsNullOrEmpty(_model.buyer_id))
+            {
+                <div class="d-flex justify-start my-3">
+                    <MudText Color="@(_dynamicBalanceCalculation < 0 ? Color.Error : Color.Primary)" Typo="Typo.body2" Class="fw-bold">
+                        @_dynamicBalanceLabel: @_displayAbsoluteBalance.ToString("N0") MMK
+                    </MudText>
+                </div>
+            }
+
             <!-- BUTTONS -->
             <div class="d-flex justify-end gap-3 mt-6">
                 @if (!_isSuccessCompleted)
                 {
                     <MudButton ButtonType="ButtonType.Button" Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" Class="px-6"
-                               Disabled="@_isSaving" OnClick="HandleValidSubmitAsync">
+                               Disabled="@(_isSaving)" OnClick="HandleValidSubmitAsync">
                         @if (_isSaving)
                         {
                             <MudProgressCircular Size="Size.Small" Indeterminate="true" />
@@ -193,6 +203,35 @@
 
     private decimal _calculatedTotalAmount => _model.price_per_unit * _model.weight;
 
+    // Buyer ၏ လက်ရှိ Receivable Balance (သို့မဟုတ် Advance Balance)
+    private decimal _currentBuyerBalance = 0m;
+
+    // Dynamic Balance တွက်ချက်ခြင်း (ရောင်းချခြင်းအတွက်: Total Amount - Actual Paid က ပိုလျှင် ဝယ်သူက ပေးရန်/အကြွေးတင်မည်)
+    private decimal _dynamicBalanceCalculation
+    {
+        get
+        {
+            if (string.IsNullOrEmpty(_model.buyer_id)) return 0m;
+
+            // မူလ Balance + (ယခုရောင်းချမှု တန်ဖိုး - အမှန်တကယ် လက်ခံရရှိငွေ)
+            // ရောင်းချလျှင် တန်ဖိုးတိုးလာပြီး (Debit)၊ ငွေပေးချေလျှင် လျော့သွားမည် (Credit)
+            return _currentBuyerBalance + (_calculatedTotalAmount - _model.actual_paid);
+        }
+    }
+
+    private string _dynamicBalanceLabel
+    {
+        get
+        {
+            decimal balance = _dynamicBalanceCalculation;
+            if (balance > 0) return "ဝယ်သူဆီမှ ရရန်ငွေ (Receivable)";
+            if (balance < 0) return "ဝယ်သူသို့ ပေးရန်ငွေ (Advance / Payable)";
+            return string.Empty;
+        }
+    }
+
+    private decimal _displayAbsoluteBalance => Math.Abs(_dynamicBalanceCalculation);
+
     protected override async Task OnInitializedAsync()
     {
         LangService.OnLanguageChanged += StateHasChanged;
@@ -207,7 +246,6 @@
 
         if (!string.IsNullOrEmpty(id))
         {
-            // Edit လုပ်ရန် ဝင်လာပါက မူလဒေတာများကို ဆွဲထုတ်ပြီး Form တွင် ဖြည့်မည်
             await LoadExistingSaleDataAsync(id);
         }
         else
@@ -232,7 +270,15 @@
                 _model.price_per_unit = tx.agreed_price;
                 _model.actual_paid = tx.paid_amount;
 
-                // Description မှ source_type ကို ခန့်မှန်းဖတ်ရှုခြင်း (သို့မဟုတ် Default Warehouse)
+                if (!string.IsNullOrEmpty(tx.contact_id))
+                {
+                    var buyerObj = _buyers.FirstOrDefault(b => b.Id == tx.contact_id);
+                    if (buyerObj != null)
+                    {
+                        _currentBuyerBalance = buyerObj.ReceivableBalance;
+                    }
+                }
+
                 if (!string.IsNullOrEmpty(tx.description) && tx.description.Contains("TruckStock"))
                     _model.source_type = "TruckStock";
                 else if (!string.IsNullOrEmpty(tx.description) && tx.description.Contains("TempStock"))
@@ -307,7 +353,6 @@
                 }
             }
 
-            // အကယ်၍ Edit ဖြစ်နေလျှင် source_id နှင့် available quantity ကို ချိန်ညှိပေးမည်
             if (!string.IsNullOrEmpty(id) && _sourceItems.Any() && string.IsNullOrEmpty(_model.source_id))
             {
                 var match = _sourceItems.FirstOrDefault(s => s.RubberTypeId == _model.rubber_type_id);
@@ -327,6 +372,21 @@
     private async void OnSourceTypeChanged()
     {
         await LoadSourceItemsAsync();
+        StateHasChanged();
+    }
+
+    private async Task OnBuyerSelected(IEnumerable<string> values)
+    {
+        var selectedId = values.FirstOrDefault();
+        if (!string.IsNullOrEmpty(selectedId))
+        {
+            var buyerObj = _buyers.FirstOrDefault(b => b.Id == selectedId);
+            _currentBuyerBalance = buyerObj?.ReceivableBalance ?? 0m;
+        }
+        else
+        {
+            _currentBuyerBalance = 0m;
+        }
         StateHasChanged();
     }
 
@@ -410,7 +470,7 @@
         _isSaving = true;
         try
         {
-            // အကယ်၍ Edit ဖြစ်နေလျှင် မူလဟောင်းကို ဖျက်ဆီးပြီးမှ အသစ်ပြန်သွင်းမည် (Delete old first if editing)
+            // Edit လုပ်နေပါက မူလဟောင်းများအား ဖယ်ရှား/ပြန်ပြင်မည် (Reversal)
             if (!string.IsNullOrEmpty(id))
             {
                 await DeleteOldTransactionEffectsAsync(id);
@@ -418,6 +478,9 @@
 
             var ownerId = await UserContext.GetCurrentOwnerIdAsync();
             var staffId = await UserContext.GetCurrentStaffIdAsync();
+
+            decimal totalAmount = _calculatedTotalAmount;
+            decimal paidAmount = _model.actual_paid;
 
             var salePayload = new
             {
@@ -428,10 +491,10 @@
                 wallet_id = _model.wallet_id,
                 transaction_type = "Sale",
                 voucher_number = _currentVoucherNumber,
-                total_amount = _calculatedTotalAmount,
+                total_amount = totalAmount,
                 agreed_price = _model.price_per_unit,
                 quantity = _model.weight,
-                paid_amount = _model.actual_paid,
+                paid_amount = paidAmount,
                 description = $"Rubber Sale from {_model.source_type} (Voucher: {_currentVoucherNumber})"
             };
 
@@ -458,12 +521,14 @@
                 };
                 await Http.PostAsJsonAsync("rest/v1/vouchers", voucherPayload);
 
-                // Ledger Entry
+                // Ledger & Contacts Table Balance Update
                 if (!string.IsNullOrEmpty(_model.buyer_id))
                 {
+                    decimal newReceivableBalance = _dynamicBalanceCalculation;
+
                     decimal previousBalance = await GetLatestBalanceForContactAsync(_model.buyer_id);
-                    decimal debitVal = _calculatedTotalAmount;
-                    decimal creditVal = _model.actual_paid;
+                    decimal debitVal = totalAmount;
+                    decimal creditVal = paidAmount;
                     decimal currentRunningBalance = previousBalance + debitVal - creditVal;
                     string entryType = debitVal >= creditVal ? "Debit" : "Credit";
 
@@ -484,16 +549,25 @@
                     };
 
                     await Http.PostAsJsonAsync("rest/v1/ledgers", ledgerPayload);
+
+                    // contacts table ထဲရှိ receivable_balance (သို့မဟုတ် advance_balance) ကို Row အသစ်မတိုးဘဲ တိုက်ရိုက် Update (`PATCH`) လုပ်ခြင်း
+                    await Http.PatchAsJsonAsync($"rest/v1/contacts?id=eq.{_model.buyer_id}", new { receivable_balance = newReceivableBalance });
+
+                    var buyerObj = _buyers.FirstOrDefault(b => b.Id == _model.buyer_id);
+                    if (buyerObj != null)
+                    {
+                        buyerObj.ReceivableBalance = newReceivableBalance;
+                    }
                 }
 
-                // Wallet Balance Update
-                if (!string.IsNullOrEmpty(_model.wallet_id) && _model.actual_paid > 0)
+                // Wallet Balance Update (ရောင်းငွေဝင်လာသောကြောင့် ပေါင်းမည်)
+                if (!string.IsNullOrEmpty(_model.wallet_id) && paidAmount > 0)
                 {
                     var selectedWallet = _wallets.FirstOrDefault(w => w.Id == _model.wallet_id);
                     if (selectedWallet != null)
                     {
-                        decimal newBalance = selectedWallet.Balance + _model.actual_paid;
-                        await Http.PatchAsync($"rest/v1/wallets?id=eq.{_model.wallet_id}", JsonContent.Create(new { balance = newBalance }));
+                        decimal newWalletBalance = selectedWallet.Balance + paidAmount;
+                        await Http.PatchAsync($"rest/v1/wallets?id=eq.{_model.wallet_id}", JsonContent.Create(new { balance = newWalletBalance }));
                     }
                 }
 
@@ -528,8 +602,8 @@
     {
         try
         {
-            // 1. Wallet Balance Restore (ရောင်းငွေဖြစ်므로 နှုတ်ပေးမည်)
-            var txList = await Http.GetFromJsonAsync<List<TransactionDetailModel>>($"rest/v1/transactions?id=eq.{oldTxId}&select=wallet_id,paid_amount");
+            // 1. Wallet Balance Restore (ရောင်းတုန်းက ထည့်ခဲ့သော ငွေကို ပြန်နှုတ်ပေးမည်)
+            var txList = await Http.GetFromJsonAsync<List<TransactionDetailModel>>($"rest/v1/transactions?id=eq.{oldTxId}&select=wallet_id,paid_amount,contact_id,total_amount");
             if (txList != null && txList.Any())
             {
                 var tx = txList.First();
@@ -541,6 +615,19 @@
                         var wallet = wallets.First();
                         decimal restoredBalance = wallet.Balance - tx.paid_amount;
                         await Http.PatchAsync($"rest/v1/wallets?id=eq.{tx.wallet_id}", JsonContent.Create(new { balance = restoredBalance }));
+                    }
+                }
+
+                // Contact Balance ပြန်လည် ထိန်းညှိရန် မူလ buyer ရဲ့ balance ကို ပြန်ပြင်ရန် contact_id ဆွဲထုတ်ထားသည်
+                if (!string.IsNullOrEmpty(tx.contact_id))
+                {
+                    var contactList = await Http.GetFromJsonAsync<List<Contact>>($"rest/v1/contacts?id=eq.{tx.contact_id}&select=*");
+                    if (contactList != null && contactList.Any())
+                    {
+                        var contact = contactList.First();
+                        // မူလထည့်ခဲ့သော ရောင်းချမှုအကျိုးသက်ရောက်မှုကို ပြန်ဖျက်ရန် (Reverse)
+                        decimal reversedBalance = contact.ReceivableBalance - (tx.total_amount - tx.paid_amount);
+                        await Http.PatchAsJsonAsync($"rest/v1/contacts?id=eq.{tx.contact_id}", new { receivable_balance = reversedBalance });
                     }
                 }
             }
@@ -685,6 +772,7 @@
         public decimal quantity { get; set; }
         public decimal agreed_price { get; set; }
         public decimal paid_amount { get; set; }
+        public decimal total_amount { get; set; }
         public string? description { get; set; }
     }
 
@@ -692,6 +780,6 @@
     private class TruckStockModel { public string id { get; set; } = string.Empty; public string vehicle_id { get; set; } = string.Empty; public decimal quantity { get; set; } public string rubber_type_id { get; set; } = string.Empty; }
     private class TempStockModel { public string id { get; set; } = string.Empty; public string source_type { get; set; } = string.Empty; public decimal net_weight { get; set; } public string rubber_type_id { get; set; } = string.Empty; }
     private class TransactionResponseModel { public string id { get; set; } = string.Empty; public string? voucher_number { get; set; } }
-    private class TransactionDetailModel { public string? wallet_id { get; set; } public decimal paid_amount { get; set; } }
+    private class TransactionDetailModel { public string? wallet_id { get; set; } public decimal paid_amount { get; set; } public string? contact_id { get; set; } public decimal total_amount { get; set; } }
     private class LedgerItemModel { public decimal balance_after { get; set; } }
 }

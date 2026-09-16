@@ -448,13 +448,12 @@
         string printHeaderTitle = "ရွှေပြည်စိုး ရာဘာကုန်သွယ်လုပ်ငန်း";
         string printHeaderAddress = "";
         string printFooterNote = "ကျေးဇူးတင်ပါသည်";
-        string printPaperSize = "A5";
-        int printCustomWidth = 100;
-        int printCustomHeight = 150;
+        string printPaperSize = "A5_Portrait";
+        int printCustomWidth = 148;
+        int printCustomHeight = 210;
 
         try
         {
-            // Supabase မှ printer_settings ဇယားကို လှမ်းခေါ်ခြင်း
             var printerSettings = await Http.GetFromJsonAsync<List<PrinterSetupRaw>>("rest/v1/printer_settings?select=*");
             if (printerSettings != null && printerSettings.Any())
             {
@@ -462,34 +461,35 @@
                 printHeaderTitle = activeSetting.header_title ?? printHeaderTitle;
                 printHeaderAddress = activeSetting.header_address ?? "";
                 printFooterNote = activeSetting.footer_note ?? "";
-                printPaperSize = activeSetting.voucher_size ?? "A5";
-                printCustomWidth = activeSetting.custom_width;
-                printCustomHeight = activeSetting.custom_height;
+                printPaperSize = string.IsNullOrEmpty(activeSetting.voucher_size) ? "A5_Portrait" : activeSetting.voucher_size;
+                printCustomWidth = activeSetting.custom_width > 0 ? activeSetting.custom_width : 148;
+                printCustomHeight = activeSetting.custom_height > 0 ? activeSetting.custom_height : 210;
             }
         }
         catch { }
 
-        var parameters = new DialogParameters<Components.PrintPreviewDialog>
-    {
-        { x => x.VoucherNumber, _currentVoucherNumber },
-        { x => x.PaperSize, printPaperSize },
-        //{ x => x.CustomWidthMm, printCustomWidth },
-        //{ x => x.CustomHeightMm, printCustomHeight },
-        { x => x.HeaderTitle, printHeaderTitle },
-        { x => x.HeaderAddress, printHeaderAddress },
-        { x => x.FooterNote, printFooterNote },
-        { x => x.BuyerName, buyerName },
-        { x => x.RubberTypeName, rubberName },
-        { x => x.Quantity, _model.contract_quantity },
-        { x => x.AgreedPrice, _model.agreed_price },
-        { x => x.TotalAmount, _calculatedTotalAdvance },
-        { x => x.ContractDate, _contractDate },
-        { x => x.DueDate, _dueDate },
-        { x => x.Description, _model.description }
-    };
+        var parameters = new DialogParameters<ForwardContractPrintDialog>
+        {
+            { x => x.VoucherNumber, _currentVoucherNumber },
+            { x => x.PaperSize, printPaperSize },
+            { x => x.CustomWidth, printCustomWidth },
+            { x => x.CustomHeight, printCustomHeight },
+            { x => x.HeaderTitle, printHeaderTitle },
+            { x => x.HeaderAddress, printHeaderAddress },
+            { x => x.FooterNote, printFooterNote },
+            { x => x.BuyerName, buyerName },
+            { x => x.RubberTypeName, rubberName },
+            { x => x.Quantity, _model.contract_quantity },
+            { x => x.AgreedPrice, _model.agreed_price },
+            { x => x.TotalAmount, _calculatedTotalAdvance },
+            { x => x.ContractDate, _contractDate },
+            { x => x.DueDate, _dueDate },
+            { x => x.Description, _model.description },
+            { x => x.WeightUnit, _weightUnit } // <-- business_settings ထဲမှ default_weight_unit ကို ပေးပို့ခြင်း
+        };
 
-        var options = new DialogOptions { MaxWidth = MaxWidth.Large, FullWidth = true, CloseButton = true };
-        await DialogService.ShowAsync<Components.PrintPreviewDialog>("Print Preview", parameters, options);
+        var options = new DialogOptions { MaxWidth = MaxWidth.Large, FullWidth = true, CloseButton = true, Position = DialogPosition.Center };
+        await DialogService.ShowAsync<ForwardContractPrintDialog>("ကြိုပွိုင့်စာချုပ် ပုံနှိပ်စစ်ဆေးခြင်း (Print Preview)", parameters, options);
     }
 
     private class PrinterSetupRaw

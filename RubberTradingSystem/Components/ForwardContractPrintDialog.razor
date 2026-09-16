@@ -1,0 +1,179 @@
+﻿@using RubberTradingSystem.Models.Printing
+@inject IJSRuntime JSRuntime
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <div style="overflow-y: auto; max-height: 75vh; padding: 16px; background-color: #334155; display: flex; justify-content: center;">
+
+            <!-- Printable Area (Exact Paper Size & Sticky Footer) -->
+            <div id="printable-forward-contract-area" class="voucher-paper">
+
+                <div>
+                    <!-- Header (Center Aligned) -->
+                    <div class="voucher-header">
+                        <div class="voucher-title">@HeaderTitle</div>
+                        <div class="voucher-address">@HeaderAddress</div>
+                        <div class="voucher-header-line"></div>
+                        <div style="font-weight: bold; font-size: 14px; margin-top: 4px;">ကြိုပွိုင့်ရော်ဘာအရောင်းအဝယ် စာချုပ်ချုပ်ဆိုခြင်း ဘောက်ချာ</div>
+                    </div>
+
+                    <!-- Meta Information Fields -->
+                    <div class="voucher-meta" style="margin-bottom: 12px; font-size: 12px;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                            <span><strong>ဘောက်ချာနံပါတ်:</strong></span>
+                            <span>@VoucherNumber</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                            <span><strong>စာချုပ်ချုပ်ဆိုသည့်ရက်စွဲ:</strong></span>
+                            <span>@(ContractDate?.ToString("dd/MM/yyyy") ?? "-")</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                            <span><strong>နောက်ဆုံးပေးသွင်းရမည့်ရက်:</strong></span>
+                            <span>@(DueDate?.ToString("dd/MM/yyyy") ?? "-")</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                            <span><strong>ဝယ်ယူသူ (Buyer):</strong></span>
+                            <span>@BuyerName</span>
+                        </div>
+                    </div>
+
+                    <!-- Contract Details Table -->
+                    <table class="voucher-table" style="width: 100%; border-collapse: collapse; margin-bottom: 15px; font-size: 12px;">
+                        <thead>
+                            <tr>
+                                <th style="border-top: 1px solid #000; border-bottom: 2px solid #000; padding: 6px; text-align: left;">ရော်ဘာအမျိုးအစား</th>
+                                <th style="border-top: 1px solid #000; border-bottom: 2px solid #000; padding: 6px; text-align: right;">အလေးချိန်/ပမာဏ</th>
+                                <th style="border-top: 1px solid #000; border-bottom: 2px solid #000; padding: 6px; text-align: right;">သဘောတူဈေး</th>
+                                <th style="border-top: 1px solid #000; border-bottom: 2px solid #000; padding: 6px; text-align: right;">စုစုပေါင်းငွေ</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td style="border-bottom: 1px solid #ddd; padding: 6px;">@RubberTypeName</td>
+                                <td style="border-bottom: 1px solid #ddd; padding: 6px; text-align: right;">@Quantity.ToString("N0") @WeightUnit</td>
+                                <td style="border-bottom: 1px solid #ddd; padding: 6px; text-align: right;">@AgreedPrice.ToString("N0")</td>
+                                <td style="border-bottom: 1px solid #ddd; padding: 6px; text-align: right;">@TotalAmount.ToString("N0")</td>
+                            </tr>
+                           
+                        </tbody>
+                    </table>
+
+                    <div style="text-align: right; font-weight: bold; font-size: 13px; margin-bottom: 15px;">
+                        ရယူမည့် ကြိုတင်ငွေစုစုပေါင်း: @TotalAmount.ToString("N0") ကျပ်
+                    </div>
+
+                    @if (!string.IsNullOrEmpty(Description))
+                    {
+                        <div style="font-size: 11px; color: #333; margin-bottom: 10px; border: 1px dashed #bbb; padding: 6px;">
+                            <strong>မှတ်ချက်:</strong> @Description
+                        </div>
+                    }
+                </div>
+
+                <!-- Footer (Sticky to bottom) -->
+                <div class="voucher-footer">
+                    <div style="border-top: 1px dashed #777; margin-bottom: 8px; width: 100%;"></div>
+                    <p style="margin: 0; font-size: 11px; color: #333;">@FooterNote</p>
+                </div>
+
+            </div>
+        </div>
+    </DialogContent>
+
+    <DialogActions>
+        <div style="background-color: #1e293b; padding: 12px 16px; border-top: 1px solid #475569; width: 100%; display: flex; justify-content: flex-end; gap: 8px;">
+            <MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="Close" Style="color: white;">ပိတ်မည်</MudButton>
+            <MudButton Color="Color.Primary" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Print" OnClick="PrintVoucher">
+                ပုံနှိပ်မည် (PRINT)
+            </MudButton>
+        </div>
+    </DialogActions>
+</MudDialog>
+
+<style>
+    .voucher-paper {
+        width: @(CustomWidth) mm;
+        height: @(CustomHeight) mm;
+        min-height: @(CustomHeight) mm;
+        max-height: @(CustomHeight) mm;
+        background: white;
+        color: black;
+        padding: 8mm;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        overflow: hidden;
+    }
+
+    .voucher-header {
+        text-align: center;
+        margin-bottom: 10px;
+    }
+
+    .voucher-title {
+        font-size: 18px;
+        font-weight: bold;
+        margin-bottom: 2px;
+    }
+
+    .voucher-address {
+        font-size: 11px;
+        color: #444;
+        white-space: pre-line;
+    }
+
+    .voucher-header-line {
+        border-bottom: 2px solid #000;
+        margin-top: 6px;
+        margin-bottom: 6px;
+    }
+
+    .voucher-footer {
+        text-align: center;
+        margin-top: auto;
+    }
+</style>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter] public string VoucherNumber { get; set; } = "";
+    [Parameter] public string PaperSize { get; set; } = "A5_Portrait";
+    [Parameter] public int CustomWidth { get; set; } = 148;
+    [Parameter] public int CustomHeight { get; set; } = 210;
+    [Parameter] public string HeaderTitle { get; set; } = "";
+    [Parameter] public string HeaderAddress { get; set; } = "";
+    [Parameter] public string FooterNote { get; set; } = "";
+    [Parameter] public string BuyerName { get; set; } = "";
+    [Parameter] public string RubberTypeName { get; set; } = "";
+    [Parameter] public decimal Quantity { get; set; }
+    [Parameter] public decimal AgreedPrice { get; set; }
+    [Parameter] public decimal TotalAmount { get; set; }
+    [Parameter] public DateTime? ContractDate { get; set; }
+    [Parameter] public DateTime? DueDate { get; set; }
+    [Parameter] public string? Description { get; set; }
+    [Parameter] public string WeightUnit { get; set; } = "ပိဿာ"; // Business Settings မှ လာမည့် Weight Unit
+
+    private void Close() => MudDialog.Close();
+
+    private async Task PrintVoucher()
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync(
+                "printVoucher",
+                "printable-forward-contract-area",
+                PaperSize,
+                CustomWidth,
+                CustomHeight
+            );
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Print ထုတ်ရာတွင် အမှားအယွင်းရှိပါသည်: {ex.Message}", Severity.Error);
+        }
+    }
+}

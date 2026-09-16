@@ -36,6 +36,7 @@ builder.Services.AddScoped<LanguageService>();
 builder.Services.AddScoped<AppThemeService>();
 builder.Services.AddMudServices();
 builder.Services.AddScoped<UserContextService>();
+builder.Services.AddScoped<PrintService>();
 
 // --- 3. Authentication Setup ---
 builder.Services.AddAuthorizationCore();

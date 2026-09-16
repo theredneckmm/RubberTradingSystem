@@ -1,361 +1,157 @@
-﻿@using MudBlazor
+﻿@using RubberTradingSystem.Models.Printing
 @inject IJSRuntime JSRuntime
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <!-- Style များကို ဒီ div ထဲသို့ ရွှေ့ပြောင်းထားသည် -->
+        <div style="overflow-y: auto; max-height: 75vh; padding: 16px; background-color: #334155; display: flex; justify-content: center;">
+
+            <!-- Printable Area -->
+            <div id="printable-voucher-area" class="voucher-paper">
+
+                <div>
+                    <!-- Header (Center Aligned) -->
+                    <div class="voucher-header">
+                        <div class="voucher-title">@Document.HeaderTitle</div>
+                        <div class="voucher-address">@Document.HeaderAddress</div>
+                        <div class="voucher-header-line"></div>
+                    </div>
+
+                    <!-- Meta Information Fields -->
+                    <div class="voucher-meta" style="margin-bottom: 12px;">
+                        @foreach (var field in Document.Fields)
+                        {
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 13px;">
+                                <span><strong>@field.Label :</strong></span>
+                                <span>@field.Value</span>
+                            </div>
+                        }
+                    </div>
+
+                    <!-- Rows Table -->
+                    @if (Document.Rows != null && Document.Rows.Any())
+                    {
+                        <table class="voucher-table" style="width: 100%; border-collapse: collapse; margin-bottom: 15px; font-size: 12px;">
+                            <thead>
+                                <tr>
+                                    <th style="border-top: 1px solid #000; border-bottom: 2px solid #000; padding: 6px; text-align: left;">အကြောင်းအရာ</th>
+                                    <th style="border-top: 1px solid #000; border-bottom: 2px solid #000; padding: 6px; text-align: right;">အရေအတွက်</th>
+                                    <th style="border-top: 1px solid #000; border-bottom: 2px solid #000; padding: 6px; text-align: right;">ဈေးနှုန်း</th>
+                                    <th style="border-top: 1px solid #000; border-bottom: 2px solid #000; padding: 6px; text-align: right;">စုစုပေါင်း</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var row in Document.Rows)
+                                {
+                                    <tr>
+                                        <td style="border-bottom: 1px solid #ddd; padding: 6px;">@row.Description</td>
+                                        <td style="border-bottom: 1px solid #ddd; padding: 6px; text-align: right;">@row.Quantity.ToString("N2")</td>
+                                        <td style="border-bottom: 1px solid #ddd; padding: 6px; text-align: right;">@row.Price.ToString("N0")</td>
+                                        <td style="border-bottom: 1px solid #ddd; padding: 6px; text-align: right;">@row.Amount.ToString("N0")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+
+                        <div style="text-align: right; font-weight: bold; font-size: 13px; margin-bottom: 15px;">
+                            စုစုပေါင်းငွေ: @Document.Rows.Sum(x => x.Amount).ToString("N0") ကျပ်
+                        </div>
+                    }
+                </div>
+
+                <!-- Footer (Always sticky to bottom of the paper) -->
+                <div class="voucher-footer">
+                    <div style="border-top: 1px dashed #777; margin-bottom: 8px; width: 100%;"></div>
+                    <p style="margin: 0; font-size: 12px; color: #333;">@Document.FooterNote</p>
+                </div>
+
+            </div>
+        </div>
+    </DialogContent>
+
+    <DialogActions>
+        <!-- Style များကို ဒီ div ထဲသို့ ရွှေ့ပြောင်းထားသည် -->
+        <div style="background-color: #1e293b; padding: 12px 16px; border-top: 1px solid #475569; width: 100%; display: flex; justify-content: flex-end; gap: 8px;">
+            <MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="Close" Style="color: white;">ပိတ်မည်</MudButton>
+            <MudButton Color="Color.Primary" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Print" OnClick="PrintVoucher">
+                ပုံနှိပ်မည် (PRINT)
+            </MudButton>
+        </div>
+    </DialogActions>
+</MudDialog>
 
 <style>
-    .voucher-preview-wrapper {
-        background: #525659;
-        padding: 25px;
-        overflow: auto;
-        display: flex;
-        justify-content: center;
-        align-items: flex-start;
-        min-height: 450px;
-    }
-
+    /* CSS for Exact Paper Dimensions & Sticky Footer */
     .voucher-paper {
+        width: @(Document.CustomWidth) mm;
+        height: @(Document.CustomHeight) mm;
+        min-height: @(Document.CustomHeight) mm;
+        max-height: @(Document.CustomHeight) mm;
         background: white;
         color: black;
-        width: @GetPreviewWidth();
-        min-height: 400px;
-        padding: 24px;
+        padding: 8mm;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.3);
         box-sizing: border-box;
-        border: 1px solid #ccc;
-        box-shadow: 0 4px 15px rgba(0,0,0,.35);
-        font-family: "Noto Sans Myanmar", "Myanmar Text", Arial, sans-serif;
-        font-size: 13px;
-        line-height: 1.5;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        overflow: hidden;
     }
 
     .voucher-header {
         text-align: center;
-        margin-bottom: 12px;
+        margin-bottom: 10px;
     }
 
     .voucher-title {
-        font-size: 20px;
+        font-size: 18px;
         font-weight: bold;
-        margin-bottom: 3px;
+        margin-bottom: 2px;
     }
 
     .voucher-address {
-        font-size: 12px;
+        font-size: 11px;
+        color: #444;
         white-space: pre-line;
-        color: #333;
     }
 
     .voucher-header-line {
         border-bottom: 2px solid #000;
-        margin-top: 8px;
-        margin-bottom: 12px;
-    }
-
-    .voucher-meta {
-        display: flex;
-        justify-content: space-between;
-        margin-bottom: 12px;
-        font-size: 13px;
-    }
-
-    .voucher-details {
-        margin-bottom: 15px;
-        font-size: 13px;
-        line-height: 1.6;
-    }
-
-    .voucher-table {
-        width: 100%;
-        border-collapse: collapse;
-        margin-bottom: 18px;
-        font-size: 13px;
-    }
-
-        .voucher-table th {
-            padding: 7px 6px;
-            text-align: left;
-            border-top: 1px solid #000;
-            border-bottom: 2px solid #000;
-            font-weight: bold;
-        }
-
-        .voucher-table td {
-            padding: 7px 6px;
-            border-bottom: 1px solid #ddd;
-            vertical-align: top;
-        }
-
-        .voucher-table .text-right {
-            text-align: right;
-        }
-
-    .total-amount {
-        font-weight: bold;
-    }
-
-    .english-text {
-        font-size: 11px;
-    }
-
-    .voucher-description {
-        font-size: 13px;
-        margin-top: 10px;
-        margin-bottom: 25px;
+        margin-top: 6px;
+        margin-bottom: 10px;
     }
 
     .voucher-footer {
         text-align: center;
-        border-top: 1px dashed #777;
-        padding-top: 12px;
-        margin-top: 30px;
-        font-size: 12px;
+        margin-top: auto;
     }
 </style>
 
-
-<MudDialog MaxWidth="MaxWidth.Large" FullWidth="true">
-
-    <TitleContent>
-        <div class="d-flex justify-space-between align-center">
-            <MudText Typo="Typo.h6">
-                <b>ဘောက်ချာ Print Preview (@PaperSize)</b>
-            </MudText>
-
-            <MudIconButton Icon="@Icons.Material.Filled.Close"
-                           OnClick="Close" />
-        </div>
-    </TitleContent>
-
-    <DialogContent>
-
-        <div class="voucher-preview-wrapper">
-
-            <div id="print-area" class="voucher-paper">
-
-                <div class="voucher-header">
-
-                    <div class="voucher-title">
-                        @HeaderTitle
-                    </div>
-
-                    @if (!string.IsNullOrWhiteSpace(HeaderAddress))
-                    {
-                        <div class="voucher-address">
-                            @HeaderAddress
-                        </div>
-                    }
-
-                    <div class="voucher-header-line"></div>
-
-                </div>
-
-
-                <div class="voucher-meta">
-
-                    <div>
-                        <b>ဘောက်ချာအမှတ်:</b>
-                        @VoucherNumber
-                    </div>
-
-                    <div>
-                        <b>ရက်စွဲ:</b>
-                        @ContractDate?.ToString("dd/MM/yyyy")
-                    </div>
-
-                </div>
-
-
-                <div class="voucher-details">
-
-                    <div>
-                        <b>ကုန်သည်/ကုမ္ပဏီ:</b>
-                        @BuyerName
-                    </div>
-
-                    <div>
-                        <b>ရာဘာအမျိုးအစား:</b>
-                        @RubberTypeName
-                    </div>
-
-                    <div>
-                        <b>သတ်မှတ်ရက် (Due Date):</b>
-                        @DueDate?.ToString("dd/MM/yyyy")
-                    </div>
-
-                </div>
-
-
-                <table class="voucher-table">
-
-                    <thead>
-                        <tr>
-                            <th>အကြောင်းအရာ</th>
-
-                            <th class="text-right">
-                                ပိဿာချိန်
-                            </th>
-
-                            <th class="text-right">
-                                သဘောတူဈေး
-                            </th>
-
-                            <th class="text-right">
-                                စုစုပေါင်းငွေ
-                            </th>
-                        </tr>
-                    </thead>
-
-                    <tbody>
-                        <tr>
-
-                            <td>
-                                ကြိုပွိုင့်စာချုပ်
-                                <br />
-                                <span class="english-text">
-                                    (Forward Contract Advance)
-                                </span>
-                            </td>
-
-                            <td class="text-right">
-                                @Quantity.ToString("N2")
-                            </td>
-
-                            <td class="text-right">
-                                @AgreedPrice.ToString("N0")
-                            </td>
-
-                            <td class="text-right total-amount">
-                                @TotalAmount.ToString("N0") MMK
-                            </td>
-
-                        </tr>
-                    </tbody>
-
-                </table>
-
-
-                @if (!string.IsNullOrWhiteSpace(Description))
-                {
-                    <div class="voucher-description">
-                        <b>မှတ်ချက်:</b>
-                        @Description
-                    </div>
-                }
-
-
-                <div class="voucher-footer">
-                    @FooterNote
-                </div>
-
-            </div>
-
-        </div>
-
-    </DialogContent>
-
-
-    <DialogActions>
-
-        <MudButton Variant="Variant.Outlined"
-                   Color="Color.Secondary"
-                   OnClick="Close">
-
-            ပိတ်မည်
-
-        </MudButton>
-
-        <MudButton Variant="Variant.Filled"
-                   Color="Color.Primary"
-                   StartIcon="@Icons.Material.Filled.Print"
-                   OnClick="TriggerPrint">
-
-            တိုက်ရိုက်ထုတ်မည် (Print)
-
-        </MudButton>
-
-    </DialogActions>
-
-</MudDialog>
-
-
 @code {
-
     [CascadingParameter]
-    public IMudDialogInstance MudDialog { get; set; } = default!;
+    // MudDialogInstance အစား IMudDialogInstance ကို ပြောင်းလဲသုံးစွဲပါ
+    private IMudDialogInstance MudDialog { get; set; } = default!;
 
-    [Parameter] public string VoucherNumber { get; set; } = "";
+    [Parameter] public PrintDocumentModel Document { get; set; } = new();
 
-    [Parameter] public string PaperSize { get; set; } = "A5";
+    private void Close() => MudDialog.Close();
 
-    [Parameter] public int CustomWidthMm { get; set; } = 100;
-
-    [Parameter] public int CustomHeightMm { get; set; } = 150;
-
-    [Parameter]
-    public string HeaderTitle { get; set; }
-        = "ရွှေပြည်စိုး ရာဘာကုန်သွယ်လုပ်ငန်း";
-
-    [Parameter] public string HeaderAddress { get; set; } = "";
-
-    [Parameter]
-    public string FooterNote { get; set; }
-        = "ကျေးဇူးတင်ပါသည်";
-
-    [Parameter] public string BuyerName { get; set; } = "";
-
-    [Parameter] public string RubberTypeName { get; set; } = "";
-
-    [Parameter] public decimal Quantity { get; set; }
-
-    [Parameter] public decimal AgreedPrice { get; set; }
-
-    [Parameter] public decimal TotalAmount { get; set; }
-
-    [Parameter] public DateTime? ContractDate { get; set; }
-
-    [Parameter] public DateTime? DueDate { get; set; }
-
-    [Parameter] public string? Description { get; set; }
-
-
-    private void Close()
-    {
-        MudDialog.Close();
-    }
-
-
-    private string GetPreviewWidth()
-    {
-        return PaperSize switch
-        {
-            "A4" => "650px",
-            "A5" => "500px",
-            "A6" => "380px",
-            "Custom" =>
-                $"{Math.Min(
-                    Math.Max(CustomWidthMm * 3, 300),
-                    700
-                )}px",
-            _ => "500px"
-        };
-    }
-
-
-    private async Task TriggerPrint()
+    private async Task PrintVoucher()
     {
         try
         {
             await JSRuntime.InvokeVoidAsync(
                 "printVoucher",
-                "print-area",
-                PaperSize,
-                CustomWidthMm,
-                CustomHeightMm
+                "printable-voucher-area",
+                Document.PaperSize,
+                Document.CustomWidth,
+                Document.CustomHeight
             );
         }
         catch (Exception ex)
         {
-            Console.WriteLine(
-                $"Print error: {ex.Message}"
-            );
+            Snackbar.Add($"Print ထုတ်ရာတွင် အမှားအယွင်းရှိပါသည်: {ex.Message}", Severity.Error);
         }
     }
 }

@@ -32,12 +32,12 @@
                     </MudSelect>
                 </MudItem>
 
-                <!-- ရွေးချယ်ထားသော ခြံရှင်၏ Ledger မှ လက်ရှိ Balance ကို ပြသရန် -->
+                <!-- ရွေးချယ်ထားသော ခြံရှင်၏ လက်ရှိ Advance Balance ကို ပြသရန် -->
                 @if (_selectedContact != null)
                 {
                     <MudItem xs="12">
                         <MudAlert Severity="Severity.Info" Dense="true" Class="mb-2">
-                            @Lang.GetString("Lbl_CurrentAdvance"): <b>@_currentLedgerBalance.ToString("N2") MMK</b>
+                            @Lang.GetString("Lbl_CurrentAdvance"): <b>@_currentAdvanceBalance.ToString("N2") MMK</b>
                         </MudAlert>
                     </MudItem>
                 }
@@ -72,7 +72,6 @@
             <div class="d-flex justify-end gap-3 mt-6">
                 @if (!_isSuccessCompleted)
                 {
-                    <!-- မအောင်မြင်သေးမီ (သို့မဟုတ် မလုပ်ရသေးခင်) Pay Advance ခလုတ်ကို ပုံမှန်ပြမည်၊ Print/Finish ကို မှိန်ထားမည် -->
                     <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAdvanceOutAsync"
                                Disabled="@(!_success || _isSaving)">
                         @if (_isSaving)
@@ -87,19 +86,18 @@
                 }
                 else
                 {
-                    <!-- အောင်မြင်သွားပါက Pay Advance ကို မှိန်ထားမည် (သို့မဟုတ် ဖျောက်ထားမည်) -->
                     <MudButton Variant="Variant.Outlined" Color="Color.Primary" Disabled="true">
                         @Lang.GetString("Btn_PayAdvance")
                     </MudButton>
                 }
 
-                <!-- Print ခလုတ် (အောင်မြင်မှသာ Enable ဖြစ်မည်) -->
+                <!-- Print ခလုတ် -->
                 <MudButton Variant="Variant.Outlined" Color="Color.Secondary" OnClick="PrintVoucher"
                            Disabled="!_isSuccessCompleted">
                     Print Voucher
                 </MudButton>
 
-                <!-- Finish ခလုတ် (အောင်မြင်မှသာ Enable ဖြစ်မည်၊ နှိပ်မှသာ Form ရှင်းပြီး Redirect မည်) -->
+                <!-- Finish ခလုတ် -->
                 <MudButton Variant="Variant.Filled" Color="Color.Success" OnClick="FinishTransaction"
                            Disabled="!_isSuccessCompleted">
                     Finish
@@ -113,14 +111,14 @@
     private MudForm _form = new();
     private bool _success;
     private bool _isSaving;
-    private bool _isSuccessCompleted = false; // ငွေပေးချေမှုအောင်မြင်သွားခြင်း ရှိမရှိ စစ်ဆေးရန်
+    private bool _isSuccessCompleted = false;
     private string _voucherNumber = string.Empty;
 
     private List<Contact> _suppliers = new();
     private List<WalletModel> _wallets = new();
     private Guid _selectedContactId;
     private Contact? _selectedContact;
-    private decimal _currentLedgerBalance = 0m;
+    private decimal _currentAdvanceBalance = 0m;
     private string _selectedWalletId = "";
     private decimal _amount;
     private string _description = "";
@@ -149,7 +147,6 @@
             _selectedWalletId = _wallets.First().Id;
         }
 
-        // ဘောင်ချာနံပါတ် အလိုအလျောက်ထုတ်ပေးရန်
         _voucherNumber = await GenerateVoucherNumberAsync("ADV-OUT");
     }
 
@@ -160,7 +157,6 @@
 
         try
         {
-            // transactions ဇယားထဲမှ ယနေ့ရက်စွဲပါသော နောက်ဆုံးဘောင်ချာနံပါတ်ကို ရှာရန်
             var transactions = await Http.GetFromJsonAsync<List<TransactionResponseModel>>(
                 $"rest/v1/transactions?voucher_number=like.{searchPattern}*&order=voucher_number.desc&limit=1");
 
@@ -182,26 +178,14 @@
         }
     }
 
-    private async void OnSupplierSelected()
+    private void OnSupplierSelected()
     {
         _selectedContact = _suppliers.FirstOrDefault(c => c.Id == _selectedContactId.ToString());
         if (_selectedContact != null)
         {
-            _currentLedgerBalance = await GetLatestBalanceForContact(_selectedContact.Id);
+            // ခြံရှင်ရွေးလိုက်သည်နှင့် contacts table ထဲတွင် ရှိပြီးသား advance_balance ကို တိုက်ရိုက်ယူပြမည်
+            _currentAdvanceBalance = _selectedContact.AdvanceBalance;
             StateHasChanged();
-        }
-    }
-
-    private async Task<decimal> GetLatestBalanceForContact(string contactId)
-    {
-        try
-        {
-            var ledgers = await Http.GetFromJsonAsync<List<LedgerModel>>($"rest/v1/ledgers?contact_id=eq.{contactId}&order=created_at.desc&limit=1");
-            return ledgers?.FirstOrDefault()?.balance_after ?? 0m;
-        }
-        catch
-        {
-            return 0m;
         }
     }
 
@@ -216,6 +200,7 @@
             string ownerId = await UserContext.GetCurrentOwnerIdAsync();
             string staffId = await UserContext.GetCurrentStaffIdAsync();
 
+            // 1. Transactions ဇယားတွင် မှတ်တမ်းတင်ခြင်း
             var transaction = new
             {
                 owner_id = ownerId,
@@ -242,10 +227,10 @@
                 var createdTransactions = await transResponse.Content.ReadFromJsonAsync<List<TransactionResponseModel>>();
                 string? generatedTransactionId = createdTransactions?.FirstOrDefault()?.id;
 
-                decimal previousBalance = await GetLatestBalanceForContact(_selectedContactId.ToString());
-                decimal currentRunningBalance = previousBalance + _amount;
+                // 2. ledgers ဇယားတွင် အသေးစိတ် History အတွက် ဆက်လက်မှတ်တမ်းတင်ခြင်း
+                decimal newAdvanceBalance = _currentAdvanceBalance + _amount;
 
-                var ledgerPayload = new
+                var oldLedgerPayload = new
                 {
                     owner_id = ownerId,
                     staff_id = staffId,
@@ -255,35 +240,43 @@
                     entry_type = "Credit",
                     debit_amount = 0.00m,
                     credit_amount = _amount,
-                    balance_after = currentRunningBalance,
+                    balance_after = newAdvanceBalance,
                     balance_impact = "AdvanceOut",
                     description = string.IsNullOrEmpty(_description) ? "Advance Out (ကြိုတင်ငွေထုတ်ပေးခြင်း)" : _description
                 };
 
-                await Http.PostAsJsonAsync("rest/v1/ledgers", ledgerPayload);
+                await Http.PostAsJsonAsync("rest/v1/ledgers", oldLedgerPayload);
 
-                // 4. VOUCHERS ဇယားတွင် မှတ်တမ်းတင်ခြင်း
+                // 3. ခြံရှင် (contacts) ဇယားထဲရှိ advance_balance ကို တိုက်ရိုက် Update ပြုလုပ်ခြင်း (Row အသစ်မတိုးဘဲ ရှိပြီးသားကို ပေါင်းထည့်မည်)
+                await Http.PatchAsJsonAsync($"rest/v1/contacts?id=eq.{_selectedContactId}", new { advance_balance = newAdvanceBalance });
+
+                // Local state ကိုလည်း တခါတည်း update လုပ်ထားရန်
+                if (_selectedContact != null)
+                {
+                    _selectedContact.AdvanceBalance = newAdvanceBalance;
+                }
+
+                // 4. Vouchers ဇယားတွင် မှတ်တမ်းတင်ခြင်း
                 var voucherPayload = new
                 {
                     owner_id = ownerId,
                     staff_id = staffId,
                     voucher_number = _voucherNumber,
                     voucher_type = "AdvanceOut",
-                    reference_id = generatedTransactionId // transaction id ကို reference အနေဖြင့် ထည့်ခြင်း
+                    reference_id = generatedTransactionId
                 };
 
                 await Http.PostAsJsonAsync("rest/v1/vouchers", voucherPayload);
 
+                // 5. Wallet လက်ကျန်ငွေ ဖြတ်တောက်ခြင်း
                 var selectedWallet = _wallets.FirstOrDefault(w => w.Id == _selectedWalletId);
                 if (selectedWallet != null)
                 {
-                    decimal newBalance = selectedWallet.Balance - _amount;
-                    await Http.PatchAsJsonAsync($"rest/v1/wallets?id=eq.{selectedWallet.Id}", new { balance = newBalance });
+                    decimal newWalletBalance = selectedWallet.Balance - _amount;
+                    await Http.PatchAsJsonAsync($"rest/v1/wallets?id=eq.{selectedWallet.Id}", new { balance = newWalletBalance });
                 }
 
                 Snackbar.Add(Lang.GetString("Msg_Success"), Severity.Success);
-
-                // ငွေပေးချေမှုအောင်မြင်သွားပြီဖြစ်သဖြင့် Input များကို Lock လုပ်မည်၊ Print & Finish ကို ဖွင့်ပေးမည်
                 _isSuccessCompleted = true;
             }
             else
@@ -304,13 +297,11 @@
 
     private void PrintVoucher()
     {
-        // Print ထုတ်မည့် လုပ်ဆောင်ချက် (သို့မဟုတ် JS Interop ခေါ်ရန်)
         Navigation.NavigateTo($"/print-voucher/{_voucherNumber}");
     }
 
     private void FinishTransaction()
     {
-        // ပြီးဆုံးမှသာ Data များကို ရှင်းလင်းပြီး စာမျက်နှာပြောင်းမည်
         Navigation.NavigateTo("/contacts");
     }
 
