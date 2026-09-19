@@ -783,6 +783,16 @@ namespace RubberTradingSystem.Services
             ["SmkExpense_SaveSuccess"] = "Smoking expense saved successfully.",
             ["Smoking_AddExpenseButton"] = "Add Expense",
             ["Smoking_ColExpense"] = "Expense Amount",
+            ["SmkExpenseList_Title"] = "Smoking Expense Details",
+            ["SmkExpenseList_ColCategory"] = "Category",
+            ["SmkExpenseList_ColTitle"] = "Title",
+            ["SmkExpenseList_ColAmount"] = "Amount",
+            ["SmkExpenseList_ColPayment"] = "Payment Method",
+            ["SmkExpenseList_ColDate"] = "Date",
+            ["SmkExpenseList_ColNote"] = "Note",
+            ["SmkExpenseList_Total"] = "Total Expense:",
+            ["Btn_Back"] = "Back",
+            ["Smoking_ViewExpensesButton"] = "View Expenses",
         };
 
         private static readonly Dictionary<string, string> Myanmar = new()
@@ -1545,6 +1555,16 @@ namespace RubberTradingSystem.Services
             ["SmkExpense_SaveSuccess"] = "မှိုင်းခံ ကုန်ကျစရိတ် အောင်မြင်စွာ သိမ်းဆည်းပြီးပါပြီ။",
             ["Smoking_AddExpenseButton"] = "အသုံးစရိတ် ထည့်ရန်",
             ["Smoking_ColExpense"] = "ကုန်ကျစရိတ်",
+            ["SmkExpenseList_Title"] = "မှိုင်းခံ အသုံးစရိတ် အသေးစိတ်စာရင်း",
+            ["SmkExpenseList_ColCategory"] = "အမျိုးအစား",
+            ["SmkExpenseList_ColTitle"] = "ခေါင်းစဉ်",
+            ["SmkExpenseList_ColAmount"] = "ငွေပမာဏ",
+            ["SmkExpenseList_ColPayment"] = "ငွေပေးချေမှု",
+            ["SmkExpenseList_ColDate"] = "ရက်စွဲ",
+            ["SmkExpenseList_ColNote"] = "မှတ်ချက်",
+            ["SmkExpenseList_Total"] = "စုစုပေါင်း ကုန်ကျစရိတ် -",
+            ["Btn_Back"] = "နောက်သို့",
+            ["Smoking_ViewExpensesButton"] = "အသုံးစရိတ် အသေးစိတ်ကြည့်ရန်",
         };
     }
 }

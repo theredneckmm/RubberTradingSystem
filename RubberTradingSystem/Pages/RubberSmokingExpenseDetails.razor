@@ -1,0 +1,131 @@
+﻿@page "/rubber-smoking/expenses/{BatchId}"
+@using MudBlazor
+@using RubberTradingSystem.Models
+@using RubberTradingSystem.Services
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+@inject LanguageService LangService
+@implements IDisposable
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4 mb-6">
+    <!-- ခေါင်းစဉ် နှင့် နောက်သို့ ခလုတ် -->
+    <div class="d-flex justify-space-between align-center mb-4">
+        <div>
+            <MudText Typo="Typo.h5" Color="Color.Primary" Class="font-weight-bold">
+                @LangService.GetString("SmkExpenseList_Title")
+            </MudText>
+            @if (!string.IsNullOrEmpty(_batchNumber))
+            {
+                <MudText Typo="Typo.subtitle1" Color="Color.Secondary">
+                    <b>Batch No: @_batchNumber</b>
+                </MudText>
+            }
+        </div>
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.ArrowBack" OnClick="GoBack">
+            @LangService.GetString("Btn_Back")
+        </MudButton>
+    </div>
+
+    <!-- အသုံးစရိတ် ဇယား -->
+    <MudTable Items="@_expenses" Dense="true" Hover="true" Bordered="true" Striped="true" Elevation="2" Loading="@_isLoading">
+        <HeaderContent>
+            <MudTh>@LangService.GetString("SmkExpenseList_ColDate")</MudTh>
+            <MudTh>@LangService.GetString("SmkExpenseList_ColCategory")</MudTh>
+            <MudTh>@LangService.GetString("SmkExpenseList_ColTitle")</MudTh>
+            <MudTh>@LangService.GetString("SmkExpenseList_ColPayment")</MudTh>
+            <MudTh>@LangService.GetString("SmkExpenseList_ColNote")</MudTh>
+            <MudTh Style="text-align: right;">@LangService.GetString("SmkExpenseList_ColAmount")</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Date">@context.expense_date.ToString("dd/MM/yyyy")</MudTd>
+            <MudTd DataLabel="Category">@context.category</MudTd>
+            <MudTd DataLabel="Title">@context.title</MudTd>
+            <MudTd DataLabel="Payment">
+                <MudChip T="string" Color="Color.Primary" Size="Size.Small" Variant="Variant.Text">
+                    @context.payment_method
+                </MudChip>
+            </MudTd>
+            <MudTd DataLabel="Note">@context.note</MudTd>
+            <MudTd DataLabel="Amount" Style="text-align: right;"><b>@context.amount.ToString("N0")</b></MudTd>
+        </RowTemplate>
+        <PagerContent>
+            <MudTablePager PageSizeOptions="new int[] { 10, 25, 50 }" />
+        </PagerContent>
+    </MudTable>
+
+    <!-- စုစုပေါင်း ကုန်ကျစရိတ် ပြသရန် -->
+    <MudPaper Class="d-flex justify-end pa-4 mt-4" Elevation="2">
+        <MudText Typo="Typo.h6" Color="Color.Error">
+            <b>@LangService.GetString("SmkExpenseList_Total") @_totalAmount.ToString("N0")</b>
+        </MudText>
+    </MudPaper>
+</MudContainer>
+
+@code {
+    [Parameter]
+    public string BatchId { get; set; } = string.Empty;
+
+    private List<ExpenseDetailModel> _expenses = new();
+    private string _batchNumber = string.Empty;
+    private decimal _totalAmount => _expenses.Sum(x => x.amount);
+    private bool _isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        LangService.OnLanguageChanged += StateHasChanged;
+        await LoadDataAsync();
+    }
+
+    public void Dispose()
+    {
+        LangService.OnLanguageChanged -= StateHasChanged;
+    }
+
+    private async Task LoadDataAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            // ၁။ Batch Number ကို ယူရန်
+            var batches = await Http.GetFromJsonAsync<List<BatchInfoModel>>($"rest/v1/rubber_smoking_batches?id=eq.{BatchId}&select=batch_number");
+            if (batches != null && batches.Any())
+            {
+                _batchNumber = batches.First().batch_number;
+            }
+
+            // ၂။ သက်ဆိုင်ရာ Batch ၏ အသုံးစရိတ်များကို ယူရန်
+            _expenses = await Http.GetFromJsonAsync<List<ExpenseDetailModel>>($"rest/v1/expenses?batch_id=eq.{BatchId}&select=*&order=expense_date.desc") ?? new();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading expenses: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void GoBack()
+    {
+        Navigation.NavigateTo("/rubber-smoking");
+    }
+
+    // Models for this page
+    private class ExpenseDetailModel
+    {
+        public string id { get; set; } = string.Empty;
+        public string category { get; set; } = string.Empty;
+        public string title { get; set; } = string.Empty;
+        public decimal amount { get; set; }
+        public string payment_method { get; set; } = string.Empty;
+        public DateTime expense_date { get; set; }
+        public string? note { get; set; }
+    }
+
+    private class BatchInfoModel
+    {
+        public string batch_number { get; set; } = string.Empty;
+    }
+}

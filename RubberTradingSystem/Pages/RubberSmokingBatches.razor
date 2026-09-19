@@ -80,6 +80,11 @@
             @LangService.GetString("Smoking_AddExpenseButton")
         </MudButton>
 
+        <MudButton Variant="Variant.Outlined" Color="Color.Info" StartIcon="@Icons.Material.Filled.ListAlt"
+                   Disabled="@(_selectedItem == null)" OnClick="NavigateToExpenseDetails" Class="mr-2">
+            @LangService.GetString("Smoking_ViewExpensesButton")
+        </MudButton>
+
         <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.CheckCircle"
                    Disabled="@(_selectedItem == null || _selectedItem.status == "Completed")" OnClick="NavigateToComplete" Class="mr-2">
             @LangService.GetString("Smoking_CompleteButton")
@@ -167,6 +172,12 @@
     {
         if (_selectedItem == null) return;
         Navigation.NavigateTo($"/rubber-smoking/complete/{_selectedItem.id}");
+    }
+
+    private void NavigateToExpenseDetails()
+    {
+        if (_selectedItem == null) return;
+        Navigation.NavigateTo($"/rubber-smoking/expenses/{_selectedItem.id}");
     }
 
     private async Task DeleteAsync()
