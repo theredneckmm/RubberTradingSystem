@@ -39,11 +39,26 @@ namespace RubberTradingSystem.Models
         [JsonPropertyName("note")]
         public string? note { get; set; }
 
+        // Supabase မှ expenses(amount) ကို Array အနေဖြင့် လက်ခံရန်
+        public List<ExpenseAmountModel> expenses { get; set; } = new();
+
+        // Expenses array ထဲရှိ amount အားလုံးကို အလိုအလျောက် ပေါင်းပေးမည့် Property
+        public decimal total_expense => expenses?.Sum(e => e.amount) ?? 0m;
+    
+
+    
+
         // Navigation property for items (UI တွင် အသုံးပြုရန်)
         public List<RubberSmokingItemModel> items { get; set; } = new();
     }
 
-    public class RubberSmokingItemModel
+    // Amount တစ်ခုတည်းကိုသာ လက်ခံမည့် Sub-model
+    public class ExpenseAmountModel
+{
+    public decimal amount { get; set; }
+}
+
+public class RubberSmokingItemModel
     {
         [JsonPropertyName("id")]
         public string id { get; set; } = Guid.NewGuid().ToString();

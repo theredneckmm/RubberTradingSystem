@@ -777,6 +777,12 @@ namespace RubberTradingSystem.Services
             ["Btn_Print"] = "Print",
             ["Menu_FarmOwnerAdvances"] = "Farm Owner Advance Records",
             ["Menu_FarmOwnerRepayments"] = "Farm Owner Repayment Records",
+            ["SmkExpense_Title"] = "Add Rubber Smoking Expense",
+            ["SmkExpense_SelectBatch"] = "Select Smoking Batch",
+            ["SmkExpense_BatchWarning"] = "Please select a smoking batch.",
+            ["SmkExpense_SaveSuccess"] = "Smoking expense saved successfully.",
+            ["Smoking_AddExpenseButton"] = "Add Expense",
+            ["Smoking_ColExpense"] = "Expense Amount",
         };
 
         private static readonly Dictionary<string, string> Myanmar = new()
@@ -788,7 +794,7 @@ namespace RubberTradingSystem.Services
             ["Search"] = "ဘောက်ချာ (သို့) အမည် ရှာရန်...",
 
             ["Menu_Trading"] = "အရောင်းအဝယ် ကဏ္ဍ",
-            ["TodaySalesTotal"]="ယနေ့ ရောင်းချမှုစုစုပေါင်း",
+            ["TodaySalesTotal"] = "ယနေ့ ရောင်းချမှုစုစုပေါင်း",
             ["Menu_Purchase"] = "ရော်ဘာအစို ဝယ်ယူရန်",
             ["Menu_Sales"] = "မှိုင်းခံပြား (RSS) ရောင်းရန်",
             ["Menu_Vouchers"] = "ဘောက်ချာ မှတ်တမ်းများ",
@@ -1533,6 +1539,12 @@ namespace RubberTradingSystem.Services
             ["Btn_Print"] = "Print ထုတ်မည်",
             ["Menu_FarmOwnerAdvances"] = "ခြံရှင်များ ကြိုတင်ထုတ်ယူငွေမှတ်တမ်း",
             ["Menu_FarmOwnerRepayments"] = "ခြံရှင်များ ကြိုတင်ငွေပြန်ဆပ်ခြင်းမှတ်တမ်း",
+            ["SmkExpense_Title"] = "မှိုင်းခံ ကုန်ကျစရိတ် ထည့်သွင်းခြင်း",
+            ["SmkExpense_SelectBatch"] = "မှိုင်းခံ ဘက်ခ် (Batch No) ရွေးရန်",
+            ["SmkExpense_BatchWarning"] = "ကျေးဇူးပြု၍ မှိုင်းခံ ဘက်ခ် (Batch) တစ်ခု ရွေးချယ်ပါ။",
+            ["SmkExpense_SaveSuccess"] = "မှိုင်းခံ ကုန်ကျစရိတ် အောင်မြင်စွာ သိမ်းဆည်းပြီးပါပြီ။",
+            ["Smoking_AddExpenseButton"] = "အသုံးစရိတ် ထည့်ရန်",
+            ["Smoking_ColExpense"] = "ကုန်ကျစရိတ်",
         };
     }
 }

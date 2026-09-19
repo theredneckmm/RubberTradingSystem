@@ -14,6 +14,9 @@ namespace RubberTradingSystem.Models
         [JsonPropertyName("staff_id")]
         public string? staff_id { get; set; }
 
+        [JsonPropertyName("batch_id")]
+        public string? batch_id { get; set; }
+
         [JsonPropertyName("category")]
         public string category { get; set; } = string.Empty;
 

@@ -44,6 +44,7 @@
             <MudTh>@LangService.GetString("Smoking_ColInput")</MudTh>
             <MudTh>@LangService.GetString("Smoking_ColOutput")</MudTh>
             <MudTh>@LangService.GetString("Smoking_ColLoss")</MudTh>
+            <MudTh>@LangService.GetString("Smoking_ColExpense")</MudTh>
         </HeaderContent>
 
         <RowTemplate>
@@ -58,6 +59,7 @@
             <MudTd DataLabel="Input Weight"><b>@context.total_input_weight.ToString("N0")</b></MudTd>
             <MudTd DataLabel="Output Weight"><b style="color: var(--mud-palette-success-text);">@context.total_output_weight.ToString("N0")</b></MudTd>
             <MudTd DataLabel="Loss Weight"><b style="color: var(--mud-palette-error-text);">@context.total_loss_weight.ToString("N0")</b></MudTd>
+            <MudTd DataLabel="Expense"><b>@context.total_expense.ToString("N0")</b></MudTd>
         </RowTemplate>
 
         <PagerContent>
@@ -70,6 +72,14 @@
                    OnClick="NavigateToCreate" Class="mr-2">
             @LangService.GetString("Smoking_AddButton")
         </MudButton>
+
+        <!-- Processing ဖြစ်နေသော Batch ကို ရွေးထားမှသာ Enable ဖြစ်မည် -->
+        <MudButton Variant="Variant.Filled" Color="Color.Warning" StartIcon="@Icons.Material.Filled.AttachMoney"
+                   Disabled="@(_selectedItem == null || _selectedItem.status != "Processing")"
+                   OnClick="NavigateToExpense" Class="mr-2">
+            @LangService.GetString("Smoking_AddExpenseButton")
+        </MudButton>
+
         <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.CheckCircle"
                    Disabled="@(_selectedItem == null || _selectedItem.status == "Completed")" OnClick="NavigateToComplete" Class="mr-2">
             @LangService.GetString("Smoking_CompleteButton")
@@ -99,6 +109,8 @@
         await LoadDataAsync();
     }
 
+
+
     private async void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
     {
         await LoadDataAsync();
@@ -115,7 +127,8 @@
     {
         try
         {
-            _items = await Http.GetFromJsonAsync<List<RubberSmokingBatchModel>>("rest/v1/rubber_smoking_batches?select=*&order=start_date.desc") ?? new();
+            _items = await Http.GetFromJsonAsync<List<RubberSmokingBatchModel>>(
+                "rest/v1/rubber_smoking_batches?select=*,expenses(amount)&order=start_date.desc") ?? new(); 
             _selectedItem = null;
         }
         catch (Exception ex)
@@ -139,10 +152,15 @@
         return item.batch_number.Contains(_searchString, StringComparison.OrdinalIgnoreCase);
     }
 
-    // Dialog အစား Dedicated Page သို့ လမ်းကြောင်းပြောင်းခြင်း
     private void NavigateToCreate()
     {
         Navigation.NavigateTo("/rubber-smoking/create");
+    }
+
+    private void NavigateToExpense()
+    {
+        if (_selectedItem == null) return;
+        Navigation.NavigateTo($"/rubber-smoking/expense?batchId={_selectedItem.id}");
     }
 
     private void NavigateToComplete()

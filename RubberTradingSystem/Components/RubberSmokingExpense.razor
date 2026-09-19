@@ -1,0 +1,249 @@
+﻿@page "/rubber-smoking/expense"
+@using MudBlazor
+@using RubberTradingSystem.Models
+@using RubberTradingSystem.Services
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+@inject LanguageService LangService
+@inject UserContextService UserContext
+@implements IDisposable
+
+<MudContainer MaxWidth="MaxWidth.Medium" Class="mt-4 mb-6">
+    <MudPaper Class="pa-6" Elevation="3">
+        <MudText Typo="Typo.h5" Color="Color.Primary" Class="mb-4 font-weight-bold">
+            @LangService.GetString("SmkExpense_Title")
+        </MudText>
+
+        <EditForm Model="@_model" OnValidSubmit="SaveAsync">
+            <DataAnnotationsValidator />
+
+            <!-- ဘောင်ချာအမှတ် -->
+            <div class="d-flex justify-space-between align-center mb-4">
+                <MudText Typo="Typo.subtitle1"><b>Voucher: @_currentVoucherNumber</b></MudText>
+            </div>
+
+            <!-- မှိုင်းခံ Batch ရွေးချယ်ရန် Listbox (Status = Processing သာပြမည်) -->
+            <MudSelect T="string" @bind-Value="_model.batch_id"
+                       Label="@LangService.GetString("SmkExpense_SelectBatch")"
+                       Variant="Variant.Outlined"
+                       Class="mb-4"
+                       Clearable="true"
+                       Required="true">
+                @if (_processingBatches != null)
+                {
+                    @foreach (var batch in _processingBatches)
+                    {
+                        <MudSelectItem Value="@batch.id">@batch.batch_number (Start: @batch.start_date.ToString("dd/MM/yyyy"))</MudSelectItem>
+                    }
+                }
+            </MudSelect>
+
+            <!-- အမျိုးအစား (Category) -->
+            <MudAutocomplete T="string" @bind-Value="_model.category"
+                             SearchFunc="@SearchCategories"
+                             Label="@LangService.GetString("Expense_CategoryLabel")"
+                             Variant="Variant.Outlined"
+                             Class="mb-4"
+                             Required="true"
+                             ResetValueOnEmptyText="true"
+                             CoerceText="true"
+                             CoerceValue="true"
+                             AdornmentIcon="@Icons.Material.Filled.ArrowDropDown" />
+
+            <!-- ခေါင်းစဉ် (Title) -->
+            <MudAutocomplete T="string" @bind-Value="_model.title"
+                             SearchFunc="@SearchTitles"
+                             Label="@LangService.GetString("Expense_TitleLabel")"
+                             Variant="Variant.Outlined"
+                             Class="mb-4"
+                             Required="true"
+                             Disabled="@(string.IsNullOrEmpty(_model.category))"
+                             ResetValueOnEmptyText="true"
+                             CoerceText="true"
+                             CoerceValue="true"
+                             AdornmentIcon="@Icons.Material.Filled.ArrowDropDown" />
+
+            <!-- ငွေပမာဏ -->
+            <MudNumericField @bind-Value="_model.amount"
+                             Label="@LangService.GetString("Expense_AmountLabel")"
+                             Variant="Variant.Outlined"
+                             Class="mb-4"
+                             Min="0" />
+
+            <!-- ငွေပေးချေမှု နည်းလမ်း (Wallet) -->
+            <MudSelect T="string" @bind-Value="_model.payment_method"
+                       Label="@LangService.GetString("Expense_PaymentMethodLabel")"
+                       Variant="Variant.Outlined"
+                       Class="mb-4"
+                       Required="true">
+                @foreach (var method in _paymentMethods)
+                {
+                    <MudSelectItem Value="@method">@method</MudSelectItem>
+                }
+            </MudSelect>
+
+            <!-- နေ့စွဲ -->
+            <MudDatePicker @bind-Date="_expenseDate"
+                           Label="@LangService.GetString("Expense_DateLabel")"
+                           Variant="Variant.Outlined"
+                           Class="mb-4" />
+
+            <!-- မှတ်ချက် -->
+            <MudTextField @bind-Value="_model.note"
+                          Label="@LangService.GetString("Expense_NoteLabel")"
+                          Variant="Variant.Outlined"
+                          Lines="2"
+                          Class="mb-4" />
+
+            <div class="d-flex justify-end gap-2">
+                <MudButton OnClick="Cancel" Variant="Variant.Text">
+                    @LangService.GetString("Btn_Cancel")
+                </MudButton>
+                <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Disabled="_isSaving">
+                    @LangService.GetString("Btn_Save")
+                </MudButton>
+            </div>
+        </EditForm>
+    </MudPaper>
+</MudContainer>
+
+@code {
+
+    [Parameter]
+    [SupplyParameterFromQuery(Name = "batchId")]
+    public string? PreselectedBatchId { get; set; }
+    private ExpenseModel _model = new();
+    private string _currentVoucherNumber = string.Empty;
+    private bool _isSaving = false;
+
+    private List<RubberSmokingBatchModel> _processingBatches = new();
+    private List<string> _categories = new();
+    private List<string> _allTitles = new();
+    private List<ExpenseSettingModel> _allSettings = new();
+    private List<string> _paymentMethods = new();
+
+    private DateTime? _expenseDate
+    {
+        get => _model.expense_date;
+        set => _model.expense_date = value ?? DateTime.Today;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        LangService.OnLanguageChanged += StateHasChanged;
+        _model.expense_date = DateTime.Today;
+        _currentVoucherNumber = await GenerateVoucherNumberAsync("EXP-SMK");
+        _model.batch_id = PreselectedBatchId;
+        await LoadDropdownDataAsync();
+    }
+
+    public void Dispose() => LangService.OnLanguageChanged -= StateHasChanged;
+
+    private async Task LoadDropdownDataAsync()
+    {
+        try
+        {
+            _processingBatches = await Http.GetFromJsonAsync<List<RubberSmokingBatchModel>>("rest/v1/rubber_smoking_batches?status=eq.Processing&select=*") ?? new();
+
+            _allSettings = await Http.GetFromJsonAsync<List<ExpenseSettingModel>>("rest/v1/expense_settings?select=*") ?? new();
+            _categories = _allSettings.Where(x => x.SettingType == "Category").Select(x => x.SettingName).Distinct().ToList();
+            _allTitles = _allSettings.Where(x => x.SettingType == "Title").Select(x => x.SettingName).Distinct().ToList();
+
+            var wallets = await Http.GetFromJsonAsync<List<WalletNameModel>>("rest/v1/wallets?select=wallet_name");
+            if (wallets != null && wallets.Any())
+            {
+                _paymentMethods = wallets.Select(x => x.wallet_name).Distinct().ToList();
+            }
+            else
+            {
+                _paymentMethods = new List<string> { "Cash" };
+            }
+        }
+        catch
+        {
+            _paymentMethods = new List<string> { "Cash" };
+        }
+    }
+
+    private Task<IEnumerable<string>> SearchCategories(string value, CancellationToken token)
+    {
+        if (string.IsNullOrEmpty(value)) return Task.FromResult<IEnumerable<string>>(_categories);
+        return Task.FromResult<IEnumerable<string>>(_categories.Where(x => x.Contains(value, StringComparison.InvariantCultureIgnoreCase)));
+    }
+
+    private Task<IEnumerable<string>> SearchTitles(string value, CancellationToken token)
+    {
+        if (string.IsNullOrEmpty(value)) return Task.FromResult<IEnumerable<string>>(_allTitles);
+        return Task.FromResult<IEnumerable<string>>(_allTitles.Where(x => x.Contains(value, StringComparison.InvariantCultureIgnoreCase)));
+    }
+
+    private async Task SaveAsync()
+    {
+        if (string.IsNullOrEmpty(_model.batch_id))
+        {
+            Snackbar.Add(LangService.GetString("SmkExpense_BatchWarning"), Severity.Warning);
+            return;
+        }
+
+        _isSaving = true;
+        try
+        {
+            string ownerId = await UserContext.GetCurrentOwnerIdAsync();
+            string staffId = await UserContext.GetCurrentStaffIdAsync();
+
+            var expensePayload = new
+            {
+                owner_id = ownerId,
+                staff_id = string.IsNullOrEmpty(staffId) ? null : staffId,
+                batch_id = _model.batch_id,
+                category = _model.category,
+                title = _model.title,
+                amount = _model.amount,
+                payment_method = _model.payment_method,
+                expense_date = _model.expense_date.ToString("yyyy-MM-dd"),
+                note = _model.note
+            };
+
+            var response = await Http.PostAsJsonAsync("rest/v1/expenses", expensePayload);
+            if (!response.IsSuccessStatusCode)
+            {
+                Snackbar.Add("Failed to save smoking expense.", Severity.Error);
+                return;
+            }
+
+            Snackbar.Add(LangService.GetString("SmkExpense_SaveSuccess"), Severity.Success);
+            Navigation.NavigateTo("/rubber-smoking"); Navigation.NavigateTo("/rubber-smoking");
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private void Cancel() => Navigation.NavigateTo("/rubber-smoking");
+
+    private async Task<string> GenerateVoucherNumberAsync(string prefix)
+    {
+        string dateStr = DateTime.Now.ToString("yyyyMMdd");
+        string searchPattern = $"{prefix}-{dateStr}-";
+        try
+        {
+            var transactions = await Http.GetFromJsonAsync<List<TransactionResponseModel>>(
+                $"rest/v1/transactions?voucher_number=like.{searchPattern}*&select=voucher_number");
+            int nextSeq = transactions?.Count() + 1 ?? 1;
+            return $"{prefix}-{dateStr}-{nextSeq:D3}";
+        }
+        catch
+        {
+            return $"{prefix}-{dateStr}-001";
+        }
+    }
+
+    private class WalletNameModel { public string wallet_name { get; set; } = string.Empty; }
+    private class TransactionResponseModel { public string id { get; set; } = string.Empty; public string? voucher_number { get; set; } }
+}

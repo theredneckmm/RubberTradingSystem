@@ -16,4 +16,5 @@ public class SmokingBatchModel
     public decimal shrinkage_kg => output_weight_kg.HasValue ? input_weight_kg - output_weight_kg.Value : 0;
     public decimal shrinkage_percentage => (input_weight_kg > 0 && output_weight_kg.HasValue) ? ((input_weight_kg - output_weight_kg.Value) / input_weight_kg) * 100 : 0;
     public string? note { get; set; }
+    public decimal total_expense { get; set; }
 }
