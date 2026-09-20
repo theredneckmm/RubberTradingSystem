@@ -194,14 +194,18 @@
             foreach (var item in truckRawList)
             {
                 decimal deductionPct = 0m;
+                string originalSupplierName = "-";
 
-                // အကယ်၍ transaction_id ရှိပါက transactions ဇယားမှ deduction_percent ကို လှမ်းယူမည်
+                // အကယ်၍ transaction_id ရှိပါက transactions ဇယားမှ deduction_percent နှင့် မူလခြံရှင်အမည် (contacts) ကို လှမ်းယူမည်
                 if (!string.IsNullOrEmpty(item.transaction_id))
                 {
-                    var transList = await Http.GetFromJsonAsync<List<TransactionDeductionObj>>($"rest/v1/transactions?id=eq.{item.transaction_id}&select=deduction_percent");
+                    var transList = await Http.GetFromJsonAsync<List<TransactionDeductionObj>>(
+                        $"rest/v1/transactions?id=eq.{item.transaction_id}&select=deduction_percent,contacts(name)");
+
                     if (transList != null && transList.Count > 0)
                     {
                         deductionPct = transList[0].deduction_percent;
+                        originalSupplierName = transList[0].contacts?.name ?? "-";
                     }
                 }
 
@@ -210,11 +214,16 @@
                     Id = $"truck_{item.id}",
                     SourceCategory = "TruckStock",
                     OriginalId = item.id,
-                    SupplierName = item.trucks?.driver_name ?? "Truck Stock",
-                    VehicleOrNote = item.trucks?.truck_number ?? "ဆိုင်လာရောင်း (Walk-in)",
+
+                    // Transactions မှ ရရှိလာသော မူလခြံရှင်အမည်ကို ထည့်သွင်းမည်
+                    SupplierName = originalSupplierName,
+
+                    // ကားအမှတ် နှင့် Driver နာမည်ကို မှတ်ချက်ကော်လံတွင် တွဲပြမည်
+                    VehicleOrNote = item.trucks != null ? $"{item.trucks.truck_number} (Driver: {item.trucks.driver_name})" : "ဆိုင်လာရောင်း (Walk-in)",
+
                     RubberTypeName = item.rubber_types != null ? $"{item.rubber_types.name} ({item.rubber_types.grade})" : "N/A",
                     Quantity = item.quantity,
-                    MoistureOrDetails = deductionPct, // ယာဉ်ပေါ်ပါ ရာဘာအတွက် transactions ထဲက deduction_percent %
+                    MoistureOrDetails = deductionPct,
                     RubberTypeId = item.rubber_type_id,
                     ContactId = null
                 });
@@ -371,6 +380,7 @@
     private class TransactionDeductionObj
     {
         public decimal deduction_percent { get; set; }
+        public ContactObj? contacts { get; set; }
     }
     private class TruckObj { public string truck_number { get; set; } = string.Empty; public string? driver_name { get; set; } }
     private class ContactObj { public string name { get; set; } = string.Empty; }

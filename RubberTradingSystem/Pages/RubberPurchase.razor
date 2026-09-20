@@ -814,16 +814,16 @@
         document.Fields.Add(new PrintFieldModel { Label = "ရောင်းသူ/ပိုင်ရှင်", Value = selectedSupplier?.Name ?? "Walk-in Supplier" });
         document.Fields.Add(new PrintFieldModel { Label = "ရာဘာအမျိုးအစား", Value = selectedRubber?.name ?? "Standard Rubber" });
         document.Fields.Add(new PrintFieldModel { Label = "ဝယ်ယူသည့်ရက်", Value = _selectedDate.HasValue ? _selectedDate.Value.ToString("dd/MM/yyyy") : "-" });
-        document.Fields.Add(new PrintFieldModel { Label = "ဝယ်ယူနေရာ", Value = _model.purchase_location ?? "-" });
+        //document.Fields.Add(new PrintFieldModel { Label = "ဝယ်ယူနေရာ", Value = _model.purchase_location ?? "-" });
 
-        if (_model.purchase_location == "Truck" && !string.IsNullOrWhiteSpace(_model.truck_id))
-        {
-            var selectedTruck = _trucks.FirstOrDefault(t => t.id == _model.truck_id);
-            if (selectedTruck != null)
-            {
-                document.Fields.Add(new PrintFieldModel { Label = "ကားနံပါတ်", Value = selectedTruck.truck_number });
-            }
-        }
+       // if (_model.purchase_location == "Truck" && !string.IsNullOrWhiteSpace(_model.truck_id))
+       // {
+       //     var selectedTruck = _trucks.FirstOrDefault(t => t.id == _model.truck_id);
+       //     if (selectedTruck != null)
+       //     {
+       //         document.Fields.Add(new PrintFieldModel { Label = "ကားနံပါတ်", Value = selectedTruck.truck_number });
+       //     }
+       // }
 
         document.Rows.Add(new PrintRowModel
         {
@@ -850,14 +850,14 @@
 
     private void FinishTransaction()
     {
-        if (_isEditMode)
-        {
+       // if (_isEditMode)
+       // {
             Navigation.NavigateTo("/rubber-purchases-list");
-        }
-        else
-        {
-            Navigation.NavigateTo("/rubber-purchase", forceLoad: true);
-        }
+       // }
+       // else
+       // {
+      //      Navigation.NavigateTo("/rubber-purchase", forceLoad: true);
+      //  }
     }
 
     private async Task<decimal> GetLatestBalanceForContact(string contactId)
