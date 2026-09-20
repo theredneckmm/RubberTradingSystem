@@ -1,4 +1,5 @@
 ﻿@page "/advance/in"
+@page "/advance/in/edit/{EditTransactionId}"
 @using MudBlazor
 @using RubberTradingSystem.Models
 @using RubberTradingSystem.Services
@@ -13,7 +14,9 @@
     <MudPaper Elevation="3" Class="pa-6">
         <!-- ခေါင်းစဉ်နှင့် ဘောင်ချာနံပါတ် -->
         <div class="d-flex justify-space-between align-center mb-6">
-            <MudText Typo="Typo.h5" Color="Color.Primary" Class="fw-bold">@Lang.GetString("Title_AdvanceIn")</MudText>
+            <MudText Typo="Typo.h5" Color="Color.Primary" Class="fw-bold">
+                @(_isEditMode ? Lang.GetString("Btn_Edit") : Lang.GetString("Title_AdvanceIn"))
+            </MudText>
             <MudChip T="string" Color="Color.Success" Variant="Variant.Outlined" Size="Size.Large"><b>@_voucherNumber</b></MudChip>
         </div>
 
@@ -21,13 +24,13 @@
             <MudGrid>
                 <!-- ခြံရှင် ရွေးချယ်ခြင်း -->
                 <MudItem xs="12">
-                    <MudSelect T="Guid" Label="@Lang.GetString("Lbl_SelectSupplier")" @bind-Value="_selectedContactId"
+                    <MudSelect T="string" Label="@Lang.GetString("Lbl_SelectSupplier")" @bind-Value="_selectedContactId"
                                SelectedValuesChanged="OnSupplierSelected"
                                Required="true" Variant="Variant.Outlined" AnchorOrigin="Origin.BottomCenter"
                                Disabled="_isSuccessCompleted">
                         @foreach (var contact in _suppliers)
                         {
-                            <MudSelectItem Value="@(Guid.Parse(contact.Id))">@contact.Name</MudSelectItem>
+                            <MudSelectItem Value="@contact.Id">@contact.Name</MudSelectItem>
                         }
                     </MudSelect>
                 </MudItem>
@@ -80,14 +83,14 @@
                         }
                         else
                         {
-                            <MudText>@Lang.GetString("Btn_ReceiveAdvance")</MudText>
+                            <text>@(_isEditMode ? Lang.GetString("Btn_Edit") : Lang.GetString("Btn_ReceiveAdvance"))</text>
                         }
                     </MudButton>
                 }
                 else
                 {
                     <MudButton Variant="Variant.Outlined" Color="Color.Success" Disabled="true">
-                        @Lang.GetString("Btn_ReceiveAdvance")
+                        @(_isEditMode ? Lang.GetString("Btn_Edit") : Lang.GetString("Btn_ReceiveAdvance"))
                     </MudButton>
                 }
 
@@ -108,6 +111,11 @@
 </MudContainer>
 
 @code {
+    [Parameter]
+    public string? EditTransactionId { get; set; }
+
+    private bool _isEditMode => !string.IsNullOrEmpty(EditTransactionId);
+
     private MudForm _form = new();
     private bool _success;
     private bool _isSaving;
@@ -116,17 +124,27 @@
 
     private List<Contact> _suppliers = new();
     private List<WalletModel> _wallets = new();
-    private Guid _selectedContactId;
+    private string _selectedContactId = string.Empty;
     private Contact? _selectedContact;
     private decimal _currentAdvanceBalance = 0m;
-    private string _selectedWalletId = "";
+    private string _selectedWalletId = string.Empty;
     private decimal _amount;
-    private string _description = "";
+    private string _description = string.Empty;
+
+    // ပြင်ဆင်ရန် (Edit) အတွက် မူလဒေတာများ သိမ်းထားရန်
+    private decimal _originalAmount = 0;
+    private string _originalContactId = string.Empty;
+    private string _originalWalletId = string.Empty;
 
     protected override async Task OnInitializedAsync()
     {
         Lang.OnLanguageChanged += StateHasChanged;
         await LoadInitialDataAsync();
+
+        if (_isEditMode)
+        {
+            await LoadExistingTransactionAsync();
+        }
     }
 
     private async Task LoadInitialDataAsync()
@@ -137,17 +155,50 @@
         var ownerId = await UserContext.GetCurrentOwnerIdAsync();
         _wallets = await Http.GetFromJsonAsync<List<WalletModel>>($"rest/v1/wallets?owner_id=eq.{ownerId}&select=*") ?? new();
 
-        var cashWallet = _wallets.FirstOrDefault(w => w.WalletType.Equals("Cash", StringComparison.OrdinalIgnoreCase));
-        if (cashWallet != null)
+        if (!_isEditMode)
         {
-            _selectedWalletId = cashWallet.Id;
-        }
-        else if (_wallets.Any())
-        {
-            _selectedWalletId = _wallets.First().Id;
-        }
+            var cashWallet = _wallets.FirstOrDefault(w => w.WalletType.Equals("Cash", StringComparison.OrdinalIgnoreCase));
+            if (cashWallet != null)
+            {
+                _selectedWalletId = cashWallet.Id;
+            }
+            else if (_wallets.Any())
+            {
+                _selectedWalletId = _wallets.First().Id;
+            }
 
-        _voucherNumber = await GenerateVoucherNumberAsync("ADV-IN");
+            _voucherNumber = await GenerateVoucherNumberAsync("ADV-IN");
+        }
+    }
+
+    private async Task LoadExistingTransactionAsync()
+    {
+        try
+        {
+            var txList = await Http.GetFromJsonAsync<List<TransactionModel>>($"rest/v1/transactions?id=eq.{EditTransactionId}&select=*");
+            if (txList != null && txList.Any())
+            {
+                var tx = txList.First();
+                _voucherNumber = tx.voucher_number ?? "";
+                _selectedContactId = tx.contact_id ?? "";
+                _selectedWalletId = tx.wallet_id ?? "";
+                _amount = tx.total_amount;
+                _description = tx.description ?? "";
+
+                // မူလတန်ဖိုးများကို သိမ်းထားမည်
+                _originalAmount = tx.total_amount;
+                _originalContactId = tx.contact_id ?? "";
+                _originalWalletId = tx.wallet_id ?? "";
+
+                // ရွေးချယ်ထားသော Contact ၏ လက်ရှိ Advance ကို တွက်ချက်ပြသရန်
+                var selectedParams = new List<string> { _selectedContactId };
+                OnSupplierSelected(selectedParams);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading transaction: {ex.Message}", Severity.Error);
+        }
     }
 
     private async Task<string> GenerateVoucherNumberAsync(string prefix)
@@ -178,12 +229,13 @@
         }
     }
 
-    private void OnSupplierSelected()
+    private void OnSupplierSelected(IEnumerable<string> values)
     {
-        _selectedContact = _suppliers.FirstOrDefault(c => c.Id == _selectedContactId.ToString());
+        _selectedContactId = values.FirstOrDefault() ?? string.Empty;
+        _selectedContact = _suppliers.FirstOrDefault(c => c.Id == _selectedContactId);
+
         if (_selectedContact != null)
         {
-            // contacts table ထဲမှ AdvanceBalance ကို တိုက်ရိုက်ယူပြမည်
             _currentAdvanceBalance = _selectedContact.AdvanceBalance;
             StateHasChanged();
         }
@@ -200,91 +252,138 @@
             string ownerId = await UserContext.GetCurrentOwnerIdAsync();
             string staffId = await UserContext.GetCurrentStaffIdAsync();
 
-            // 1. Transactions ဇယားတွင် မှတ်တမ်းတင်ခြင်း
-            var transaction = new
+            if (_isEditMode)
             {
-                owner_id = ownerId,
-                staff_id = staffId,
-                contact_id = _selectedContactId,
-                transaction_type = "AdvanceIn",
-                voucher_number = _voucherNumber,
-                total_amount = _amount,
-                paid_amount = _amount,
-                wallet_id = _selectedWalletId,
-                description = string.IsNullOrEmpty(_description) ? "Advance In (ကြိုတင်ငွေလက်ခံခြင်း)" : _description
-            };
+                // ================== EDIT MODE (Revert Old -> Apply New) ==================
 
-            var requestMessage = new HttpRequestMessage(HttpMethod.Post, "rest/v1/transactions")
+                // ၁။ ယခင် ခြံရှင်စာရင်းကို ပြန်ပြင်မည် (Advance In အဟောင်းကို ပယ်ဖျက်တာဖြစ်လို့ Advance Balance ထဲ ငွေပြန်ပေါင်းထည့်မည်)
+                if (!string.IsNullOrEmpty(_originalContactId))
+                {
+                    var oldContact = await Http.GetFromJsonAsync<List<ContactBalanceModel>>($"rest/v1/contacts?id=eq.{_originalContactId}&select=advance_balance");
+                    decimal oldBalance = oldContact?.FirstOrDefault()?.advance_balance ?? 0;
+                    await Http.PatchAsJsonAsync($"rest/v1/contacts?id=eq.{_originalContactId}", new { advance_balance = oldBalance + _originalAmount });
+                }
+
+                // ၂။ ယခင် Wallet သို့ ပြန်ပြင်မည် (ငွေဝင်လာတာကို ပယ်ဖျက်တာဖြစ်လို့ Wallet ထဲက ငွေပြန်နှုတ်မည်)
+                if (!string.IsNullOrEmpty(_originalWalletId))
+                {
+                    var oldWallet = await Http.GetFromJsonAsync<List<WalletBalanceModel>>($"rest/v1/wallets?id=eq.{_originalWalletId}&select=balance");
+                    decimal oldWalletBal = oldWallet?.FirstOrDefault()?.balance ?? 0;
+                    await Http.PatchAsJsonAsync($"rest/v1/wallets?id=eq.{_originalWalletId}", new { balance = oldWalletBal - _originalAmount });
+                }
+
+                // ၃။ အသစ်ရွေးချယ်ထားသော ခြံရှင်စာရင်းကို ငွေပြန်နှုတ်မည် (ငွေဆပ်တာဖြစ်လို့ Advance Balance လျော့မည်)
+                var newContact = await Http.GetFromJsonAsync<List<ContactBalanceModel>>($"rest/v1/contacts?id=eq.{_selectedContactId}&select=advance_balance");
+                decimal currentAdvance = newContact?.FirstOrDefault()?.advance_balance ?? 0;
+                decimal updatedAdvance = currentAdvance - _amount;
+                await Http.PatchAsJsonAsync($"rest/v1/contacts?id=eq.{_selectedContactId}", new { advance_balance = updatedAdvance });
+
+                // ၄။ အသစ်ရွေးချယ်ထားသော Wallet မှ ပမာဏအသစ် ပေါင်းမည် (ငွေဝင်လာသောကြောင့်)
+                var newWallet = await Http.GetFromJsonAsync<List<WalletBalanceModel>>($"rest/v1/wallets?id=eq.{_selectedWalletId}&select=balance");
+                decimal currentWalletBal = newWallet?.FirstOrDefault()?.balance ?? 0;
+                await Http.PatchAsJsonAsync($"rest/v1/wallets?id=eq.{_selectedWalletId}", new { balance = currentWalletBal + _amount });
+
+                // ၅။ Transaction နှင့် Ledger များကို Update လုပ်မည်
+                await Http.PatchAsJsonAsync($"rest/v1/transactions?id=eq.{EditTransactionId}", new
+                {
+                    contact_id = _selectedContactId,
+                    wallet_id = _selectedWalletId,
+                    total_amount = _amount,
+                    paid_amount = _amount,
+                    description = string.IsNullOrEmpty(_description) ? "Advance In Edit" : _description
+                });
+
+                await Http.PatchAsJsonAsync($"rest/v1/ledgers?transaction_id=eq.{EditTransactionId}", new
+                {
+                    contact_id = _selectedContactId,
+                    debit_amount = _amount,
+                    balance_after = updatedAdvance,
+                    description = string.IsNullOrEmpty(_description) ? "Advance In Edit" : _description
+                });
+
+                Snackbar.Add("ပြင်ဆင်မှု အောင်မြင်ပါသည်။ ခြံရှင်နှင့် Wallet စာရင်းများကို ညှိပေးပြီးပါပြီ။", Severity.Success);
+            }
+            else
             {
-                Content = JsonContent.Create(transaction)
-            };
-            requestMessage.Headers.Add("Prefer", "return=representation");
+                // ================== NEW CREATE MODE ==================
 
-            var transResponse = await Http.SendAsync(requestMessage);
-
-            if (transResponse.IsSuccessStatusCode)
-            {
-                var createdTransactions = await transResponse.Content.ReadFromJsonAsync<List<TransactionResponseModel>>();
-                string? generatedTransactionId = createdTransactions?.FirstOrDefault()?.id;
-
-                // 2. ပြန်ဆပ်ငွေဖြစ်သောကြောင့် လက်ကျန်ငွေ လျော့သွားပါမည် (Current Balance - Amount)
-                decimal newAdvanceBalance = _currentAdvanceBalance - _amount;
-
-                // 3. ledgers ဇယားတွင် History အတွက် မှတ်တမ်းတင်ခြင်း
-                var ledgerPayload = new
+                var transaction = new
                 {
                     owner_id = ownerId,
                     staff_id = staffId,
                     contact_id = _selectedContactId,
-                    transaction_id = generatedTransactionId,
+                    transaction_type = "AdvanceIn",
                     voucher_number = _voucherNumber,
-                    entry_type = "Debit",
-                    debit_amount = _amount,
-                    credit_amount = 0.00m,
-                    balance_after = newAdvanceBalance,
-                    balance_impact = "AdvanceIn",
+                    total_amount = _amount,
+                    paid_amount = _amount,
+                    wallet_id = _selectedWalletId,
                     description = string.IsNullOrEmpty(_description) ? "Advance In (ကြိုတင်ငွေလက်ခံခြင်း)" : _description
                 };
 
-                await Http.PostAsJsonAsync("rest/v1/ledgers", ledgerPayload);
-
-                // 4. contacts ဇယားထဲရှိ AdvanceBalance ကို တိုက်ရိုက် Update ပြုလုပ်ခြင်း (Row အသစ်မတိုးဘဲ ရှိပြီးသားကို နှုတ်မည်)
-                await Http.PatchAsJsonAsync($"rest/v1/contacts?id=eq.{_selectedContactId}", new { advance_balance = newAdvanceBalance });
-
-                // Local state ကိုလည်း တခါတည်း update လုပ်ထားရန်
-                if (_selectedContact != null)
+                var requestMessage = new HttpRequestMessage(HttpMethod.Post, "rest/v1/transactions")
                 {
-                    _selectedContact.AdvanceBalance = newAdvanceBalance;
-                }
-
-                // 5. Vouchers ဇယားတွင် မှတ်တမ်းတင်ခြင်း
-                var voucherPayload = new
-                {
-                    owner_id = ownerId,
-                    staff_id = staffId,
-                    voucher_number = _voucherNumber,
-                    voucher_type = "AdvanceIn",
-                    reference_id = generatedTransactionId
+                    Content = JsonContent.Create(transaction)
                 };
+                requestMessage.Headers.Add("Prefer", "return=representation");
 
-                await Http.PostAsJsonAsync("rest/v1/vouchers", voucherPayload);
+                var transResponse = await Http.SendAsync(requestMessage);
 
-                // 6. Wallet လက်ကျန်ငွေ တိုးမြှင့်ခြင်း (ငွေဝင်လာသောကြောင့် Wallet ထဲ ပေါင်းမည်)
-                var selectedWallet = _wallets.FirstOrDefault(w => w.Id == _selectedWalletId);
-                if (selectedWallet != null)
+                if (transResponse.IsSuccessStatusCode)
                 {
-                    decimal newWalletBalance = selectedWallet.Balance + _amount;
-                    await Http.PatchAsJsonAsync($"rest/v1/wallets?id=eq.{selectedWallet.Id}", new { balance = newWalletBalance });
-                }
+                    var createdTransactions = await transResponse.Content.ReadFromJsonAsync<List<TransactionResponseModel>>();
+                    string? generatedTransactionId = createdTransactions?.FirstOrDefault()?.id;
 
-                Snackbar.Add(Lang.GetString("Msg_Success"), Severity.Success);
-                _isSuccessCompleted = true;
+                    // ပြန်ဆပ်ငွေဖြစ်သောကြောင့် လက်ကျန်ငွေ လျော့သွားပါမည်
+                    decimal newAdvanceBalance = _currentAdvanceBalance - _amount;
+
+                    var ledgerPayload = new
+                    {
+                        owner_id = ownerId,
+                        staff_id = staffId,
+                        contact_id = _selectedContactId,
+                        transaction_id = generatedTransactionId,
+                        voucher_number = _voucherNumber,
+                        entry_type = "Debit",
+                        debit_amount = _amount,
+                        credit_amount = 0.00m,
+                        balance_after = newAdvanceBalance,
+                        balance_impact = "AdvanceIn",
+                        description = string.IsNullOrEmpty(_description) ? "Advance In (ကြိုတင်ငွေလက်ခံခြင်း)" : _description
+                    };
+
+                    await Http.PostAsJsonAsync("rest/v1/ledgers", ledgerPayload);
+
+                    await Http.PatchAsJsonAsync($"rest/v1/contacts?id=eq.{_selectedContactId}", new { advance_balance = newAdvanceBalance });
+
+                    var voucherPayload = new
+                    {
+                        owner_id = ownerId,
+                        staff_id = staffId,
+                        voucher_number = _voucherNumber,
+                        voucher_type = "AdvanceIn",
+                        reference_id = generatedTransactionId
+                    };
+                    await Http.PostAsJsonAsync("rest/v1/vouchers", voucherPayload);
+
+                    // Wallet လက်ကျန်ငွေ တိုးမြှင့်ခြင်း (ငွေဝင်လာသောကြောင့် Wallet ထဲ ပေါင်းမည်)
+                    var selectedWallet = _wallets.FirstOrDefault(w => w.Id == _selectedWalletId);
+                    if (selectedWallet != null)
+                    {
+                        decimal newWalletBalance = selectedWallet.Balance + _amount;
+                        await Http.PatchAsJsonAsync($"rest/v1/wallets?id=eq.{selectedWallet.Id}", new { balance = newWalletBalance });
+                    }
+
+                    Snackbar.Add(Lang.GetString("Msg_Success") ?? "အောင်မြင်ပါသည်", Severity.Success);
+                }
+                else
+                {
+                    var err = await transResponse.Content.ReadAsStringAsync();
+                    Snackbar.Add($"{Lang.GetString("Msg_Error")} {err}", Severity.Error);
+                    return;
+                }
             }
-            else
-            {
-                var err = await transResponse.Content.ReadAsStringAsync();
-                Snackbar.Add($"{Lang.GetString("Msg_Error")} {err}", Severity.Error);
-            }
+
+            _isSuccessCompleted = true;
         }
         catch (Exception ex)
         {
@@ -303,13 +402,36 @@
 
     private void FinishTransaction()
     {
-        Navigation.NavigateTo("/contacts");
+        // ခြံရှင်ငွေပြန်ဆပ်စာရင်းများ စာမျက်နှာ (သို့မဟုတ် သက်ဆိုင်ရာ List Page) သို့ သွားမည်
+        Navigation.NavigateTo("/farm-owner-repayments");
+    }
+
+    private class TransactionModel
+    {
+        public string id { get; set; } = string.Empty;
+        public string? voucher_number { get; set; }
+        public string? contact_id { get; set; }
+        public string? wallet_id { get; set; }
+        public decimal total_amount { get; set; }
+        public string? description { get; set; }
     }
 
     private class TransactionResponseModel
     {
         public string id { get; set; } = string.Empty;
         public string? voucher_number { get; set; }
+    }
+
+    private class ContactBalanceModel
+    {
+        public string id { get; set; } = string.Empty;
+        public decimal advance_balance { get; set; }
+    }
+
+    private class WalletBalanceModel
+    {
+        public string id { get; set; } = string.Empty;
+        public decimal balance { get; set; }
     }
 
     public void Dispose() => Lang.OnLanguageChanged -= StateHasChanged;

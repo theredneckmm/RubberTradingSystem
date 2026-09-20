@@ -67,17 +67,18 @@
         <MudNavLink Href="/farm-accounts" Icon="@Icons.Material.Filled.AccountBalance" Match="NavLinkMatch.All">
             @LangService.GetString("Nav_FarmAccounts")
         </MudNavLink>
-        <MudNavLink Href="/contacts/balance" Icon="@Icons.Material.Filled.Balance" Match="NavLinkMatch.Prefix">
-            @LangService.GetString("Menu_BalanceSummary")
-        </MudNavLink>
+       
         <!-- ခြံရှင်များ ကြိုတင်ထုတ်ယူငွေမှတ်တမ်း (Farm Owner Advances) -->
         <MudNavLink Href="/farm-owner-advances" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.AccountBalanceWallet">
             @LangService.GetString("Menu_FarmOwnerAdvances")
         </MudNavLink>
 
         <!-- ခြံရှင်များ ကြိုတင်ငွေပြန်ဆပ်ခြင်းမှတ်တမ်း (Farm Owner Repayments) -->
-        <MudNavLink Href="/farm-owner/repayments" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Payment">
+        <MudNavLink Href="/farm-owner-repayments" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Payment">
             @LangService.GetString("Menu_FarmOwnerRepayments")
+        </MudNavLink>
+        <MudNavLink Href="/contacts/balance" Icon="@Icons.Material.Filled.Balance" Match="NavLinkMatch.Prefix">
+            @LangService.GetString("Menu_BalanceSummary")
         </MudNavLink>
     </MudNavGroup>
 

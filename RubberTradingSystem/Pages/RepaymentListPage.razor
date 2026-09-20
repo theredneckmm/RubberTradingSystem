@@ -1,60 +1,90 @@
-﻿@page "/farm-owner/repayments"
+﻿@page "/farm-owner-repayments"
 @using MudBlazor
+@using RubberTradingSystem.Models
 @using RubberTradingSystem.Services
 @inject HttpClient Http
 @inject ISnackbar Snackbar
+@inject IDialogService DialogService
 @inject NavigationManager Navigation
 @inject LanguageService Lang
 @implements IDisposable
 
-<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4 mb-6">
-    <div class="d-flex justify-space-between align-center mb-4">
-        <MudText Typo="Typo.h5" Color="Color.Primary" Class="font-weight-bold">
-            @Lang.GetString("Title_FarmOwnerRepayments")
-        </MudText>
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="GoToCreate">
-            @Lang.GetString("Btn_CreateNew")
-        </MudButton>
-    </div>
+<!-- စာမျက်နှာတစ်ခုလုံးကို အပြည့်ယူပြီး အောက်ခြေတွင် ခလုတ်များကပ်နေစေရန် Layout သတ်မှတ်ခြင်း -->
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="pa-4 d-flex flex-column" Style="height: calc(100vh - 64px);">
 
-    <MudPaper Elevation="3" Class="pa-4">
-        <MudTable Items="_repaymentList" Dense="true" Hover="true" Bordered="true" Filter="new Func<TransactionModel, bool>(FilterFunc)">
-            <ToolBarContent>
-                <MudTextField @bind-Value="_searchString" Placeholder="ရှာဖွေရန် (Voucher / ခြံရှင်အမည်)..." Adornment="Adornment.Start"
-                              AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0"></MudTextField>
-            </ToolBarContent>
+    <!-- ခေါင်းစဉ် နှင့် Date Filter (အပေါ်ပိုင်း) -->
+    <MudPaper Elevation="2" Class="pa-4 mb-4">
+        <MudText Typo="Typo.h5" Color="Color.Primary" Class="fw-bold mb-4">@Lang.GetString("RepayList_Title")</MudText>
+
+        <div class="d-flex flex-wrap gap-4 align-center">
+            <MudDatePicker Label="@Lang.GetString("RepayList_StartDate")" @bind-Date="_startDate" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            <MudDatePicker Label="@Lang.GetString("RepayList_EndDate")" @bind-Date="_endDate" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Search" OnClick="LoadDataAsync">
+                @Lang.GetString("RepayList_Search")
+            </MudButton>
+        </div>
+    </MudPaper>
+
+    <!-- မှတ်တမ်းစာရင်း (အလယ်ပိုင်း - Scroll ဆွဲ၍ရမည်) -->
+    <div class="flex-grow-1 overflow-auto mb-4">
+        <MudTable Items="@_repaymentRecords"
+                  Dense="true" Hover="true" Bordered="true" Striped="true"
+                  @bind-SelectedItem="_selectedItem"
+                  RowClassFunc="SelectedRowClassFunc"
+                  Elevation="2"
+                  Loading="_isLoading">
             <HeaderContent>
-                <MudTh>@Lang.GetString("Col_VoucherNo")</MudTh>
-                <MudTh>@Lang.GetString("Col_FarmOwner")</MudTh>
-                <MudTh>@Lang.GetString("Lbl_Date")</MudTh>
-                <MudTh>@Lang.GetString("Col_Amount")</MudTh>
-                <MudTh>@Lang.GetString("Lbl_Note")</MudTh>
-                <MudTh style="text-align: right;">@Lang.GetString("Col_Actions")</MudTh>
+                <MudTh>@Lang.GetString("RepayList_ColDate")</MudTh>
+                <MudTh>@Lang.GetString("RepayList_ColVoucher")</MudTh>
+                <MudTh>@Lang.GetString("RepayList_ColSupplier")</MudTh>
+                <MudTh>@Lang.GetString("RepayList_ColAmount")</MudTh>
+                <MudTh>@Lang.GetString("RepayList_ColNote")</MudTh>
             </HeaderContent>
             <RowTemplate>
-                <MudTd><b>@context.voucher_number</b></MudTd>
-                <MudTd>@context.contact_name</MudTd>
-                <MudTd>@Convert.ToDateTime(context.created_at).ToString("dd/MM/yyyy")</MudTd>
-                <MudTd><b>@context.total_amount.ToString("N0") MMK</b></MudTd>
-                <MudTd>@context.description</MudTd>
-                <MudTd style="text-align: right;">
-                    <MudButtonGroup Size="Size.Small" Variant="Variant.Outlined">
-                        <MudButton Color="Color.Info" OnClick="() => EditRecord(context.id)">@Lang.GetString("Btn_Edit")</MudButton>
-                        <MudButton Color="Color.Error" OnClick="() => DeleteRecord(context.id)">@Lang.GetString("Btn_Delete")</MudButton>
-                        <MudButton Color="Color.Secondary" OnClick="() => PrintRecord(context.voucher_number)">@Lang.GetString("Btn_Print")</MudButton>
-                    </MudButtonGroup>
-                </MudTd>
+                <MudTd DataLabel="Date">@context.Date.ToString("dd/MM/yyyy")</MudTd>
+                <MudTd DataLabel="Voucher"><b>@context.VoucherNumber</b></MudTd>
+                <MudTd DataLabel="Farm Owner">@context.ContactName</MudTd>
+                <MudTd DataLabel="Amount"><b style="color: var(--mud-palette-success);">@context.Amount.ToString("N0")</b></MudTd>
+                <MudTd DataLabel="Note">@context.Note</MudTd>
             </RowTemplate>
             <PagerContent>
-                <MudTablePager />
+                <MudTablePager PageSizeOptions="new int[] { 10, 25, 50 }" />
             </PagerContent>
         </MudTable>
+    </div>
+
+    <!-- အောက်ခြေ Action ခလုတ်များ (mt-auto ဖြင့် အောက်ဆုံးသို့ ကပ်ထားသည်) -->
+    <MudPaper Class="pa-3 d-flex justify-end gap-3 mt-auto" Elevation="4" Style="background-color: var(--mud-palette-background-grey);">
+        <MudButton Variant="Variant.Filled" Color="Color.Success" StartIcon="@Icons.Material.Filled.Add" OnClick="NavigateToNew">
+            @Lang.GetString("Btn_New")
+        </MudButton>
+
+        <MudButton Variant="Variant.Filled" Color="Color.Warning" StartIcon="@Icons.Material.Filled.Edit"
+                   Disabled="@(_selectedItem == null)" OnClick="NavigateToEdit">
+            @Lang.GetString("Btn_Edit")
+        </MudButton>
+
+        <MudButton Variant="Variant.Filled" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete"
+                   Disabled="@(_selectedItem == null)" OnClick="DeleteAsync">
+            @Lang.GetString("Btn_Delete")
+        </MudButton>
     </MudPaper>
+
 </MudContainer>
 
+<style>
+    .selected-row {
+        background-color: rgba(33, 150, 243, 0.2) !important;
+    }
+</style>
+
 @code {
-    private List<TransactionModel> _repaymentList = new();
-    private string _searchString = "";
+    private DateTime? _startDate = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+    private DateTime? _endDate = DateTime.Today;
+    private bool _isLoading = false;
+
+    private List<RepaymentRecordViewModel> _repaymentRecords = new();
+    private RepaymentRecordViewModel? _selectedItem;
 
     protected override async Task OnInitializedAsync()
     {
@@ -62,61 +92,177 @@
         await LoadDataAsync();
     }
 
-    public void Dispose() => Lang.OnLanguageChanged -= StateHasChanged;
+    public void Dispose()
+    {
+        Lang.OnLanguageChanged -= StateHasChanged;
+    }
 
     private async Task LoadDataAsync()
     {
+        _isLoading = true;
+        _selectedItem = null;
         try
         {
-            // transaction_type က AdvanceIn ဖြစ်သော စာရင်းများကို ဆွဲထုတ်ခြင်း
-            _repaymentList = await Http.GetFromJsonAsync<List<TransactionModel>>("rest/v1/transactions?transaction_type=eq.AdvanceIn&select=id,voucher_number,total_amount,description,created_at,contacts(name)&order=created_at.desc") ?? new();
+            // 1. ရက်စွဲ Filter အတွက် Format ပြောင်းခြင်း
+            string start = _startDate?.ToString("yyyy-MM-dd") ?? "2000-01-01";
+            string end = _endDate?.ToString("yyyy-MM-dd") ?? "2100-01-01";
+
+            // 2. Transactions ဇယားမှ AdvanceIn မှတ်တမ်းများကို ရက်စွဲအလိုက် ဆွဲထုတ်ခြင်း
+            var txUrl = $"rest/v1/transactions?transaction_type=eq.AdvanceIn&created_at=gte.{start}T00:00:00&created_at=lte.{end}T23:59:59&select=*&order=created_at.desc";
+            var transactions = await Http.GetFromJsonAsync<List<TransactionModel>>(txUrl) ?? new();
+
+            // 3. Contacts (ခြံရှင်အမည်များ) ဆွဲထုတ်ခြင်း
+            var contacts = await Http.GetFromJsonAsync<List<ContactModel>>("rest/v1/contacts?select=id,name") ?? new();
+
+            // 4. Data များကို Table တွင်ပြသမည့် ViewModel အဖြစ် ပေါင်းစပ် (Join) ခြင်း
+            _repaymentRecords = transactions.Select(tx => new RepaymentRecordViewModel
+            {
+                Id = tx.id,
+                Date = tx.created_at ?? DateTime.Today,
+                VoucherNumber = tx.voucher_number ?? "-",
+                ContactId = tx.contact_id ?? "",
+                ContactName = contacts.FirstOrDefault(c => c.id == tx.contact_id)?.name ?? "Unknown",
+                Amount = tx.total_amount,
+                Note = tx.description ?? ""
+            }).ToList();
         }
         catch (Exception ex)
         {
             Snackbar.Add($"Error loading data: {ex.Message}", Severity.Error);
         }
-    }
-
-    private bool FilterFunc(TransactionModel item)
-    {
-        if (string.IsNullOrWhiteSpace(_searchString)) return true;
-        if (item.voucher_number?.Contains(_searchString, StringComparison.OrdinalIgnoreCase) == true) return true;
-        if (item.contact_name?.Contains(_searchString, StringComparison.OrdinalIgnoreCase) == true) return true;
-        return false;
-    }
-
-    private void GoToCreate() => Navigation.NavigateTo("/advance/in");
-    private void EditRecord(string id) => Navigation.NavigateTo($"/advance/in/edit/{id}");
-
-    private async Task DeleteRecord(string id)
-    {
-        var resp = await Http.DeleteAsync($"rest/v1/transactions?id=eq.{id}");
-        if (resp.IsSuccessStatusCode)
+        finally
         {
-            Snackbar.Add("အောင်မြင်စွာ ဖျက်ပြီးပါပြီ။", Severity.Success);
-            await LoadDataAsync();
-        }
-        else
-        {
-            Snackbar.Add("ဖျက်ရာတွင် အမှားအယွင်းရှိပါသည်။", Severity.Error);
+            _isLoading = false;
         }
     }
 
-    private void PrintRecord(string voucherNo) => Navigation.NavigateTo($"/print-voucher/{voucherNo}");
-
-    public class TransactionModel
+    private string SelectedRowClassFunc(RepaymentRecordViewModel item, int rowNumber)
     {
-        public string id { get; set; } = "";
-        public string voucher_number { get; set; } = "";
+        if (_selectedItem != null && _selectedItem.Id == item.Id)
+        {
+            return "selected-row";
+        }
+        return string.Empty;
+    }
+
+    private void NavigateToNew()
+    {
+        Navigation.NavigateTo("/advance/in");
+    }
+
+    private void NavigateToEdit()
+    {
+        if (_selectedItem == null) return;
+        Navigation.NavigateTo($"/advance/in/edit/{_selectedItem.Id}");
+    }
+
+    private async Task DeleteAsync()
+    {
+        if (_selectedItem == null) return;
+
+        var confirmed = await DialogService.ShowMessageBoxAsync(
+            "အတည်ပြုပါ",
+            $"ဘောက်ချာနံပါတ် {_selectedItem.VoucherNumber} ကို ဖျက်ရန် သေချာပါသလား?",
+            yesText: "ဖျက်မည်", cancelText: "မဖျက်ပါ");
+
+        if (confirmed == true)
+        {
+            try
+            {
+                // ၁။ ဖျက်မည့် မှတ်တမ်း၏ မူလ Contact ID, Wallet ID နှင့် Amount ကို ပြန်ယူခြင်း
+                var txList = await Http.GetFromJsonAsync<List<TransactionModel>>($"rest/v1/transactions?id=eq.{_selectedItem.Id}&select=contact_id,wallet_id,total_amount");
+
+                if (txList != null && txList.Any())
+                {
+                    var tx = txList.First();
+
+                    // ၂။ ခြံရှင် (Contact) ၏ Advance Balance ထဲသို့ ထိုပမာဏကို ပြန်ပေါင်းပေးခြင်း (Reverse: အကြွေးဆပ်တာကို ပယ်ဖျက်လိုက်လို့ အကြွေးပြန်တက်သွားမည်)
+                    if (!string.IsNullOrEmpty(tx.contact_id))
+                    {
+                        var contacts = await Http.GetFromJsonAsync<List<ContactBalanceModel>>($"rest/v1/contacts?id=eq.{tx.contact_id}&select=id,advance_balance");
+                        if (contacts != null && contacts.Any())
+                        {
+                            var oldAdvanceBalance = contacts.First().advance_balance;
+                            decimal restoredAdvance = oldAdvanceBalance + tx.total_amount;
+                            await Http.PatchAsJsonAsync($"rest/v1/contacts?id=eq.{tx.contact_id}", new { advance_balance = restoredAdvance });
+                        }
+                    }
+
+                    // ၃။ Wallet လက်ကျန်ငွေထဲမှ ထိုပမာဏကို ပြန်နှုတ်ပေးခြင်း (Reverse: ဝင်လာတဲ့ငွေကို ပယ်ဖျက်လိုက်လို့ Wallet ထဲက ငွေပြန်လျော့သွားမည်)
+                    if (!string.IsNullOrEmpty(tx.wallet_id))
+                    {
+                        var wallets = await Http.GetFromJsonAsync<List<WalletBalanceModel>>($"rest/v1/wallets?id=eq.{tx.wallet_id}&select=id,balance");
+                        if (wallets != null && wallets.Any())
+                        {
+                            var oldWalletBalance = wallets.First().balance;
+                            decimal restoredWallet = oldWalletBalance - tx.total_amount;
+                            await Http.PatchAsJsonAsync($"rest/v1/wallets?id=eq.{tx.wallet_id}", new { balance = restoredWallet });
+                        }
+                    }
+                }
+
+                // ၄။ Ledgers နှင့် Vouchers မှတ်တမ်းများကို ဖျက်ခြင်း
+                await Http.DeleteAsync($"rest/v1/ledgers?transaction_id=eq.{_selectedItem.Id}");
+                await Http.DeleteAsync($"rest/v1/vouchers?reference_id=eq.{_selectedItem.Id}");
+
+                // ၅။ Transactions မှတ်တမ်းကို ဖျက်ခြင်း
+                var response = await Http.DeleteAsync($"rest/v1/transactions?id=eq.{_selectedItem.Id}");
+
+                if (response.IsSuccessStatusCode)
+                {
+                    Snackbar.Add(Lang.GetString("my") == "my" ? "မှတ်တမ်းဖျက်သိမ်းခြင်း အောင်မြင်ပါသည်။ Wallet နှင့် ခြံရှင်စာရင်းများကိုလည်း ပြန်လည်ညှိပေးပြီးပါပြီ။" : "Deleted successfully. Wallet and advance balances restored.", Severity.Success);
+                    await LoadDataAsync(); // ဇယားကို Refresh လုပ်မည်
+                }
+                else
+                {
+                    Snackbar.Add("မှတ်တမ်းဖျက်သိမ်းခြင်း မအောင်မြင်ပါ။", Severity.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+
+    // --- ViewModels for Data Mapping ---
+    private class TransactionModel
+    {
+        public string id { get; set; } = string.Empty;
+        public string? voucher_number { get; set; }
+        public string? contact_id { get; set; }
+        public string? wallet_id { get; set; }
         public decimal total_amount { get; set; }
         public string? description { get; set; }
         public DateTime? created_at { get; set; }
-        public ContactInfo? contacts { get; set; }
-        public string contact_name => contacts?.name ?? "-";
     }
 
-    public class ContactInfo
+    private class ContactModel
     {
-        public string name { get; set; } = "";
+        public string id { get; set; } = string.Empty;
+        public string name { get; set; } = string.Empty;
+    }
+
+    private class ContactBalanceModel
+    {
+        public string id { get; set; } = string.Empty;
+        public decimal advance_balance { get; set; }
+    }
+
+    private class WalletBalanceModel
+    {
+        public string id { get; set; } = string.Empty;
+        public decimal balance { get; set; }
+    }
+
+    private class RepaymentRecordViewModel
+    {
+        public string Id { get; set; } = string.Empty;
+        public DateTime Date { get; set; }
+        public string VoucherNumber { get; set; } = string.Empty;
+        public string ContactId { get; set; } = string.Empty;
+        public string ContactName { get; set; } = string.Empty;
+        public decimal Amount { get; set; }
+        public string Note { get; set; } = string.Empty;
     }
 }

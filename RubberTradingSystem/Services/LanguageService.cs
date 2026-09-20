@@ -804,7 +804,16 @@ namespace RubberTradingSystem.Services
             ["AdvList_ColNote"] = "Note",
             ["Btn_New"] = "New",
             ["Btn_Edit"] = "Edit",
-            ["Btn_Delete"] = "Delete"
+            ["Btn_Delete"] = "Delete",
+            ["RepayList_Title"] = "Farm Owner Repayment Records",
+            ["RepayList_StartDate"] = "Start Date",
+            ["RepayList_EndDate"] = "End Date",
+            ["RepayList_Search"] = "Search",
+            ["RepayList_ColDate"] = "Date",
+            ["RepayList_ColVoucher"] = "Voucher No",
+            ["RepayList_ColSupplier"] = "Farm Owner",
+            ["RepayList_ColAmount"] = "Amount",
+            ["RepayList_ColNote"] = "Note",
         };
 
         private static readonly Dictionary<string, string> Myanmar = new()
@@ -1589,7 +1598,16 @@ namespace RubberTradingSystem.Services
             ["AdvList_ColNote"] = "မှတ်ချက်",
             ["Btn_New"] = "အသစ်ထည့်မည်",
             ["Btn_Edit"] = "ပြင်ဆင်မည်",
-            ["Btn_Delete"] = "ဖျက်မည်"
+            ["Btn_Delete"] = "ဖျက်မည်",
+            ["RepayList_Title"] = "ခြံရှင်ကြိုတင်ငွေ ပြန်ဆပ်မှတ်တမ်းများ",
+            ["RepayList_StartDate"] = "စတင်ရက်",
+            ["RepayList_EndDate"] = "အဆုံးရက်",
+            ["RepayList_Search"] = "ရှာဖွေမည်",
+            ["RepayList_ColDate"] = "ရက်စွဲ",
+            ["RepayList_ColVoucher"] = "ဘောက်ချာနံပါတ်",
+            ["RepayList_ColSupplier"] = "ခြံရှင်အမည်",
+            ["RepayList_ColAmount"] = "ငွေပမာဏ",
+            ["RepayList_ColNote"] = "မှတ်ချက်",
         };
     }
 }
