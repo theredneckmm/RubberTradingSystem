@@ -51,7 +51,10 @@
 
         <MudNavLink Href="/wallets" Icon="@Icons.Material.Filled.AccountBalance">@LangService.GetString("Menu_Wallets")</MudNavLink>
         <MudNavLink Href="/fund-transfers" Icon="@Icons.Material.Filled.SwapHoriz">@LangService.GetString("Menu_Transfers")</MudNavLink>
-    </MudNavGroup>
+        <MudNavLink Href="/voucher-history" Icon="@Icons.Material.Filled.ReceiptLong">
+            @LangService.GetString("Menu_VoucherHistory")
+        </MudNavLink>
+        </MudNavGroup>
 
     <MudNavGroup Title="@LangService.GetString("Menu_Contacts")" Icon="@Icons.Material.Filled.Contacts">
         <MudNavLink Href="/contacts" Icon="@Icons.Material.Filled.ContactPage">

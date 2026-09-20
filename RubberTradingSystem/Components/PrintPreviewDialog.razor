@@ -1,24 +1,23 @@
-﻿@using RubberTradingSystem.Models.Printing
+﻿@using MudBlazor
+@using RubberTradingSystem.Models.Printing
 @inject IJSRuntime JSRuntime
 @inject ISnackbar Snackbar
 
 <MudDialog>
     <DialogContent>
-        <!-- Style များကို ဒီ div ထဲသို့ ရွှေ့ပြောင်းထားသည် -->
+        <!-- Printable Area ကို Center ကျကျ ပြသရန် -->
         <div style="overflow-y: auto; max-height: 75vh; padding: 16px; background-color: #334155; display: flex; justify-content: center;">
 
-            <!-- Printable Area -->
             <div id="printable-voucher-area" class="voucher-paper">
-
                 <div>
-                    <!-- Header (Center Aligned) -->
+                    <!-- Header -->
                     <div class="voucher-header">
                         <div class="voucher-title">@Document.HeaderTitle</div>
                         <div class="voucher-address">@Document.HeaderAddress</div>
                         <div class="voucher-header-line"></div>
                     </div>
 
-                    <!-- Meta Information Fields -->
+                    <!-- Meta Information (ဥပမာ- ဘောင်ချာနံပါတ်၊ ရက်စွဲ၊ ခြံရှင်အမည်) -->
                     <div class="voucher-meta" style="margin-bottom: 12px;">
                         @foreach (var field in Document.Fields)
                         {
@@ -29,7 +28,7 @@
                         }
                     </div>
 
-                    <!-- Rows Table -->
+                    <!-- Items / Rows Table (ဥပမာ- ရော်ဘာအဝယ်၊ ထွက်ငွေ အသေးစိတ်) -->
                     @if (Document.Rows != null && Document.Rows.Any())
                     {
                         <table class="voucher-table" style="width: 100%; border-collapse: collapse; margin-bottom: 15px; font-size: 12px;">
@@ -46,32 +45,31 @@
                                 {
                                     <tr>
                                         <td style="border-bottom: 1px solid #ddd; padding: 6px;">@row.Description</td>
-                                        <td style="border-bottom: 1px solid #ddd; padding: 6px; text-align: right;">@row.Quantity.ToString("N2")</td>
-                                        <td style="border-bottom: 1px solid #ddd; padding: 6px; text-align: right;">@row.Price.ToString("N0")</td>
+                                        <td style="border-bottom: 1px solid #ddd; padding: 6px; text-align: right;">@(row.Quantity > 0 ? row.Quantity.ToString("N2") : "-")</td>
+                                        <td style="border-bottom: 1px solid #ddd; padding: 6px; text-align: right;">@(row.Price > 0 ? row.Price.ToString("N0") : "-")</td>
                                         <td style="border-bottom: 1px solid #ddd; padding: 6px; text-align: right;">@row.Amount.ToString("N0")</td>
                                     </tr>
                                 }
                             </tbody>
                         </table>
 
+                        <!-- Total Amount -->
                         <div style="text-align: right; font-weight: bold; font-size: 13px; margin-bottom: 15px;">
                             စုစုပေါင်းငွေ: @Document.Rows.Sum(x => x.Amount).ToString("N0") ကျပ်
                         </div>
                     }
                 </div>
 
-                <!-- Footer (Always sticky to bottom of the paper) -->
+                <!-- Footer (Thanks note, signature, etc.) -->
                 <div class="voucher-footer">
                     <div style="border-top: 1px dashed #777; margin-bottom: 8px; width: 100%;"></div>
                     <p style="margin: 0; font-size: 12px; color: #333;">@Document.FooterNote</p>
                 </div>
-
             </div>
         </div>
     </DialogContent>
 
     <DialogActions>
-        <!-- Style များကို ဒီ div ထဲသို့ ရွှေ့ပြောင်းထားသည် -->
         <div style="background-color: #1e293b; padding: 12px 16px; border-top: 1px solid #475569; width: 100%; display: flex; justify-content: flex-end; gap: 8px;">
             <MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="Close" Style="color: white;">ပိတ်မည်</MudButton>
             <MudButton Color="Color.Primary" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Print" OnClick="PrintVoucher">
@@ -129,9 +127,7 @@
 </style>
 
 @code {
-    [CascadingParameter]
-    // MudDialogInstance အစား IMudDialogInstance ကို ပြောင်းလဲသုံးစွဲပါ
-    private IMudDialogInstance MudDialog { get; set; } = default!;
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
 
     [Parameter] public PrintDocumentModel Document { get; set; } = new();
 
@@ -141,6 +137,7 @@
     {
         try
         {
+            // JavaScript 함수ကို ခေါ်၍ Print ထုတ်မည်
             await JSRuntime.InvokeVoidAsync(
                 "printVoucher",
                 "printable-voucher-area",

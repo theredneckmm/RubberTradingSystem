@@ -1,0 +1,290 @@
+﻿@page "/voucher-history"
+@using MudBlazor
+@using RubberTradingSystem.Models
+@using RubberTradingSystem.Models.Printing
+@using RubberTradingSystem.Services
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@inject LanguageService LangService
+@inject PrintService PrintService
+@implements IDisposable
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4 mb-6">
+    <MudText Typo="Typo.h5" Color="Color.Primary" Class="mb-4 font-weight-bold">
+        @LangService.GetString("Voucher_Title")
+    </MudText>
+
+    <MudPaper Elevation="3" Class="pa-4 mb-4">
+        <MudGrid Spacing="2" AlignItems="Center">
+            <!-- ရက်စွဲ စစ်ထုတ်ခြင်း -->
+            <MudItem xs="12" sm="6" md="3">
+                <MudDatePicker Label="@LangService.GetString("Voucher_StartDate")" @bind-Date="_startDate" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudDatePicker Label="@LangService.GetString("Voucher_EndDate")" @bind-Date="_endDate" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            </MudItem>
+
+            <!-- အမျိုးအစား စစ်ထုတ်ခြင်း -->
+            <MudItem xs="12" sm="6" md="3">
+                <MudSelect T="string" Label="@LangService.GetString("Voucher_Type")" @bind-Value="_selectedType" Variant="Variant.Outlined" Margin="Margin.Dense">
+                    <MudSelectItem Value="@("All")">@LangService.GetString("Voucher_AllTypes")</MudSelectItem>
+                    <MudSelectItem Value="@("Income")">Income (ဝင်ငွေ)</MudSelectItem>
+                    <MudSelectItem Value="@("Expense")">Expense (ထွက်ငွေ)</MudSelectItem>
+                    <MudSelectItem Value="@("AdvanceIn")">Advance In (ကြိုတင်ငွေ ပြန်ဆပ်)</MudSelectItem>
+                    <MudSelectItem Value="@("AdvanceOut")">Advance Out (ကြိုတင်ငွေ ထုတ်ပေး)</MudSelectItem>
+                    <MudSelectItem Value="@("Purchase")">Purchase (ရာဘာအဝယ်)</MudSelectItem>
+                    <MudSelectItem Value="@("Sale")">Sale (ရာဘာအရောင်း)</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+
+            <MudItem xs="12" sm="6" md="3" Class="d-flex justify-end">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Search" OnClick="LoadDataAsync" Class="w-100 h-100" Style="max-height: 40px;">
+                    Search
+                </MudButton>
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
+
+    <MudTable Items="@_vouchers" Dense="true" Hover="true" Bordered="true" Striped="true" Loading="_isLoading"
+              Filter="new Func<VoucherRecordModel,bool>(FilterFunc)" Elevation="2">
+        <ToolBarContent>
+            <MudSpacer />
+            <MudTextField @bind-Value="_searchString" Placeholder="@LangService.GetString("Voucher_Search")"
+                          Immediate="true" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                          Class="mt-0" Clearable="true"></MudTextField>
+        </ToolBarContent>
+        <HeaderContent>
+            <MudTh>@LangService.GetString("Voucher_ColDate")</MudTh>
+            <MudTh>@LangService.GetString("Voucher_ColVoucherNo")</MudTh>
+            <MudTh>@LangService.GetString("Voucher_ColType")</MudTh>
+            <MudTh>@LangService.GetString("Voucher_ColDesc")</MudTh>
+            <MudTh Style="text-align: right;">@LangService.GetString("Voucher_ColAmount")</MudTh>
+            <MudTh Style="text-align: center;">Action</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Date">@context.created_at.ToString("dd/MM/yyyy HH:mm")</MudTd>
+            <MudTd DataLabel="Voucher No">
+                <MudChip T="string" Color="Color.Info" Variant="Variant.Outlined" Size="Size.Small"
+                         OnClick="@(() => OpenVoucherDetail(context.voucher_number))" Style="cursor: pointer;">
+                    <b>@context.voucher_number</b>
+                </MudChip>
+            </MudTd>
+            <MudTd DataLabel="Type">
+                <MudChip T="string" Color="GetTypeColor(context.transaction_type)" Size="Size.Small">@context.transaction_type</MudChip>
+            </MudTd>
+            <MudTd DataLabel="Description">@context.description</MudTd>
+            <MudTd DataLabel="Amount" Style="text-align: right;">
+                <b style="color: @(IsIncomeType(context.transaction_type) ? "var(--mud-palette-success)" : "var(--mud-palette-error)")">
+                    @context.total_amount.ToString("N0")
+                </b>
+            </MudTd>
+            <MudTd DataLabel="Action" Style="text-align: center;">
+                <MudButton Variant="Variant.Outlined" Size="Size.Small" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Print"
+                           OnClick="@(() => PrintVoucherAsync(context.voucher_number))">
+                    @LangService.GetString("Voucher_BtnPrint")
+                </MudButton>
+            </MudTd>
+        </RowTemplate>
+        <PagerContent>
+            <MudTablePager PageSizeOptions="new int[] { 15, 30, 50, 100 }" />
+        </PagerContent>
+    </MudTable>
+</MudContainer>
+
+@code {
+    private DateTime? _startDate = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+    private DateTime? _endDate = DateTime.Today;
+    private string _selectedType = "All";
+    private string _searchString = "";
+    private bool _isLoading = false;
+
+    private List<VoucherRecordModel> _vouchers = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        LangService.OnLanguageChanged += StateHasChanged;
+        await LoadDataAsync();
+    }
+
+    public void Dispose() => LangService.OnLanguageChanged -= StateHasChanged;
+
+    private async Task LoadDataAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            string start = _startDate?.ToString("yyyy-MM-dd") ?? "2000-01-01";
+            string end = _endDate?.ToString("yyyy-MM-dd") ?? "2100-01-01";
+
+            string url = $"rest/v1/transactions?voucher_number=not.is.null&created_at=gte.{start}T00:00:00&created_at=lte.{end}T23:59:59&select=id,voucher_number,transaction_type,description,total_amount,created_at&order=created_at.desc";
+
+            if (_selectedType != "All")
+            {
+                url += $"&transaction_type=eq.{_selectedType}";
+            }
+
+            _vouchers = await Http.GetFromJsonAsync<List<VoucherRecordModel>>(url) ?? new();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading vouchers: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private bool FilterFunc(VoucherRecordModel item)
+    {
+        if (string.IsNullOrWhiteSpace(_searchString)) return true;
+        return (item.voucher_number?.Contains(_searchString, StringComparison.OrdinalIgnoreCase) ?? false) ||
+               (item.description?.Contains(_searchString, StringComparison.OrdinalIgnoreCase) ?? false);
+    }
+
+    private Color GetTypeColor(string type) => type switch
+    {
+        "Income" => Color.Success,
+        "AdvanceIn" => Color.Success,
+        "Sale" => Color.Info,
+        "Expense" => Color.Error,
+        "AdvanceOut" => Color.Warning,
+        "Purchase" => Color.Error,
+        _ => Color.Default
+    };
+
+    private bool IsIncomeType(string type) => type == "Income" || type == "AdvanceIn" || type == "Sale";
+
+    private string GetVoucherTypeName(string type) => type switch
+    {
+        "Income" => "ဝင်ငွေ (Income)",
+        "Expense" => "ထွက်ငွေ (Expense)",
+        "AdvanceIn" => "ကြိုတင်ငွေ ပြန်ဆပ် (Advance In)",
+        "AdvanceOut" => "ကြိုတင်ငွေ ထုတ်ပေး (Advance Out)",
+        "Purchase" => "ရာဘာအဝယ် (Purchase)",
+        "Sale" => "ရာဘာအရောင်း (Sale)",
+        _ => type
+    };
+
+    private async Task OpenVoucherDetail(string voucherNo)
+    {
+        var parameters = new DialogParameters { ["VoucherNumber"] = voucherNo };
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+
+        var dialog = await DialogService.ShowAsync<VoucherDetailDialog>(LangService.GetString("VD_Title"), parameters, options);
+        var result = await dialog.Result;
+
+        // Dialog မှ Print နှိပ်၍ ပြန်လာပါက Print ထုတ်ပေးမည်
+        if (result != null && !result.Canceled && result.Data is string printVoucherNo)
+        {
+            await PrintVoucherAsync(printVoucherNo);
+        }
+    }
+
+    // --- Print Function အပြည့်အစုံ ---
+    private async Task PrintVoucherAsync(string voucherNo)
+    {
+        if (string.IsNullOrEmpty(voucherNo)) return;
+
+        _isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            // 1. Transaction Database မှ ဆွဲထုတ်ခြင်း
+            var txQuery = $"rest/v1/transactions?voucher_number=eq.{voucherNo}&select=voucher_number,created_at,transaction_type,total_amount,description,contacts(name),wallets(wallet_name)";
+            var txList = await Http.GetFromJsonAsync<List<TransactionDetailModel>>(txQuery);
+            var tx = txList?.FirstOrDefault();
+
+            if (tx == null)
+            {
+                Snackbar.Add("ဘောင်ချာအချက်အလက် ရှာမတွေ့ပါ။", Severity.Error);
+                return;
+            }
+
+            // 2. Printer Settings မှ ဆွဲထုတ်ခြင်း
+            var settings = await Http.GetFromJsonAsync<List<PrinterSettingsModel>>("rest/v1/printer_settings?select=*&limit=1") ?? new();
+            var setting = settings.FirstOrDefault() ?? new PrinterSettingsModel();
+
+            // 3. PrintDocumentModel သို့ ပြောင်းလဲခြင်း
+            var document = new PrintDocumentModel
+            {
+                Title = $"Print Voucher - {voucherNo}",
+                DocumentType = GetVoucherTypeName(tx.transaction_type),
+                PaperSize = string.IsNullOrEmpty(setting.voucher_size) ? "A6_Portrait" : setting.voucher_size,
+                CustomWidth = setting.custom_width > 0 ? setting.custom_width : 105,
+                CustomHeight = setting.custom_height > 0 ? setting.custom_height : 148,
+
+                HeaderTitle = string.IsNullOrEmpty(setting.header_title) ? "RUBBER TRADING SYSTEM" : setting.header_title,
+                HeaderAddress = string.IsNullOrEmpty(setting.header_address) ? "No. 123, Main Road, Yangon" : setting.header_address,
+                FooterNote = string.IsNullOrEmpty(setting.footer_note) ? "ဝယ်ယူအားပေးမှုကို ကျေးဇူးတင်ပါသည်။" : setting.footer_note,
+
+                Fields = new List<PrintFieldModel>
+                {
+                    new() { Label = "ဘောင်ချာအမှတ်", Value = tx.voucher_number },
+                    new() { Label = "ရက်စွဲ", Value = tx.created_at.ToString("dd/MM/yyyy hh:mm tt") },
+                    new() { Label = "အမျိုးအစား", Value = GetVoucherTypeName(tx.transaction_type) },
+                    new() { Label = "ပတ်သက်သူ", Value = string.IsNullOrEmpty(tx.contacts?.name) ? "-" : tx.contacts.name },
+                    new() { Label = "ငွေပေးချေမှု", Value = string.IsNullOrEmpty(tx.wallets?.wallet_name) ? "-" : tx.wallets.wallet_name }
+                },
+
+                Rows = new List<PrintRowModel>
+                {
+                    new()
+                    {
+                        Description = tx.description,
+                        Quantity = 0,
+                        Price = 0,
+                        Amount = tx.total_amount
+                    }
+                }
+            };
+
+            // 4. PrintPreviewDialog အား ခေါ်ယူပြသခြင်း
+            await PrintService.ShowPrintPreview(document);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Print အချက်အလက် ပြင်ဆင်ရာတွင် အမှားရှိနေပါသည်: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private class VoucherRecordModel
+    {
+        public string id { get; set; } = string.Empty;
+        public string voucher_number { get; set; } = string.Empty;
+        public string transaction_type { get; set; } = string.Empty;
+        public string description { get; set; } = string.Empty;
+        public decimal total_amount { get; set; }
+        public DateTime created_at { get; set; }
+    }
+
+    private class TransactionDetailModel
+    {
+        public string voucher_number { get; set; } = string.Empty;
+        public DateTime created_at { get; set; }
+        public string transaction_type { get; set; } = string.Empty;
+        public decimal total_amount { get; set; }
+        public string description { get; set; } = string.Empty;
+        public ContactObj? contacts { get; set; }
+        public WalletObj? wallets { get; set; }
+    }
+    private class ContactObj { public string name { get; set; } = string.Empty; }
+    private class WalletObj { public string wallet_name { get; set; } = string.Empty; }
+
+    private class PrinterSettingsModel
+    {
+        public string voucher_size { get; set; } = string.Empty;
+        public int custom_width { get; set; }
+        public int custom_height { get; set; }
+        public string header_title { get; set; } = string.Empty;
+        public string header_address { get; set; } = string.Empty;
+        public string footer_note { get; set; } = string.Empty;
+    }
+}

@@ -1,0 +1,149 @@
+﻿@using MudBlazor
+@using RubberTradingSystem.Models
+@using RubberTradingSystem.Services
+@inject HttpClient Http
+@inject LanguageService LangService
+
+<MudDialog>
+    <DialogContent>
+        @if (_isLoading)
+        {
+            <div class="d-flex justify-center pa-6">
+                <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+            </div>
+        }
+        else if (_detail == null)
+        {
+            <MudAlert Severity="Severity.Error">ဘောင်ချာအချက်အလက် ရှာမတွေ့ပါ။</MudAlert>
+        }
+        else
+        {
+            <MudGrid Spacing="2" Class="pa-2">
+                <!-- ဘောင်ချာနံပါတ် နှင့် အမျိုးအစား -->
+                <MudItem xs="12" sm="6">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">@LangService.GetString("VD_VoucherNo")</MudText>
+                    <MudText Typo="Typo.body1" Class="fw-bold">
+                        <MudChip T="string" Color="Color.Primary" Size="Size.Small">@_detail.voucher_number</MudChip>
+                    </MudText>
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">@LangService.GetString("VD_Type")</MudText>
+                    <MudText Typo="Typo.body1" Class="fw-bold">@GetVoucherTypeName(_detail.transaction_type)</MudText>
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudDivider Class="my-2" />
+                </MudItem>
+
+                <!-- ရက်စွဲ နှင့် ပမာဏ -->
+                <MudItem xs="12" sm="6">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">@LangService.GetString("VD_Date")</MudText>
+                    <MudText Typo="Typo.body1">@_detail.created_at.ToString("dd/MM/yyyy (hh:mm tt)")</MudText>
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">@LangService.GetString("VD_Amount")</MudText>
+                    <MudText Typo="Typo.h6" Color="@(IsIncomeType(_detail.transaction_type) ? Color.Success : Color.Error)">
+                        <b>@_detail.total_amount.ToString("N0") MMK</b>
+                    </MudText>
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudDivider Class="my-2" />
+                </MudItem>
+
+                <!-- ခြံရှင် နှင့် Wallet -->
+                <MudItem xs="12" sm="6">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">@LangService.GetString("VD_Contact")</MudText>
+                    <MudText Typo="Typo.body1">
+                        @(string.IsNullOrEmpty(_detail.contacts?.name) ? "-" : _detail.contacts.name)
+                    </MudText>
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">@LangService.GetString("VD_Wallet")</MudText>
+                    <MudText Typo="Typo.body1">
+                        @(string.IsNullOrEmpty(_detail.wallets?.wallet_name) ? "-" : _detail.wallets.wallet_name)
+                    </MudText>
+                </MudItem>
+
+                <!-- အကြောင်းအရာ -->
+                <MudItem xs="12" Class="mt-3">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">@LangService.GetString("VD_Desc")</MudText>
+                    <MudPaper Elevation="0" Class="pa-3 mt-1" Style="background-color: var(--mud-palette-background-grey);">
+                        <MudText Typo="Typo.body2">@_detail.description</MudText>
+                    </MudPaper>
+                </MudItem>
+            </MudGrid>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Close" Variant="Variant.Text">@LangService.GetString("Btn_Close")</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Print" OnClick="PrintVoucher" Disabled="@(_detail == null)">
+            @LangService.GetString("Voucher_BtnPrint")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter] public string VoucherNumber { get; set; } = string.Empty;
+
+    private bool _isLoading = true;
+    private TransactionDetailModel? _detail;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var query = $"rest/v1/transactions?voucher_number=eq.{VoucherNumber}&select=voucher_number,created_at,transaction_type,total_amount,description,contacts(name),wallets(wallet_name)";
+            var result = await Http.GetFromJsonAsync<List<TransactionDetailModel>>(query);
+
+            if (result != null && result.Any())
+            {
+                _detail = result.First();
+            }
+        }
+        catch
+        {
+            _detail = null;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private bool IsIncomeType(string type) => type == "Income" || type == "AdvanceIn" || type == "Sale";
+
+    private string GetVoucherTypeName(string type) => type switch
+    {
+        "Income" => "ဝင်ငွေ (Income)",
+        "Expense" => "ထွက်ငွေ (Expense)",
+        "AdvanceIn" => "ကြိုတင်ငွေ ပြန်ဆပ် (Advance In)",
+        "AdvanceOut" => "ကြိုတင်ငွေ ထုတ်ပေး (Advance Out)",
+        "Purchase" => "ရာဘာအဝယ် (Purchase)",
+        "Sale" => "ရာဘာအရောင်း (Sale)",
+        _ => type
+    };
+
+    private void Close() => MudDialog.Cancel();
+
+    private void PrintVoucher()
+    {
+        // Print နှိပ်ပါက ဘောင်ချာနံပါတ်ကို Data အနေဖြင့် ပြန်ပို့ပေးပြီး Dialog ပိတ်မည်
+        MudDialog.Close(DialogResult.Ok(_detail?.voucher_number));
+    }
+
+    private class TransactionDetailModel
+    {
+        public string voucher_number { get; set; } = string.Empty;
+        public DateTime created_at { get; set; }
+        public string transaction_type { get; set; } = string.Empty;
+        public decimal total_amount { get; set; }
+        public string description { get; set; } = string.Empty;
+        public ContactObj? contacts { get; set; }
+        public WalletObj? wallets { get; set; }
+    }
+    private class ContactObj { public string name { get; set; } = string.Empty; }
+    private class WalletObj { public string wallet_name { get; set; } = string.Empty; }
+}
