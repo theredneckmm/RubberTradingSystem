@@ -828,6 +828,20 @@ namespace RubberTradingSystem.Services
             ["Ledger_ColCredit"] = "Credit (Out)",
             ["Ledger_ColBalance"] = "Balance",
             ["Btn_Back"] = "Back",
+            ["Outcome_ListTitle"] = "Other Expenses",
+            ["Outcome_SearchPlaceholder"] = "Search expenses...",
+            ["Outcome_ColDesc"] = "Description",
+            ["Outcome_ColAmount"] = "Amount",
+            ["Outcome_ColPaymentMethod"] = "Payment Method",
+            ["Outcome_ColDate"] = "Date",
+            ["Outcome_ColNote"] = "Note",
+            ["Outcome_AddButton"] = "Add Expense",
+            ["Outcome_EditButton"] = "Edit",
+            ["Outcome_DeleteButton"] = "Delete",
+            ["Outcome_AddTitle"] = "Add New Expense",
+            ["Outcome_EditTitle"] = "Edit Expense",
+            ["Outcome_DeleteSuccess"] = "Expense deleted successfully.",
+            ["Menu_OtherOutcomes"] = "Other Expenses",
         };
 
         private static readonly Dictionary<string, string> Myanmar = new()
@@ -1636,6 +1650,20 @@ namespace RubberTradingSystem.Services
             ["Ledger_ColCredit"] = "ထွက်ငွေ (Credit)",
             ["Ledger_ColBalance"] = "လက်ကျန်ငွေ",
             ["Btn_Back"] = "နောက်သို့",
+            ["Outcome_ListTitle"] = "အခြားထွက်ငွေ စာရင်း",
+            ["Outcome_SearchPlaceholder"] = "ထွက်ငွေ ရှာဖွေရန်...",
+            ["Outcome_ColDesc"] = "အကြောင်းအရာ",
+            ["Outcome_ColAmount"] = "ငွေပမာဏ",
+            ["Outcome_ColPaymentMethod"] = "ငွေပေးချေမှု",
+            ["Outcome_ColDate"] = "ရက်စွဲ",
+            ["Outcome_ColNote"] = "မှတ်ချက်",
+            ["Outcome_AddButton"] = "ထွက်ငွေ အသစ်ထည့်မည်",
+            ["Outcome_EditButton"] = "ပြင်ဆင်မည်",
+            ["Outcome_DeleteButton"] = "ဖျက်မည်",
+            ["Outcome_AddTitle"] = "အခြားထွက်ငွေ အသစ်ထည့်သွင်းခြင်း",
+            ["Outcome_EditTitle"] = "အခြားထွက်ငွေ ပြင်ဆင်ခြင်း",
+            ["Outcome_DeleteSuccess"] = "ထွက်ငွေ မှတ်တမ်းဖျက်သိမ်းခြင်း အောင်မြင်ပါသည်။",
+            ["Menu_OtherOutcomes"] = "အခြားထွက်ငွေများ",
         };
     }
 }

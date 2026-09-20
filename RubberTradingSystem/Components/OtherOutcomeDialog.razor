@@ -1,6 +1,7 @@
 ﻿@using MudBlazor
 @using RubberTradingSystem.Models
 @using RubberTradingSystem.Services
+@using static RubberTradingSystem.Pages.OtherOutcomes
 @inject HttpClient Http
 @inject ISnackbar Snackbar
 @inject LanguageService LangService
@@ -10,24 +11,24 @@
     <DialogContent>
         <!-- ဘောင်ချာနံပါတ်ကို ထိပ်ဆုံး ညာဘက်တွင် ပြသရန် -->
         <div class="d-flex justify-end mb-3">
-            <MudChip T="string" Color="Color.Success" Variant="Variant.Outlined" Size="Size.Large">
+            <MudChip T="string" Color="Color.Error" Variant="Variant.Outlined" Size="Size.Large">
                 <b>@_voucherNumber</b>
             </MudChip>
         </div>
 
         <MudForm @ref="_form" @bind-IsValid="@_success">
-            <MudTextField @bind-Value="Model.description" Label="@LangService.GetString("Income_ColDesc")" Required="true" Variant="Variant.Outlined" Class="mb-3" />
-            <MudNumericField @bind-Value="Model.amount" Label="@LangService.GetString("Income_ColAmount")" Required="true" Min="0" Variant="Variant.Outlined" Class="mb-3" />
+            <MudTextField @bind-Value="Model.description" Label="@LangService.GetString("Outcome_ColDesc")" Required="true" Variant="Variant.Outlined" Class="mb-3" />
+            <MudNumericField @bind-Value="Model.amount" Label="@LangService.GetString("Outcome_ColAmount")" Required="true" Min="0" Variant="Variant.Outlined" Class="mb-3" />
 
-            <MudSelect T="string" Label="ငွေလက်ခံမည့်အကောင့် (Wallet)" @bind-Value="_selectedWalletId" Required="true" Variant="Variant.Outlined" Class="mb-3">
+            <MudSelect T="string" Label="ငွေပေးချေမည့်အကောင့် (Wallet)" @bind-Value="_selectedWalletId" Required="true" Variant="Variant.Outlined" Class="mb-3">
                 @foreach (var wallet in _wallets)
                 {
                     <MudSelectItem Value="@wallet.id">@wallet.wallet_name (@wallet.wallet_type) - Balance: @wallet.balance</MudSelectItem>
                 }
             </MudSelect>
 
-            <MudDatePicker @bind-Date="_receivedDate" Label="@LangService.GetString("Income_ColDate")" Required="true" Variant="Variant.Outlined" Class="mb-3" />
-            <MudTextField @bind-Value="Model.note" Label="@LangService.GetString("Income_ColNote")" Lines="3" Variant="Variant.Outlined" Class="mb-3" />
+            <MudDatePicker @bind-Date="_expenseDate" Label="@LangService.GetString("Outcome_ColDate")" Required="true" Variant="Variant.Outlined" Class="mb-3" />
+            <MudTextField @bind-Value="Model.note" Label="@LangService.GetString("Outcome_ColNote")" Lines="3" Variant="Variant.Outlined" Class="mb-3" />
         </MudForm>
     </DialogContent>
     <DialogActions>
@@ -48,15 +49,13 @@
 
 @code {
     [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
-
-    // မှတ်ချက် - OtherIncomeModel ကို ဤနေရာတွင် ထပ်မကြေညာတော့ဘဲ Global (RubberTradingSystem.Models) မှသာ ယူသုံးပါမည်။
-    [Parameter] public OtherIncomeModel Model { get; set; } = new();
+    [Parameter] public OtherOutcomeModel Model { get; set; } = new();
     [Parameter] public bool IsNew { get; set; }
 
     private MudForm _form = new();
     private bool _success;
     private bool _isSaving;
-    private DateTime? _receivedDate = DateTime.Today;
+    private DateTime? _expenseDate = DateTime.Today;
 
     private List<WalletFullModel> _wallets = new();
     private string _selectedWalletId = string.Empty;
@@ -65,47 +64,40 @@
 
     // အသစ်တိုးလာသော Variables များ
     private string _voucherNumber = string.Empty;
-    private string _transactionId = string.Empty;
+    private string _transactionId = string.Empty; // Edit လုပ်ရာတွင် Transaction အတိအကျသိရန်
     private string _oldDescription = string.Empty;
 
     protected override async Task OnInitializedAsync()
     {
-        try
+        _expenseDate = Model.expense_date;
+        var ownerId = await UserContext.GetCurrentOwnerIdAsync();
+
+        // Wallets များ ဆွဲထုတ်ခြင်း
+        _wallets = await Http.GetFromJsonAsync<List<WalletFullModel>>($"rest/v1/wallets?owner_id=eq.{ownerId}&select=*") ?? new();
+
+        if (IsNew)
         {
-            _receivedDate = Model.received_date;
-            var ownerId = await UserContext.GetCurrentOwnerIdAsync();
+            var cashWallet = _wallets.FirstOrDefault(w => w.wallet_type == "Cash");
+            if (cashWallet != null) _selectedWalletId = cashWallet.id;
 
-            // Wallets များ ဆွဲထုတ်ခြင်း
-            _wallets = await Http.GetFromJsonAsync<List<WalletFullModel>>($"rest/v1/wallets?owner_id=eq.{ownerId}&select=*") ?? new();
-
-            if (IsNew)
-            {
-                var cashWallet = _wallets.FirstOrDefault(w => w.wallet_type == "Cash");
-                if (cashWallet != null) _selectedWalletId = cashWallet.id;
-
-                // အသစ်ဆိုပါက ဘောင်ချာနံပါတ် ဖန်တီးမည်
-                _voucherNumber = await GenerateVoucherNumberAsync("INC");
-            }
-            else
-            {
-                _originalAmount = Model.amount;
-                _oldDescription = Model.description;
-
-                // Edit Mode တွင် မူလ Transaction မှ Wallet နှင့် Voucher Number ကို ရှာဖွေခြင်း
-                var tx = await Http.GetFromJsonAsync<List<TransactionLookupModel>>($"rest/v1/transactions?description=eq.{_oldDescription}&transaction_type=eq.Income&select=id,wallet_id,voucher_number");
-                if (tx != null && tx.Any())
-                {
-                    var firstTx = tx.First();
-                    _transactionId = firstTx.id;
-                    _selectedWalletId = firstTx.wallet_id ?? "";
-                    _originalWalletId = _selectedWalletId;
-                    _voucherNumber = firstTx.voucher_number ?? "-";
-                }
-            }
+            // အသစ်ဆိုပါက ဘောင်ချာနံပါတ် ဖန်တီးမည်
+            _voucherNumber = await GenerateVoucherNumberAsync("EXP");
         }
-        catch (Exception ex)
+        else
         {
-            Snackbar.Add($"Error loading dialog data: {ex.Message}", Severity.Error);
+            _originalAmount = Model.amount;
+            _oldDescription = Model.description;
+
+            // Edit Mode တွင် မူလ Transaction မှ Wallet နှင့် Voucher Number ကို ရှာဖွေခြင်း
+            var tx = await Http.GetFromJsonAsync<List<TransactionLookupModel>>($"rest/v1/transactions?description=eq.{_oldDescription}&transaction_type=eq.Expense&select=id,wallet_id,voucher_number");
+            if (tx != null && tx.Any())
+            {
+                var firstTx = tx.First();
+                _transactionId = firstTx.id;
+                _selectedWalletId = firstTx.wallet_id ?? "";
+                _originalWalletId = _selectedWalletId;
+                _voucherNumber = firstTx.voucher_number ?? "-";
+            }
         }
     }
 
@@ -137,7 +129,7 @@
         _isSaving = true;
         try
         {
-            Model.received_date = _receivedDate ?? DateTime.Today;
+            Model.expense_date = _expenseDate ?? DateTime.Today;
             var selectedWallet = _wallets.FirstOrDefault(w => w.id == _selectedWalletId);
             Model.payment_method = selectedWallet?.wallet_name ?? "Unknown";
 
@@ -146,11 +138,12 @@
 
             if (IsNew)
             {
+                // 1. Transaction အသစ် ဖန်တီးခြင်း
                 var transaction = new
                 {
                     owner_id = ownerId,
                     staff_id = staffId,
-                    transaction_type = "Income",
+                    transaction_type = "Expense",
                     wallet_id = _selectedWalletId,
                     total_amount = Model.amount,
                     paid_amount = Model.amount,
@@ -171,46 +164,49 @@
                     var createdTx = await txResponse.Content.ReadFromJsonAsync<List<TransactionLookupModel>>();
                     string newTxId = createdTx?.FirstOrDefault()?.id ?? "";
 
+                    // 2. Voucher ဖန်တီးခြင်း
                     var vRes = await Http.PostAsJsonAsync("rest/v1/vouchers", new
                     {
                         owner_id = ownerId,
                         staff_id = staffId,
                         voucher_number = _voucherNumber,
-                        voucher_type = "Income",
+                        voucher_type = "Expense",
                         reference_id = newTxId
                     });
                     if (!vRes.IsSuccessStatusCode) throw new Exception(await vRes.Content.ReadAsStringAsync());
 
-                    decimal newBal = (selectedWallet?.balance ?? 0) + Model.amount;
+                    // 3. Wallet ငွေနုတ်ယူခြင်း (ထွက်ငွေဖြစ်သောကြောင့် လက်ကျန်ငွေ လျော့သွားမည်)
+                    decimal newBal = (selectedWallet?.balance ?? 0) - Model.amount;
                     var wRes = await Http.PatchAsJsonAsync($"rest/v1/wallets?id=eq.{_selectedWalletId}", new { balance = newBal });
                     if (!wRes.IsSuccessStatusCode) throw new Exception(await wRes.Content.ReadAsStringAsync());
 
+                    // 4. Ledger တွင် မှတ်တမ်းတင်ခြင်း (Credit)
                     var lRes = await Http.PostAsJsonAsync("rest/v1/ledgers", new
                     {
                         owner_id = ownerId,
                         staff_id = staffId,
                         transaction_id = newTxId,
                         voucher_number = _voucherNumber,
-                        entry_type = "Debit",
-                        debit_amount = Model.amount,
+                        entry_type = "Credit",
+                        credit_amount = Model.amount,
                         balance_after = newBal,
-                        balance_impact = "Income",
+                        balance_impact = "Expense",
                         description = Model.description
                     });
                     if (!lRes.IsSuccessStatusCode) throw new Exception(await lRes.Content.ReadAsStringAsync());
 
-                    // Other Income ကိုယ်တိုင် Save ခြင်း (Error မတက်စေရန် id ကို ဖြုတ်၍ ပေးပို့မည်)
-                    var incomePayload = new
+                    // 5. Other Outcome ကိုယ်တိုင် Save ခြင်း (Error မတက်စေရန် id ကို ဖြုတ်၍ ပေးပို့မည်)
+                    var outcomePayload = new
                     {
                         owner_id = ownerId,
                         staff_id = staffId,
                         description = Model.description,
                         amount = Model.amount,
                         payment_method = Model.payment_method,
-                        received_date = Model.received_date,
+                        expense_date = Model.expense_date,
                         note = Model.note
                     };
-                    var oRes = await Http.PostAsJsonAsync("rest/v1/other_incomes", incomePayload);
+                    var oRes = await Http.PostAsJsonAsync("rest/v1/other_outcomes", outcomePayload);
                     if (!oRes.IsSuccessStatusCode) throw new Exception(await oRes.Content.ReadAsStringAsync());
                 }
                 else
@@ -221,20 +217,23 @@
             }
             else // EDIT Mode
             {
+                // 1. ယခင် Wallet သို့ ငွေကို ပြန်ထည့်ခြင်း (Reverse Old Expense)
                 if (!string.IsNullOrEmpty(_originalWalletId))
                 {
                     var oldWallet = await Http.GetFromJsonAsync<List<WalletFullModel>>($"rest/v1/wallets?id=eq.{_originalWalletId}&select=balance");
                     decimal oldBal = oldWallet?.FirstOrDefault()?.balance ?? 0;
-                    var rwRes = await Http.PatchAsJsonAsync($"rest/v1/wallets?id=eq.{_originalWalletId}", new { balance = oldBal - _originalAmount });
+                    var rwRes = await Http.PatchAsJsonAsync($"rest/v1/wallets?id=eq.{_originalWalletId}", new { balance = oldBal + _originalAmount });
                     if (!rwRes.IsSuccessStatusCode) throw new Exception(await rwRes.Content.ReadAsStringAsync());
                 }
 
+                // 2. အသစ်ရွေးထားသော Wallet မှ ငွေပြန်နှုတ်ခြင်း (Apply New Expense)
                 var newWalletData = await Http.GetFromJsonAsync<List<WalletFullModel>>($"rest/v1/wallets?id=eq.{_selectedWalletId}&select=balance");
                 decimal currentBal = newWalletData?.FirstOrDefault()?.balance ?? 0;
-                decimal updatedBal = currentBal + Model.amount;
+                decimal updatedBal = currentBal - Model.amount;
                 var nwRes = await Http.PatchAsJsonAsync($"rest/v1/wallets?id=eq.{_selectedWalletId}", new { balance = updatedBal });
                 if (!nwRes.IsSuccessStatusCode) throw new Exception(await nwRes.Content.ReadAsStringAsync());
 
+                // 3. Transactions အား Update လုပ်ခြင်း (ID ဖြင့် တိကျစွာပြင်မည်)
                 if (!string.IsNullOrEmpty(_transactionId))
                 {
                     var tuRes = await Http.PatchAsJsonAsync($"rest/v1/transactions?id=eq.{_transactionId}", new
@@ -246,23 +245,25 @@
                     });
                     if (!tuRes.IsSuccessStatusCode) throw new Exception(await tuRes.Content.ReadAsStringAsync());
 
+                    // Ledger ပါ Update ပြုလုပ်ခြင်း
                     await Http.PatchAsJsonAsync($"rest/v1/ledgers?transaction_id=eq.{_transactionId}", new
                     {
-                        debit_amount = Model.amount,
+                        credit_amount = Model.amount,
                         balance_after = updatedBal,
                         description = Model.description
                     });
                 }
 
-                var updateIncomePayload = new
+                // 4. Other Outcomes အား Update လုပ်ခြင်း
+                var updateOutcomePayload = new
                 {
                     description = Model.description,
                     amount = Model.amount,
                     payment_method = Model.payment_method,
-                    received_date = Model.received_date,
+                    expense_date = Model.expense_date,
                     note = Model.note
                 };
-                var ouRes = await Http.PatchAsJsonAsync($"rest/v1/other_incomes?id=eq.{Model.id}", updateIncomePayload);
+                var ouRes = await Http.PatchAsJsonAsync($"rest/v1/other_outcomes?id=eq.{Model.id}", updateOutcomePayload);
                 if (!ouRes.IsSuccessStatusCode) throw new Exception(await ouRes.Content.ReadAsStringAsync());
             }
 
