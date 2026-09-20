@@ -793,6 +793,18 @@ namespace RubberTradingSystem.Services
             ["SmkExpenseList_Total"] = "Total Expense:",
             ["Btn_Back"] = "Back",
             ["Smoking_ViewExpensesButton"] = "View Expenses",
+            ["AdvList_Title"] = "Farm Owner Advance Records",
+            ["AdvList_StartDate"] = "Start Date",
+            ["AdvList_EndDate"] = "End Date",
+            ["AdvList_Search"] = "Search",
+            ["AdvList_ColDate"] = "Date",
+            ["AdvList_ColVoucher"] = "Voucher No",
+            ["AdvList_ColSupplier"] = "Farm Owner",
+            ["AdvList_ColAmount"] = "Amount",
+            ["AdvList_ColNote"] = "Note",
+            ["Btn_New"] = "New",
+            ["Btn_Edit"] = "Edit",
+            ["Btn_Delete"] = "Delete"
         };
 
         private static readonly Dictionary<string, string> Myanmar = new()
@@ -1565,6 +1577,19 @@ namespace RubberTradingSystem.Services
             ["SmkExpenseList_Total"] = "စုစုပေါင်း ကုန်ကျစရိတ် -",
             ["Btn_Back"] = "နောက်သို့",
             ["Smoking_ViewExpensesButton"] = "အသုံးစရိတ် အသေးစိတ်ကြည့်ရန်",
+            // Farm Owner Advances List
+            ["AdvList_Title"] = "ခြံရှင်ကြိုတင်ထုတ်ယူမှု မှတ်တမ်းများ",
+            ["AdvList_StartDate"] = "စတင်ရက်",
+            ["AdvList_EndDate"] = "အဆုံးရက်",
+            ["AdvList_Search"] = "ရှာဖွေမည်",
+            ["AdvList_ColDate"] = "ရက်စွဲ",
+            ["AdvList_ColVoucher"] = "ဘောက်ချာနံပါတ်",
+            ["AdvList_ColSupplier"] = "ခြံရှင်အမည်",
+            ["AdvList_ColAmount"] = "ငွေပမာဏ",
+            ["AdvList_ColNote"] = "မှတ်ချက်",
+            ["Btn_New"] = "အသစ်ထည့်မည်",
+            ["Btn_Edit"] = "ပြင်ဆင်မည်",
+            ["Btn_Delete"] = "ဖျက်မည်"
         };
     }
 }
