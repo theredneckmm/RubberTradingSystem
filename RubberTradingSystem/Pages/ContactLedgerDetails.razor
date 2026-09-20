@@ -1,0 +1,143 @@
+﻿@page "/contact-ledger/{ContactId}"
+@using MudBlazor
+@using RubberTradingSystem.Models
+@using RubberTradingSystem.Services
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+@inject LanguageService Lang
+@implements IDisposable
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4 mb-6">
+    <div class="d-flex justify-space-between align-center mb-4">
+        <div>
+            <MudText Typo="Typo.h5" Color="Color.Primary" Class="font-weight-bold">
+                @Lang.GetString("Ledger_Title")
+            </MudText>
+            @if (!string.IsNullOrEmpty(_contactName))
+            {
+                <MudText Typo="Typo.subtitle1" Color="Color.Secondary">
+                    <b>@_contactName (@_contactType)</b>
+                </MudText>
+            }
+        </div>
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.ArrowBack" OnClick="GoBack">
+            @Lang.GetString("Btn_Back")
+        </MudButton>
+    </div>
+
+    <!-- ဇယား -->
+    <MudPaper Elevation="3" Class="pa-2">
+        <MudTable Items="@_ledgers" Dense="true" Hover="true" Bordered="true" Striped="true" Loading="_isLoading">
+            <HeaderContent>
+                <MudTh>@Lang.GetString("Ledger_ColDate")</MudTh>
+                <MudTh>@Lang.GetString("Ledger_ColVoucher")</MudTh>
+                <MudTh>@Lang.GetString("Ledger_ColDescription")</MudTh>
+                <MudTh Style="text-align: right; color: var(--mud-palette-success);">@Lang.GetString("Ledger_ColDebit")</MudTh>
+                <MudTh Style="text-align: right; color: var(--mud-palette-error);">@Lang.GetString("Ledger_ColCredit")</MudTh>
+                <MudTh Style="text-align: right;">@Lang.GetString("Ledger_ColBalance")</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Date">@context.created_at.ToString("dd/MM/yyyy HH:mm")</MudTd>
+                <MudTd DataLabel="Voucher">
+                    <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Text">@context.voucher_number</MudChip>
+              
+                </MudTd>
+                <MudTd DataLabel="Description">
+                    @context.description
+                    @if (!string.IsNullOrEmpty(context.balance_impact))
+                    {
+                        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block">(@context.balance_impact)</MudText>
+                    }
+                </MudTd>
+                <MudTd DataLabel="Debit" Style="text-align: right;">
+                    @if (context.debit_amount > 0)
+                    {
+                        <b style="color: var(--mud-palette-success);">@context.debit_amount.ToString("N0")</b>
+                    }
+                    else { <text>-</text> }
+                </MudTd>
+                <MudTd DataLabel="Credit" Style="text-align: right;">
+                    @if (context.credit_amount > 0)
+                    {
+                        <b style="color: var(--mud-palette-error);">@context.credit_amount.ToString("N0")</b>
+                    }
+                    else { <text>-</text> }
+                </MudTd>
+                <MudTd DataLabel="Balance" Style="text-align: right;">
+                    <b>@context.balance_after.ToString("N0")</b>
+                </MudTd>
+            </RowTemplate>
+            <PagerContent>
+                <MudTablePager PageSizeOptions="new int[] { 15, 30, 50 }" />
+            </PagerContent>
+        </MudTable>
+    </MudPaper>
+</MudContainer>
+
+@code {
+    [Parameter]
+    public string ContactId { get; set; } = string.Empty;
+
+    private string _contactName = string.Empty;
+    private string _contactType = string.Empty;
+    private List<LedgerRecordModel> _ledgers = new();
+    private bool _isLoading = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Lang.OnLanguageChanged += StateHasChanged;
+        await LoadDataAsync();
+    }
+
+    public void Dispose() => Lang.OnLanguageChanged -= StateHasChanged;
+
+    private async Task LoadDataAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            // ၁။ Contact Info ယူမည်
+            var contacts = await Http.GetFromJsonAsync<List<ContactInfo>>($"rest/v1/contacts?id=eq.{ContactId}&select=name,contact_type");
+            if (contacts != null && contacts.Any())
+            {
+                _contactName = contacts.First().name;
+                _contactType = contacts.First().contact_type;
+            }
+
+            // ၂။ Ledgers သမိုင်းကြောင်း အားလုံးကို ရက်စွဲအလိုက် (အဟောင်းမှ အသစ်) ဆွဲထုတ်မည်
+            _ledgers = await Http.GetFromJsonAsync<List<LedgerRecordModel>>($"rest/v1/ledgers?contact_id=eq.{ContactId}&select=*&order=created_at.asc") ?? new();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void GoBack()
+    {
+        Navigation.NavigateTo("/receivables-payables");
+    }
+
+    private class ContactInfo
+    {
+        public string name { get; set; } = string.Empty;
+        public string contact_type { get; set; } = string.Empty;
+    }
+
+    private class LedgerRecordModel
+    {
+        public string id { get; set; } = string.Empty;
+        public DateTime created_at { get; set; }
+        public string voucher_number { get; set; } = string.Empty;
+        public string description { get; set; } = string.Empty;
+        public string balance_impact { get; set; } = string.Empty;
+        public decimal debit_amount { get; set; }
+        public decimal credit_amount { get; set; }
+        public decimal balance_after { get; set; }
+    }
+}

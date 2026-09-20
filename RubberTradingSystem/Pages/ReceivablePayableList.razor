@@ -1,0 +1,134 @@
+﻿@page "/receivables-payables"
+@using MudBlazor
+@using RubberTradingSystem.Models
+@using RubberTradingSystem.Services
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+@inject LanguageService Lang
+@implements IDisposable
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4 mb-6">
+    <MudText Typo="Typo.h5" Color="Color.Primary" Class="mb-4 font-weight-bold">
+        @Lang.GetString("RP_SummaryTitle")
+    </MudText>
+
+    <MudPaper Elevation="3">
+        <MudTabs Elevation="0" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-4">
+
+            <!-- ခြံရှင်များ Tab -->
+            <MudTabPanel Text="@Lang.GetString("RP_TabSuppliers")" Icon="@Icons.Material.Filled.Agriculture">
+                <MudTable Items="@_suppliers" Dense="true" Hover="true" Bordered="true" Striped="true"
+                          OnRowClick="RowClicked" T="ContactBalanceModel" Loading="_isLoading">
+                    <HeaderContent>
+                        <MudTh>@Lang.GetString("RP_ColName")</MudTh>
+                        <MudTh>@Lang.GetString("RP_ColBalance")</MudTh>
+                        <MudTh Style="text-align: right;">Action</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="Name"><b>@context.name</b></MudTd>
+                        <MudTd DataLabel="Balance">
+                            <!-- လိုအပ်သလို အရောင်ခွဲနိုင်သည် (ဥပမာ + ဆိုရင် ရရန်၊ - ဆိုရင် ပေးရန်) -->
+                            <b style="color: @(context.advance_balance >= 0 ? "var(--mud-palette-success)" : "var(--mud-palette-error)")">
+                                @context.advance_balance.ToString("N0")
+                            </b>
+                        </MudTd>
+                        <MudTd Style="text-align: right;">
+                            <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small"
+                                       OnClick="@(() => NavigateToDetails(context.id))">
+                                @Lang.GetString("RP_ActionView")
+                            </MudButton>
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            </MudTabPanel>
+
+            <!-- ကုန်သည် / ကုမ္ပဏီများ Tab -->
+            <MudTabPanel Text="@Lang.GetString("RP_TabBuyers")" Icon="@Icons.Material.Filled.Storefront">
+                <MudTable Items="@_buyers" Dense="true" Hover="true" Bordered="true" Striped="true"
+                          OnRowClick="RowClicked" T="ContactBalanceModel" Loading="_isLoading">
+                    <HeaderContent>
+                        <MudTh>@Lang.GetString("RP_ColName")</MudTh>
+                        <MudTh>@Lang.GetString("RP_ColBalance")</MudTh>
+                        <MudTh Style="text-align: right;">Action</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="Name"><b>@context.name</b></MudTd>
+                        <MudTd DataLabel="Balance">
+                            <b style="color: @(context.advance_balance >= 0 ? "var(--mud-palette-error)" : "var(--mud-palette-success)")">
+                                @context.advance_balance.ToString("N0")
+                            </b>
+                        </MudTd>
+                        <MudTd Style="text-align: right;">
+                            <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small"
+                                       OnClick="@(() => NavigateToDetails(context.id))">
+                                @Lang.GetString("RP_ActionView")
+                            </MudButton>
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            </MudTabPanel>
+
+        </MudTabs>
+    </MudPaper>
+</MudContainer>
+
+<style>
+    .mud-table-row:hover {
+        cursor: pointer;
+    }
+</style>
+
+@code {
+    private List<ContactBalanceModel> _suppliers = new();
+    private List<ContactBalanceModel> _buyers = new();
+    private bool _isLoading = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Lang.OnLanguageChanged += StateHasChanged;
+        await LoadDataAsync();
+    }
+
+    public void Dispose() => Lang.OnLanguageChanged -= StateHasChanged;
+
+    private async Task LoadDataAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            var allContacts = await Http.GetFromJsonAsync<List<ContactBalanceModel>>("rest/v1/contacts?select=id,name,contact_type,advance_balance&order=name.asc");
+            if (allContacts != null)
+            {
+                _suppliers = allContacts.Where(c => c.contact_type == "Supplier").ToList();
+                _buyers = allContacts.Where(c => c.contact_type == "Buyer").ToList();
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void RowClicked(TableRowClickEventArgs<ContactBalanceModel> args)
+    {
+        NavigateToDetails(args.Item.id);
+    }
+
+    private void NavigateToDetails(string contactId)
+    {
+        Navigation.NavigateTo($"/contact-ledger/{contactId}");
+    }
+
+    private class ContactBalanceModel
+    {
+        public string id { get; set; } = string.Empty;
+        public string name { get; set; } = string.Empty;
+        public string contact_type { get; set; } = string.Empty;
+        public decimal advance_balance { get; set; }
+    }
+}

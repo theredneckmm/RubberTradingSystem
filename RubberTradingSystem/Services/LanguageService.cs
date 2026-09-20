@@ -814,6 +814,20 @@ namespace RubberTradingSystem.Services
             ["RepayList_ColSupplier"] = "Farm Owner",
             ["RepayList_ColAmount"] = "Amount",
             ["RepayList_ColNote"] = "Note",
+            ["RP_SummaryTitle"] = "Receivables & Payables",
+            ["RP_TabSuppliers"] = "Farm Owners (Suppliers)",
+            ["RP_TabBuyers"] = "Merchants / Companies (Buyers)",
+            ["RP_ColName"] = "Name",
+            ["RP_ColBalance"] = "Advance / Net Balance",
+            ["RP_ActionView"] = "View Details",
+            ["Ledger_Title"] = "Detailed Ledger History",
+            ["Ledger_ColDate"] = "Date",
+            ["Ledger_ColVoucher"] = "Voucher No",
+            ["Ledger_ColDescription"] = "Description / Type",
+            ["Ledger_ColDebit"] = "Debit (In)",
+            ["Ledger_ColCredit"] = "Credit (Out)",
+            ["Ledger_ColBalance"] = "Balance",
+            ["Btn_Back"] = "Back",
         };
 
         private static readonly Dictionary<string, string> Myanmar = new()
@@ -1608,6 +1622,20 @@ namespace RubberTradingSystem.Services
             ["RepayList_ColSupplier"] = "ခြံရှင်အမည်",
             ["RepayList_ColAmount"] = "ငွေပမာဏ",
             ["RepayList_ColNote"] = "မှတ်ချက်",
+            ["RP_SummaryTitle"] = "ရရန် / ပေးရန် စာရင်းချုပ်",
+            ["RP_TabSuppliers"] = "ခြံရှင်များ (ရရန်/ပေးရန်)",
+            ["RP_TabBuyers"] = "ကုန်သည်/ကုမ္ပဏီများ (ရရန်/ပေးရန်)",
+            ["RP_ColName"] = "အမည်",
+            ["RP_ColBalance"] = "လက်ကျန်ငွေ",
+            ["RP_ActionView"] = "အသေးစိတ်ကြည့်မည်",
+            ["Ledger_Title"] = "ငွေစာရင်း အသေးစိတ် မှတ်တမ်း",
+            ["Ledger_ColDate"] = "ရက်စွဲ",
+            ["Ledger_ColVoucher"] = "ဘောက်ချာ",
+            ["Ledger_ColDescription"] = "အကြောင်းအရာ",
+            ["Ledger_ColDebit"] = "ဝင်ငွေ (Debit)",
+            ["Ledger_ColCredit"] = "ထွက်ငွေ (Credit)",
+            ["Ledger_ColBalance"] = "လက်ကျန်ငွေ",
+            ["Btn_Back"] = "နောက်သို့",
         };
     }
 }
