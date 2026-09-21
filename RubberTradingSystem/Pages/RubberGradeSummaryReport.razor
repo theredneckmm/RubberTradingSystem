@@ -9,32 +9,89 @@
 @implements IDisposable
 
 <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4 mb-6">
-    <MudText Typo="Typo.h5" Color="Color.Primary" Class="mb-4">@LangService.GetString("Title_RubberGradeSummaryReport")</MudText>
+    <MudText Typo="Typo.h5" Color="Color.Primary" Class="mb-4 font-weight-bold">
+        @LangService.GetString("Title_RubberGradeSummaryReport")
+    </MudText>
 
-    <MudTable Items="@_items" Dense="true" Hover="true" Bordered="true" Striped="true" Loading="@_isLoading" Elevation="2">
+    <MudPaper Class="pa-4 mb-4" Elevation="2">
+        <MudGrid AlignItems="Center" Spacing="2">
+            <!-- Date Filters -->
+            <MudItem xs="12" sm="6" md="3">
+                <MudDatePicker Label="စတင်ရက် (Start Date)" @bind-Date="_startDate" Variant="Variant.Outlined" Dense="true" />
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudDatePicker Label="အဆုံးရက် (End Date)" @bind-Date="_endDate" Variant="Variant.Outlined" Dense="true" />
+            </MudItem>
+
+            <!-- Search Box -->
+            <MudItem xs="12" sm="6" md="3">
+                <MudTextField T="string" @bind-Value="_searchString" Placeholder="အမျိုးအစား ရှာရန်..." Variant="Variant.Outlined" Dense="true" Clearable="true" />
+            </MudItem>
+
+            <!-- Action Buttons -->
+            <MudItem xs="12" sm="6" md="3" Class="d-flex gap-2 justify-end">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="LoadDataAsync" StartIcon="@Icons.Material.Filled.Search">
+                    @LangService.GetString("Btn_Search")
+                </MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Success" StartIcon="@Icons.Material.Filled.TableChart" OnClick="ExportToExcelAsync">
+                    Excel
+                </MudButton>
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
+
+    <MudTable Items="@_items" Dense="true" Hover="true" Bordered="true" Striped="true" Loading="@_isLoading" Elevation="2" Filter="new Func<RubberSummaryModel, bool>(FilterFunc)">
         <HeaderContent>
             <MudTh>@LangService.GetString("Th_RubberType")</MudTh>
-            <MudTh>@LangService.GetString("Th_TotalPurchaseQty")</MudTh>
-            <MudTh>@LangService.GetString("Th_TotalPurchaseAmount")</MudTh>
-            <MudTh>@LangService.GetString("Th_TotalSaleQty")</MudTh>
-            <MudTh>@LangService.GetString("Th_TotalSaleAmount")</MudTh>
+            <MudTh Style="text-align: right;">@LangService.GetString("Th_TotalPurchaseQty")</MudTh>
+            <MudTh Style="text-align: right;">@LangService.GetString("Th_TotalPurchaseAmount")</MudTh>
+            <MudTh Style="text-align: right;">@LangService.GetString("Th_TotalSaleQty")</MudTh>
+            <MudTh Style="text-align: right;">@LangService.GetString("Th_TotalSaleAmount")</MudTh>
         </HeaderContent>
         <RowTemplate>
             <MudTd><b>@context.RubberTypeName</b></MudTd>
-            <MudTd>@context.TotalPurchaseQty.ToString("N2")</MudTd>
-            <MudTd>@context.TotalPurchaseAmount.ToString("N0")</MudTd>
-            <MudTd>@context.TotalSaleQty.ToString("N2")</MudTd>
-            <MudTd><b>@context.TotalSaleAmount.ToString("N0")</b></MudTd>
+
+            <MudTd Style="text-align: right; color: var(--mud-palette-error);">
+                @(context.TotalPurchaseQty > 0 ? context.TotalPurchaseQty.ToString("N2") : "-")
+            </MudTd>
+            <MudTd Style="text-align: right; color: var(--mud-palette-error);">
+                @(context.TotalPurchaseAmount > 0 ? context.TotalPurchaseAmount.ToString("N0") : "-")
+            </MudTd>
+
+            <MudTd Style="text-align: right; color: var(--mud-palette-success);">
+                @(context.TotalSaleQty > 0 ? context.TotalSaleQty.ToString("N2") : "-")
+            </MudTd>
+            <MudTd Style="text-align: right; color: var(--mud-palette-success);">
+                <b>@(context.TotalSaleAmount > 0 ? context.TotalSaleAmount.ToString("N0") : "-")</b>
+            </MudTd>
         </RowTemplate>
+
+        <!-- Total အနှစ်ချုပ်ပြသရန် ဖူတာပိုင်း (Footer) -->
+        <FooterContent>
+            <MudTd Style="text-align: right;"><b>စုစုပေါင်း (Total) :</b></MudTd>
+            <MudTd Style="text-align: right;"><b>@_items.Sum(x => x.TotalPurchaseQty).ToString("N2")</b></MudTd>
+            <MudTd Style="text-align: right;"><b>@_items.Sum(x => x.TotalPurchaseAmount).ToString("N0")</b></MudTd>
+            <MudTd Style="text-align: right;"><b>@_items.Sum(x => x.TotalSaleQty).ToString("N2")</b></MudTd>
+            <MudTd Style="text-align: right;"><b>@_items.Sum(x => x.TotalSaleAmount).ToString("N0")</b></MudTd>
+        </FooterContent>
+
         <PagerContent><MudTablePager PageSizeOptions="new int[] { 10, 25, 50 }" /></PagerContent>
     </MudTable>
 </MudContainer>
 
 @code {
     private bool _isLoading = false;
+    private string _searchString = "";
+    private DateTime? _startDate = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+    private DateTime? _endDate = DateTime.Today;
     private List<RubberSummaryModel> _items = new();
 
-    protected override async Task OnInitializedAsync() { LangService.OnLanguageChanged += StateHasChanged; await LoadDataAsync(); }
+    protected override async Task OnInitializedAsync()
+    {
+        LangService.OnLanguageChanged += StateHasChanged;
+        await LoadDataAsync();
+    }
+
     public void Dispose() => LangService.OnLanguageChanged -= StateHasChanged;
 
     private async Task LoadDataAsync()
@@ -42,22 +99,82 @@
         _isLoading = true;
         try
         {
-            var txs = await Http.GetFromJsonAsync<List<TxRawModel>>("rest/v1/transactions?select=transaction_type,quantity,total_amount,rubber_types(name,grade)") ?? new();
-            _items = txs.GroupBy(t => t.rubber_types != null ? $"{t.rubber_types.name} ({t.rubber_types.grade})" : "Unknown")
-                .Select(g => new RubberSummaryModel
-                {
-                    RubberTypeName = g.Key,
-                    TotalPurchaseQty = g.Where(x => x.transaction_type == "Purchase").Sum(x => x.quantity),
-                    TotalPurchaseAmount = g.Where(x => x.transaction_type == "Purchase").Sum(x => x.total_amount),
-                    TotalSaleQty = g.Where(x => x.transaction_type == "Sale" || x.transaction_type == "ForwardContractSale").Sum(x => x.quantity),
-                    TotalSaleAmount = g.Where(x => x.transaction_type == "Sale" || x.transaction_type == "ForwardContractSale").Sum(x => x.total_amount)
-                }).ToList();
+            string start = _startDate?.ToString("yyyy-MM-dd") ?? "2000-01-01";
+            string end = _endDate?.ToString("yyyy-MM-dd") ?? "2100-01-01";
+
+            string url = $"rest/v1/transactions?created_at=gte.{start}T00:00:00&created_at=lte.{end}T23:59:59&select=transaction_type,quantity,total_amount,rubber_types(name,grade)";
+
+            var txs = await Http.GetFromJsonAsync<List<TxRawModel>>(url) ?? new();
+
+            _items = txs
+                            .Where(t => t.rubber_types != null)
+                            .GroupBy(t => $"{t.rubber_types!.name} ({t.rubber_types.grade})")
+                            .Select(g => new RubberSummaryModel
+                            {
+                                RubberTypeName = g.Key,
+                                // null ဖြစ်နေပါက 0 အဖြစ်ယူ၍ ပေါင်းရန် (?? 0) ကို အသုံးပြုထားသည်
+                                TotalPurchaseQty = g.Where(x => x.transaction_type == "Purchase").Sum(x => x.quantity ?? 0),
+                                TotalPurchaseAmount = g.Where(x => x.transaction_type == "Purchase").Sum(x => x.total_amount ?? 0),
+                                TotalSaleQty = g.Where(x => x.transaction_type == "Sale" || x.transaction_type == "ForwardContractSale").Sum(x => x.quantity ?? 0),
+                                TotalSaleAmount = g.Where(x => x.transaction_type == "Sale" || x.transaction_type == "ForwardContractSale").Sum(x => x.total_amount ?? 0)
+                            })
+                            .OrderBy(x => x.RubberTypeName)
+                            .ToList();
         }
-        catch (Exception ex) { Snackbar.Add($"Error: {ex.Message}", Severity.Error); }
-        finally { _isLoading = false; }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isLoading = false;
+        }
     }
 
-    public class RubberSummaryModel { public string RubberTypeName { get; set; } = string.Empty; public decimal TotalPurchaseQty { get; set; } public decimal TotalPurchaseAmount { get; set; } public decimal TotalSaleQty { get; set; } public decimal TotalSaleAmount { get; set; } }
-    private class TxRawModel { public string transaction_type { get; set; } = string.Empty; public decimal quantity { get; set; } public decimal total_amount { get; set; } public RubberObj? rubber_types { get; set; } }
-    private class RubberObj { public string name { get; set; } = string.Empty; public string grade { get; set; } = string.Empty; }
+    private bool FilterFunc(RubberSummaryModel item)
+    {
+        if (string.IsNullOrWhiteSpace(_searchString)) return true;
+        if (item.RubberTypeName.Contains(_searchString, StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
+    }
+
+    private async Task ExportToExcelAsync()
+    {
+        var csv = new System.Text.StringBuilder();
+        csv.Append('\uFEFF');
+        csv.AppendLine("Rubber Type,Total Purchase Qty,Total Purchase Amount,Total Sale Qty,Total Sale Amount");
+
+        foreach (var i in _items)
+        {
+            csv.AppendLine($"\"{i.RubberTypeName}\",{i.TotalPurchaseQty},{i.TotalPurchaseAmount},{i.TotalSaleQty},{i.TotalSaleAmount}");
+        }
+
+        csv.AppendLine($"\"Total\",{_items.Sum(x => x.TotalPurchaseQty)},{_items.Sum(x => x.TotalPurchaseAmount)},{_items.Sum(x => x.TotalSaleQty)},{_items.Sum(x => x.TotalSaleAmount)}");
+
+        await JS.InvokeVoidAsync("downloadFileFromBytes", $"Rubber_Grade_Summary_{DateTime.Now:yyyyMMdd}.csv", "text/csv", System.Text.Encoding.UTF8.GetBytes(csv.ToString()));
+    }
+
+    public class RubberSummaryModel
+    {
+        public string RubberTypeName { get; set; } = string.Empty;
+        public decimal TotalPurchaseQty { get; set; }
+        public decimal TotalPurchaseAmount { get; set; }
+        public decimal TotalSaleQty { get; set; }
+        public decimal TotalSaleAmount { get; set; }
+    }
+
+    private class TxRawModel
+    {
+        public string transaction_type { get; set; } = string.Empty;
+        // ဤနေရာတွင် null ကိုပါ လက်ခံနိုင်ရန် `decimal?` အဖြစ် ပြင်ဆင်လိုက်ပါသည်
+        public decimal? quantity { get; set; }
+        public decimal? total_amount { get; set; }
+        public RubberObj? rubber_types { get; set; }
+    }
+
+    private class RubberObj
+    {
+        public string name { get; set; } = string.Empty;
+        public string grade { get; set; } = string.Empty;
+    }
 }

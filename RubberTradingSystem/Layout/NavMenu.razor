@@ -69,9 +69,6 @@
         <MudNavLink Href="/advance/buyer-out" Icon="@Icons.Material.Filled.RequestQuote">@LangService.GetString("Menu_BuyerAdvanceOut")</MudNavLink>
         <MudNavLink Href="/advance/buyer-in" Icon="@Icons.Material.Filled.Payments">@LangService.GetString("Menu_BuyerAdvanceIn")</MudNavLink>
 
-        <MudNavLink Href="/farm-accounts" Icon="@Icons.Material.Filled.AccountBalance" Match="NavLinkMatch.All">
-            @LangService.GetString("Nav_FarmAccounts")
-        </MudNavLink>
        
         <!-- ခြံရှင်များ ကြိုတင်ထုတ်ယူငွေမှတ်တမ်း (Farm Owner Advances) -->
         <MudNavLink Href="/farm-owner-advances" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.AccountBalanceWallet">
@@ -169,14 +166,14 @@
 
     <!-- Configuration Section -->
     <MudNavGroup Title="@LangService.GetString("Nav_DataManagement")" Icon="@Icons.Material.Filled.Grass">
+        <MudNavLink Href="/wallets" Icon="@Icons.Material.Filled.CreditCard">
+            @LangService.GetString("Payment_ListTitle")
+        </MudNavLink>
         <MudNavLink Href="/rubber-types" Icon="@Icons.Material.Filled.Grass" Match="NavLinkMatch.All">
             @LangService.GetString("Nav_RubberTypes")
         </MudNavLink>
         <MudNavLink Href="/warehouses" Icon="@Icons.Material.Filled.Warehouse" Match="NavLinkMatch.All">
             @LangService.GetString("Wh_ListTitle")
-        </MudNavLink>
-        <MudNavLink Href="/payment-methods" Icon="@Icons.Material.Filled.Payment" Match="NavLinkMatch.All">
-            @LangService.GetString("Nav_PaymentMethods")
         </MudNavLink>
         <MudNavLink Href="/expense-settings" Icon="@Icons.Material.Filled.SettingsApplications" Match="NavLinkMatch.Prefix">
             @LangService.GetString("Menu_ExpenseSettings")
@@ -188,9 +185,7 @@
         <MudNavLink Href="/business-settings" Icon="@Icons.Material.Filled.Rule">@LangService.GetString("Menu_Defaults")</MudNavLink>
         <MudNavLink Href="/settings/printer" Icon="@Icons.Material.Filled.Print">@LangService.GetString("Menu_Print")</MudNavLink>
         <MudNavLink Href="/staff-list" Icon="@Icons.Material.Filled.Security">@LangService.GetString("Menu_Roles")</MudNavLink>
-        <MudNavLink Href="/wallets" Icon="@Icons.Material.Filled.CreditCard">
-            @LangService.GetString("Payment_ListTitle")
-        </MudNavLink>
+        
         <MudNavLink Href="/process" Icon="@Icons.Material.Filled.Policy">@LangService.GetString("Menu_Audit")</MudNavLink>
         <MudNavLink Href="/process" Icon="@Icons.Material.Filled.Save">@LangService.GetString("Menu_Backup")</MudNavLink>
     </MudNavGroup>

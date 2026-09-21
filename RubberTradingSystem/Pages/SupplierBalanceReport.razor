@@ -23,16 +23,22 @@
         </MudGrid>
     </MudPaper>
 
-    <MudTable Items="@_items" Dense="true" Hover="true" Bordered="true" Striped="true" Loading="@_isLoading" Elevation="2">
+    <!-- Search အလုပ်လုပ်စေရန် FilterFunc ထည့်သွင်းထားသည် -->
+    <MudTable Items="@_items" Dense="true" Hover="true" Bordered="true" Striped="true" Loading="@_isLoading" Elevation="2" Filter="new Func<SupplierBalanceModel,bool>(FilterFunc)">
         <HeaderContent>
             <MudTh>@LangService.GetString("Th_SupplierName")</MudTh>
             <MudTh>@LangService.GetString("Th_Phone")</MudTh>
-            <MudTh>@LangService.GetString("Th_AdvanceBalance")</MudTh>
+            <MudTh Style="text-align: right;">@LangService.GetString("Th_AdvanceBalance")</MudTh>
         </HeaderContent>
         <RowTemplate>
             <MudTd><b>@context.Name</b></MudTd>
             <MudTd>@context.Phone</MudTd>
-            <MudTd><b>@context.AdvanceBalance.ToString("N0") MMK</b></MudTd>
+            <MudTd Style="text-align: right;">
+                <!-- ကြိုတင်ငွေ ရှိ/မရှိပေါ်မူတည်၍ အရောင်ခွဲပြရန် -->
+                <b style="color: @(context.AdvanceBalance > 0 ? "var(--mud-palette-success)" : context.AdvanceBalance < 0 ? "var(--mud-palette-error)" : "inherit")">
+                    @context.AdvanceBalance.ToString("N0") MMK
+                </b>
+            </MudTd>
         </RowTemplate>
         <PagerContent><MudTablePager PageSizeOptions="new int[] { 10, 25, 50 }" /></PagerContent>
     </MudTable>
@@ -43,7 +49,12 @@
     private string _searchString = "";
     private List<SupplierBalanceModel> _items = new();
 
-    protected override async Task OnInitializedAsync() { LangService.OnLanguageChanged += StateHasChanged; await LoadDataAsync(); }
+    protected override async Task OnInitializedAsync() 
+    { 
+        LangService.OnLanguageChanged += StateHasChanged; 
+        await LoadDataAsync(); 
+    }
+    
     public void Dispose() => LangService.OnLanguageChanged -= StateHasChanged;
 
     private async Task LoadDataAsync()
@@ -51,26 +62,64 @@
         _isLoading = true;
         try
         {
-            var contacts = await Http.GetFromJsonAsync<List<ContactModel>>("rest/v1/contacts?contact_type=eq.Supplier&select=*") ?? new();
+            // Database ထဲရှိ Column အမည်များအတိုင်း Select ခေါ်ယူမည်
+            string query = "rest/v1/contacts?contact_type=eq.Supplier&select=name,phone,advance_balance";
+            var contacts = await Http.GetFromJsonAsync<List<ContactRawModel>>(query) ?? new();
+            
             _items = contacts.Select(c => new SupplierBalanceModel
             {
-                Name = c.Name,
-                Phone = c.Phone ?? "-",
-                AdvanceBalance = c.AdvanceBalance
+                Name = c.name ?? "-",
+                Phone = c.phone ?? "-",
+                AdvanceBalance = c.advance_balance
             }).ToList();
         }
-        catch (Exception ex) { Snackbar.Add($"Error: {ex.Message}", Severity.Error); }
-        finally { _isLoading = false; }
+        catch (Exception ex) 
+        { 
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error); 
+        }
+        finally 
+        { 
+            _isLoading = false; 
+        }
+    }
+
+    // စာရိုက်ရှာဖွေရာတွင် အသုံးပြုမည့် Function
+    private bool FilterFunc(SupplierBalanceModel item)
+    {
+        if (string.IsNullOrWhiteSpace(_searchString)) return true;
+        if (item.Name.Contains(_searchString, StringComparison.OrdinalIgnoreCase)) return true;
+        if (item.Phone.Contains(_searchString, StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
     }
 
     private async Task ExportToExcelAsync()
     {
         var csv = new System.Text.StringBuilder();
+        
+        // Excel တွင် မြန်မာစာ မှန်ကန်စွာပေါ်စေရန် BOM (Byte Order Mark) ထည့်သွင်းခြင်း
+        csv.Append('\uFEFF');
         csv.AppendLine("Supplier Name,Phone,Advance Balance");
-        foreach (var i in _items) csv.AppendLine($"\"{i.Name}\",\"{i.Phone}\",{i.AdvanceBalance}");
+        
+        foreach (var i in _items) 
+        {
+            csv.AppendLine($"\"{i.Name}\",\"{i.Phone}\",{i.AdvanceBalance}");
+        }
+        
         await JS.InvokeVoidAsync("downloadFileFromBytes", $"Supplier_Balance_{DateTime.Now:yyyyMMdd}.csv", "text/csv", System.Text.Encoding.UTF8.GetBytes(csv.ToString()));
     }
 
-    public class SupplierBalanceModel { public string Name { get; set; } = string.Empty; public string Phone { get; set; } = string.Empty; public decimal AdvanceBalance { get; set; } }
-    private class ContactModel { public string Name { get; set; } = string.Empty; public string? Phone { get; set; } public decimal AdvanceBalance { get; set; } }
+    public class SupplierBalanceModel 
+    { 
+        public string Name { get; set; } = string.Empty; 
+        public string Phone { get; set; } = string.Empty; 
+        public decimal AdvanceBalance { get; set; } 
+    }
+    
+    // Supabase မှ ပြန်လာသော JSON Keys များနှင့် ကိုက်ညီစေရန် အသေး (snake_case) ဖြင့် တည်ဆောက်ထားသော Model
+    private class ContactRawModel 
+    { 
+        public string? name { get; set; } 
+        public string? phone { get; set; } 
+        public decimal advance_balance { get; set; } 
+    }
 }
