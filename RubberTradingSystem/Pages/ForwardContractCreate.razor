@@ -222,7 +222,7 @@
                 _dueDate = c.due_date;
                 _model.description = c.description;
 
-                var txs = await Http.GetFromJsonAsync<List<TransactionDetailModel>>($"rest/v1/transactions?contact_id=eq.{c.contact_id}&voucher_number=not.is.null&order=created_at.desc&limit=1");
+                var txs = await Http.GetFromJsonAsync<List<TransactionDetailModel>>($"rest/v1/transactions?contact_id=eq.{c.contact_id}&quantity=eq.{c.contract_quantity}&voucher_number=not.is.null&order=created_at.asc&limit=1");
                 if (txs != null && txs.Any())
                 {
                     _model.wallet_id = txs.First().wallet_id ?? "";
@@ -401,14 +401,19 @@
     {
         try
         {
-            var contracts = await Http.GetFromJsonAsync<List<ForwardContractDetailModel>>($"rest/v1/forward_contracts?id=eq.{contractId}&select=*");
-            if (contracts != null && contracts.Any())
+            // Edit လုပ်နေသော လက်ရှိ ဘောင်ချာနံပါတ် မရှိပါက ဆက်မလုပ်ရန်
+            if (string.IsNullOrEmpty(_currentVoucherNumber)) return;
+
+            // မှားယွင်းနိုင်သော contact_id နှင့် ပမာဏ ကိုအသုံးမပြုတော့ဘဲ၊ တိကျသော voucher_number ဖြင့်သာ ရှာဖွေမည်
+            var txs = await Http.GetFromJsonAsync<List<TransactionDetailModel>>(
+                $"rest/v1/transactions?voucher_number=eq.{_currentVoucherNumber}&select=wallet_id,total_amount,id");
+
+            if (txs != null && txs.Any())
             {
-                var c = contracts.First();
-                var txs = await Http.GetFromJsonAsync<List<TransactionDetailModel>>($"rest/v1/transactions?contact_id=eq.{c.contact_id}&total_amount=eq.{c.total_advance_amount}&select=wallet_id,total_amount,id");
-                if (txs != null && txs.Any())
+                // ဘောင်ချာနံပါတ် တူညီပြီး Error ကြောင့် ပွားနေသော Record များရှိပါက အားလုံးကို ရှင်းလင်းပေးရန် foreach သုံးထားပါသည်
+                foreach (var tx in txs)
                 {
-                    var tx = txs.First();
+                    // ၁။ ယခင် ဝင်ထားသောငွေ (total_amount) ကို Wallet မှ ပြန်လည်နှုတ်ယူခြင်း (Reverse)
                     if (!string.IsNullOrEmpty(tx.wallet_id))
                     {
                         var wallets = await Http.GetFromJsonAsync<List<WalletModel>>($"rest/v1/wallets?id=eq.{tx.wallet_id}");
@@ -419,13 +424,18 @@
                             await Http.PatchAsync($"rest/v1/wallets?id=eq.{tx.wallet_id}", JsonContent.Create(new { balance = restoredBal }));
                         }
                     }
+
+                    // ၂။ ဆက်စပ်နေသော မှတ်တမ်းများကို သက်ဆိုင်ရာ Transaction ID ဖြင့် အစဉ်လိုက် တိကျစွာ ဖျက်ခြင်း
                     await Http.DeleteAsync($"rest/v1/ledgers?transaction_id=eq.{tx.id}");
                     await Http.DeleteAsync($"rest/v1/vouchers?reference_id=eq.{tx.id}");
                     await Http.DeleteAsync($"rest/v1/transactions?id=eq.{tx.id}");
                 }
             }
         }
-        catch (Exception ex) { Console.WriteLine(ex.Message); }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.Message);
+        }
     }
 
     private async Task<decimal> GetLatestBalanceForContactAsync(string contactId)

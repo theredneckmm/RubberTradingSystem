@@ -247,6 +247,7 @@ namespace RubberTradingSystem.Services
             ["Price_UpdateSuccess"] = "Daily price updated successfully.",
             ["Price_DeleteSuccess"] = "Daily price deleted successfully.",
             ["Price_DeleteConfirm"] = "Are you sure you want to delete this price record?",
+            ["Nav_DataManagement"] = "Data Management",
 
             ["Expense_ListTitle"] = "Expenses List",
             ["Expense_SearchPlaceholder"] = "Search by title or category...",
@@ -864,6 +865,7 @@ namespace RubberTradingSystem.Services
             ["VD_Amount"] = "Total Amount",
             ["VD_Desc"] = "Description",
             ["Btn_Close"] = "Close",
+            ["Nav_RubberTypes"] = "Rubber Type",
         };
 
         private static readonly Dictionary<string, string> Myanmar = new()
