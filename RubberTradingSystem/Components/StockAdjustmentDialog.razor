@@ -4,201 +4,289 @@
 @inject HttpClient Http
 @inject ISnackbar Snackbar
 @inject LanguageService LangService
-@implements IDisposable
+@inject UserContextService UserContext
 
 <MudDialog>
     <DialogContent>
-        <EditForm Model="@Model" OnValidSubmit="SaveAsync">
-            <DataAnnotationsValidator />
-            
-            <MudGrid>
+        <MudForm @ref="_form" @bind-IsValid="@_isFormValid">
+            <MudGrid Spacing="2">
                 <MudItem xs="12" sm="6">
-                    <MudTextField @bind-Value="Model.adjustment_no" 
-                                  Label="Adjustment Voucher No" 
-                                  Variant="Variant.Outlined" 
-                                  Class="mb-4" 
-                                  Required="true" />
+                    <MudTextField @bind-Value="_voucherNo" Label="Adjustment No (ဘောင်ချာနံပါတ်)" Variant="Variant.Outlined" Required="true" Dense="true" />
                 </MudItem>
-                
                 <MudItem xs="12" sm="6">
-                    <MudDatePicker @bind-Date="_adjustmentDate" 
-                                   Label="Adjustment Date" 
-                                   Variant="Variant.Outlined" 
-                                   Class="mb-4" />
+                    <MudDatePicker @bind-Date="_adjustmentDate" Label="Date (ရက်စွဲ)" Variant="Variant.Outlined" Required="true" Dense="true" />
                 </MudItem>
 
-                <!-- Warehouse Selection -->
+                <!-- Warehouse -->
                 <MudItem xs="12" sm="6">
-                    <MudSelect T="string" Value="Model.rubber_type"
-                               ValueExpression="@(() => Model.rubber_type)"
-                               Label="Rubber Type"
-                               Variant="Variant.Outlined"
-                               Class="mb-4" Required="true"
-                               ValueChanged="OnWarehouseOrTypeChanged">
-                        @foreach (var type in _rubberTypeList)
+                    <MudSelect T="string" Label="Warehouse (ဂိုဒေါင်)" Variant="Variant.Outlined" Dense="true" Required="true"
+                               Value="_warehouseId" ValueChanged="OnWarehouseChanged">
+                        @foreach (var wh in _warehouses)
                         {
-                            <MudSelectItem Value="@type">@type</MudSelectItem>
+                            <MudSelectItem Value="@wh.id">@wh.warehouse_name</MudSelectItem>
                         }
                     </MudSelect>
                 </MudItem>
 
-                <!-- Rubber Type Selection -->
+                <!-- Rubber Type -->
                 <MudItem xs="12" sm="6">
-                    <MudSelect T="string" Value="Model.warehouse_name"
-                               ValueExpression="@(() => Model.warehouse_name)"
-                               Label="Warehouse"
-                               Variant="Variant.Outlined"
-                               Class="mb-4" Required="true"
-                               ValueChanged="OnWarehouseOrTypeChanged">
-                        @foreach (var wh in _warehouseList)
+                    <MudSelect T="string" Label="Rubber Type (ရာဘာအမျိုးအစား)" Variant="Variant.Outlined" Dense="true" Required="true"
+                               Value="_rubberTypeId" ValueChanged="OnRubberTypeChanged">
+                        @foreach (var type in _rubberTypes)
                         {
-                            <MudSelectItem Value="@wh">@wh</MudSelectItem>
+                            <MudSelectItem Value="@type.id">@type.name (@type.grade)</MudSelectItem>
                         }
                     </MudSelect>
                 </MudItem>
 
-                <!-- System Qty (Readonly auto loaded) -->
+                <!-- Batch Selection (ဂိုဒေါင်နှင့် ရာဘာရွေးပြီးမှ ပေါ်မည်) -->
+                <MudItem xs="12">
+                    <MudSelect T="string" Label="ရွေးချယ်ရန် ရာဘာအပုံ (Select Batch)" Variant="Variant.Outlined" Dense="true" Required="true"
+                               Value="_batchId" ValueChanged="OnBatchChanged" Disabled="@(!_batches.Any())">
+                        @if (!_batches.Any())
+                        {
+                            <MudSelectItem Value="@string.Empty">အထက်ပါဂိုဒေါင်တွင် ဤရာဘာအမျိုးအစား မရှိပါ</MudSelectItem>
+                        }
+                        else
+                        {
+                            @foreach (var batch in _batches)
+                            {
+                                <MudSelectItem Value="@batch.id">@batch.batch_number (လက်ကျန် - @batch.total_weight:N2 @_weightUnit)</MudSelectItem>
+                            }
+                        }
+                    </MudSelect>
+                </MudItem>
+
+                <!-- System Qty (Readonly) -->
                 <MudItem xs="12" sm="4">
-                    <MudTextField Value="@Model.system_qty_kg.ToString("N2")" 
-                                  Label="System Stock (kg)" 
-                                  Variant="Variant.Outlined" 
-                                  Class="mb-4" 
-                                  ReadOnly="true" />
+                    <MudTextField Value="@($"{_systemQty:N2} {_weightUnit}")" Label="စနစ်ပေါ်ရှိ လက်ကျန် (System Stock)" Variant="Variant.Outlined" Dense="true" ReadOnly="true" />
                 </MudItem>
 
                 <!-- Actual Physical Qty (User Input) -->
                 <MudItem xs="12" sm="4">
-                    <MudNumericField @bind-Value="Model.actual_qty_kg" 
-                                     Label="Actual Physical Qty (kg)" 
-                                     Variant="Variant.Outlined" 
-                                     Class="mb-4" Min="0" Required="true" />
+                    <MudNumericField Value="_actualQty" ValueChanged="OnActualQtyChanged" T="decimal"
+                                     Label="@($"အပြင်လက်ကျန်အမှန် ({_weightUnit})")"
+                                     Variant="Variant.Outlined" Dense="true" Min="0" Required="true"
+                                     Disabled="@(string.IsNullOrEmpty(_batchId))" />
                 </MudItem>
 
                 <!-- Difference (Auto calculated) -->
                 <MudItem xs="12" sm="4">
-                    <MudTextField Value="@Model.difference_kg.ToString("N2")" 
-                                  Label="Difference (+ / -)" 
-                                  Variant="Variant.Outlined" 
-                                  Class="mb-4" 
-                                  ReadOnly="true" />
+                    <MudTextField Value="@($"{(_actualQty - _systemQty > 0 ? "+" : "")}{(_actualQty - _systemQty):N2} {_weightUnit}")"
+                                  Label="ကွာဟချက် (Difference)"
+                                  Variant="Variant.Outlined" Dense="true" ReadOnly="true"
+                                  Style="@((_actualQty - _systemQty) < 0 ? "color: var(--mud-palette-error); font-weight: bold;" : "color: var(--mud-palette-success); font-weight: bold;")" />
                 </MudItem>
 
                 <!-- Reason Selection -->
                 <MudItem xs="12">
-                    <MudSelect T="string" @bind-Value="Model.reason" 
-                               Label="Reason for Adjustment" 
-                               Variant="Variant.Outlined" 
-                               Class="mb-4" Required="true">
+                    <MudSelect T="string" @bind-Value="_reason" Label="အကြောင်းရင်း (Reason)" Variant="Variant.Outlined" Dense="true" Required="true">
                         <MudSelectItem Value="@("Shrinkage / Weight Loss")">Shrinkage / Weight Loss (အခြောက်ခံချိန် အလေးချိန်လျော့ခြင်း)</MudSelectItem>
-                        <MudSelectItem Value="@("Physical Count Error")">Physical Count Error (စာရင်းစစ်အမှား)</MudSelectItem>
+                        <MudSelectItem Value="@("Physical Count Error")">Physical Count Error (စာရင်းစစ်အမှား / အပို-အလို)</MudSelectItem>
                         <MudSelectItem Value="@("Damage / Spoiled")">Damage / Spoiled (ပျက်စီးဆုံးရှုံးခြင်း)</MudSelectItem>
                         <MudSelectItem Value="@("Other")">Other (အခြား)</MudSelectItem>
                     </MudSelect>
                 </MudItem>
 
                 <MudItem xs="12">
-                    <MudTextField @bind-Value="Model.note" 
-                                  Label="Note / Remark" 
-                                  Variant="Variant.Outlined" 
-                                  Lines="2"
-                                  Class="mb-4" />
+                    <MudTextField @bind-Value="_note" Label="မှတ်ချက် (Note)" Variant="Variant.Outlined" Dense="true" Lines="2" />
                 </MudItem>
             </MudGrid>
-
-            <div class="d-flex justify-end mt-2">
-                <MudButton OnClick="Cancel" Variant="Variant.Text" Class="mr-2">Cancel</MudButton>
-                <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary">Save Adjustment</MudButton>
-            </div>
-        </EditForm>
+        </MudForm>
     </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Variant="Variant.Text">ပိတ်မည်</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SaveAsync" Disabled="@(!_isFormValid || _isSaving || string.IsNullOrEmpty(_batchId) || _systemQty == _actualQty)">
+            @if (_isSaving)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+            }
+            else
+            {
+
+                <text>သိမ်းမည် (Save)</text>
+            }
+        </MudButton>
+    </DialogActions>
 </MudDialog>
 
 @code {
-    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
-    [Parameter] public StockAdjustmentModel Model { get; set; } = new();
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
 
-    private List<string> _warehouseList = new();
-    private List<string> _rubberTypeList = new();
+    private MudForm _form = new();
+    private bool _isFormValid;
+    private bool _isSaving;
 
-    private DateTime? _adjustmentDate
-    {
-        get => Model.adjustment_date;
-        set => Model.adjustment_date = value ?? DateTime.Today;
-    }
+    private string _voucherNo = string.Empty;
+    private DateTime? _adjustmentDate = DateTime.Today;
+    private string _warehouseId = string.Empty;
+    private string _rubberTypeId = string.Empty;
+    private string _batchId = string.Empty;
+
+    private decimal _systemQty = 0;
+    private decimal _actualQty = 0;
+    private string _reason = string.Empty;
+    private string _note = string.Empty;
+    private string _weightUnit = "ပိဿာ";
+
+    private List<WarehouseObj> _warehouses = new();
+    private List<RubberTypeObj> _rubberTypes = new();
+    private List<BatchObj> _batches = new();
 
     protected override async Task OnInitializedAsync()
     {
-        LangService.OnLanguageChanged += StateHasChanged;
+        await LoadSettingsAsync();
+        await GenerateVoucherNumberAsync();
         await LoadDropdownsAsync();
     }
 
-    public void Dispose() => LangService.OnLanguageChanged -= StateHasChanged;
-
-    private async Task LoadDropdownsAsync()
+    private async Task LoadSettingsAsync()
     {
         try
         {
-            var warehouses = await Http.GetFromJsonAsync<List<WarehouseModel>>("rest/v1/warehouses?select=warehouse_name");
-            if (warehouses != null) _warehouseList = warehouses.Select(x => x.warehouse_name).ToList();
-
-            var types = await Http.GetFromJsonAsync<List<RubberTypeModel>>("rest/v1/rubber_types?select=grade");
-            if (types != null) _rubberTypeList = types.Select(x => x.grade).ToList();
+            var settings = await Http.GetFromJsonAsync<List<BusinessSettingModel>>("rest/v1/business_settings?select=default_weight_unit");
+            if (settings != null && settings.Any()) _weightUnit = settings.First().default_weight_unit ?? "ပိဿာ";
         }
         catch { }
     }
 
-    private async void OnWarehouseOrTypeChanged(string val)
+    private async Task GenerateVoucherNumberAsync()
     {
-        // ဂိုဒေါင် သို့မဟုတ် ရာဘာအမျိုးအစား ပြောင်းလဲတိုင်း Database မှ လက်ရှိ System Stock ကို ဆွဲထုတ်မည်
-        if (!string.IsNullOrEmpty(Model.warehouse_name) && !string.IsNullOrEmpty(Model.rubber_type))
+        string dateStr = DateTime.Now.ToString("yyyyMMdd");
+        string prefix = "ADJ";
+        try
         {
-            try
+            var adjs = await Http.GetFromJsonAsync<List<AdjNoObj>>($"rest/v1/stock_adjustments?adjustment_no=like.{prefix}-{dateStr}-*&select=adjustment_no");
+            int nextSeq = 1;
+            if (adjs != null && adjs.Any())
             {
-                var stocks = await Http.GetFromJsonAsync<List<StockBalanceResult>>(
-                    $"rest/v1/warehouse_stock_balance?warehouse_name=eq.{Model.warehouse_name}&rubber_type=eq.{Model.rubber_type}&select=current_stock_kg");
-                
-                if (stocks != null && stocks.Count > 0)
-                {
-                    Model.system_qty_kg = stocks[0].current_stock_kg;
-                }
-                else
-                {
-                    Model.system_qty_kg = 0;
-                }
-                StateHasChanged();
+                var maxSeq = adjs.Where(a => a.adjustment_no != null && a.adjustment_no.Contains("-"))
+                                 .Select(a => int.TryParse(a.adjustment_no!.Split('-').Last(), out int val) ? val : 0).DefaultIfEmpty(0).Max();
+                nextSeq = maxSeq + 1;
             }
-            catch 
-            {
-                Model.system_qty_kg = 0;
-            }
+            _voucherNo = $"{prefix}-{dateStr}-{nextSeq:D3}";
         }
+        catch { _voucherNo = $"{prefix}-{dateStr}-001"; }
+    }
+
+    private async Task LoadDropdownsAsync()
+    {
+        _warehouses = await Http.GetFromJsonAsync<List<WarehouseObj>>("rest/v1/warehouses?select=id,warehouse_name") ?? new();
+        _rubberTypes = await Http.GetFromJsonAsync<List<RubberTypeObj>>("rest/v1/rubber_types?select=id,name,grade") ?? new();
+    }
+
+    private async Task OnWarehouseChanged(string id)
+    {
+        _warehouseId = id;
+        await LoadBatchesAsync();
+    }
+
+    private async Task OnRubberTypeChanged(string id)
+    {
+        _rubberTypeId = id;
+        await LoadBatchesAsync();
+    }
+
+    private async Task LoadBatchesAsync()
+    {
+        _batchId = string.Empty;
+        _systemQty = 0;
+        _actualQty = 0;
+        _batches.Clear();
+
+        if (string.IsNullOrEmpty(_warehouseId) || string.IsNullOrEmpty(_rubberTypeId)) return;
+
+        try
+        {
+            // ရွေးချယ်ထားသော ဂိုဒေါင်နှင့် ရာဘာအမျိုးအစားနှင့် ကိုက်ညီသော Active Batches များကို ဆွဲထုတ်မည်
+            var batches = await Http.GetFromJsonAsync<List<BatchObj>>($"rest/v1/warehouse_batches?warehouse_id=eq.{_warehouseId}&rubber_type_id=eq.{_rubberTypeId}&status=eq.Active&select=id,batch_number,total_weight");
+            if (batches != null) _batches = batches;
+        }
+        catch { }
+        StateHasChanged();
+    }
+
+    private void OnBatchChanged(string id)
+    {
+        _batchId = id;
+        var b = _batches.FirstOrDefault(x => x.id == id);
+        if (b != null)
+        {
+            _systemQty = b.total_weight;
+            _actualQty = b.total_weight; // Default အနေဖြင့် စနစ်လက်ကျန်ကို အရင်ပြပေးထားမည်
+        }
+    }
+
+    private void OnActualQtyChanged(decimal val)
+    {
+        _actualQty = val;
     }
 
     private async Task SaveAsync()
     {
+        await _form.ValidateAsync();
+        if (!_isFormValid || _systemQty == _actualQty || string.IsNullOrEmpty(_batchId)) return;
+
+        _isSaving = true;
         try
         {
-            var response = await Http.PostAsJsonAsync("rest/v1/stock_adjustments", Model);
-            if (response.IsSuccessStatusCode)
+            string ownerId = await UserContext.GetCurrentOwnerIdAsync();
+            string staffId = await UserContext.GetCurrentStaffIdAsync();
+            decimal difference = _actualQty - _systemQty;
+
+            // ၁။ Adjustment Record သိမ်းဆည်းခြင်း
+            var adjPayload = new
             {
-                Snackbar.Add("Stock adjustment saved successfully.", Severity.Success);
-                MudDialog.Close(DialogResult.Ok(true));
-            }
-            else
+                owner_id = ownerId,
+                staff_id = staffId,
+                adjustment_no = _voucherNo,
+                adjustment_date = _adjustmentDate,
+                warehouse_id = _warehouseId,
+                rubber_type_id = _rubberTypeId,
+                batch_id = _batchId,
+                system_qty = _systemQty,
+                actual_qty = _actualQty,
+                difference = difference,
+                reason = _reason,
+                note = _note,
+                sync_status = "Synced"
+            };
+            await Http.PostAsJsonAsync("rest/v1/stock_adjustments", adjPayload);
+
+            // ၂။ ကွာဟချက်ကို Items ဇယားတွင် Adjustment အဖြစ် မှတ်တမ်းတင်ခြင်း (History Tracking)
+            var itemPayload = new
             {
-                Snackbar.Add("Failed to save stock adjustment.", Severity.Error);
-            }
+                owner_id = ownerId,
+                staff_id = staffId,
+                batch_id = _batchId,
+                source_type = "Adjustment",
+                source_id = _batchId,
+                weight = difference, // အတိုးအလျော့ ကွာဟချက်ကိုသာ မှတ်မည်
+                moisture_percent = 0m
+            };
+            await Http.PostAsJsonAsync("rest/v1/warehouse_batch_items", itemPayload);
+
+            // ၃။ Batch ဇယား၏ Total Weight ကို အပြင်လက်ကျန် (Actual) အတိုင်း အတိအကျ Update လုပ်ခြင်း
+            await Http.PatchAsync($"rest/v1/warehouse_batches?id=eq.{_batchId}", JsonContent.Create(new { total_weight = _actualQty }));
+
+            Snackbar.Add("လက်ကျန်ညှိနှိုင်းမှု အောင်မြင်စွာ ပြီးစီးပါပြီ။", Severity.Success);
+            MudDialog.Close(DialogResult.Ok(true));
         }
         catch (Exception ex)
         {
             Snackbar.Add($"Error: {ex.Message}", Severity.Error);
         }
+        finally
+        {
+            _isSaving = false;
+        }
     }
 
     private void Cancel() => MudDialog.Cancel();
 
-    public class StockBalanceResult
-    {
-        public decimal current_stock_kg { get; set; }
-    }
+    private class BusinessSettingModel { public string? default_weight_unit { get; set; } }
+    private class AdjNoObj { public string? adjustment_no { get; set; } }
+    private class WarehouseObj { public string id { get; set; } = ""; public string warehouse_name { get; set; } = ""; }
+    private class RubberTypeObj { public string id { get; set; } = ""; public string name { get; set; } = ""; public string grade { get; set; } = ""; }
+    private class BatchObj { public string id { get; set; } = ""; public string batch_number { get; set; } = ""; public decimal total_weight { get; set; } }
 }

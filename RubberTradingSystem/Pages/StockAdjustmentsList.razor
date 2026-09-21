@@ -10,71 +10,122 @@
 <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
     <MudText Typo="Typo.h5" Color="Color.Primary" Class="mb-4">Stock Adjustments (ကုန်လက်ကျန် ညှိနှိုင်းမှုများ)</MudText>
 
-    <MudTable Items="@_items" Dense="true" Hover="true" Bordered="true" Striped="true" Elevation="2">
+    <MudTable Items="@_items" Dense="true" Hover="true" Bordered="true" Striped="true" Loading="@_isLoading" Elevation="2">
         <ToolBarContent>
             <MudSpacer />
-            <MudButton Variant="Variant.Filled" Color="Color.Success" StartIcon="@Icons.Material.Filled.Add"
-                       OnClick="OpenAddDialog">
-                New Stock Adjustment
+            <MudButton Variant="Variant.Filled" Color="Color.Success" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenAddDialog">
+                ညှိနှိုင်းမှု အသစ် (New Adjustment)
             </MudButton>
         </ToolBarContent>
         <HeaderContent>
-            <MudTh>Voucher No</MudTh>
-            <MudTh>Warehouse</MudTh>
-            <MudTh>Rubber Type</MudTh>
-            <MudTh>System Qty</MudTh>
-            <MudTh>Actual Qty</MudTh>
-            <MudTh>Difference</MudTh>
-            <MudTh>Reason</MudTh>
-            <MudTh>Date</MudTh>
+            <MudTh>ဘောင်ချာအမှတ်</MudTh>
+            <MudTh>ရက်စွဲ</MudTh>
+            <MudTh>ဂိုဒေါင်</MudTh>
+            <MudTh>ရာဘာအမျိုးအစား</MudTh>
+            <MudTh>အသုတ်အမှတ် (Batch)</MudTh>
+            <MudTh Style="text-align:right;">@($"System Qty ({_weightUnit})")</MudTh>
+            <MudTh Style="text-align:right;">@($"Actual Qty ({_weightUnit})")</MudTh>
+            <MudTh Style="text-align:right;">@($"ကွာဟချက်")</MudTh>
+            <MudTh>အကြောင်းရင်း</MudTh>
         </HeaderContent>
         <RowTemplate>
             <MudTd><b>@context.adjustment_no</b></MudTd>
-            <MudTd>@context.warehouse_name</MudTd>
-            <MudTd>@context.rubber_type</MudTd>
-            <MudTd>@context.system_qty_kg.ToString("N2") kg</MudTd>
-            <MudTd><b>@context.actual_qty_kg.ToString("N2") kg</b></MudTd>
+            <MudTd>@context.adjustment_date.ToString("dd/MM/yyyy")</MudTd>
+            <MudTd>@GetWarehouseName(context.warehouse_id)</MudTd>
+            <MudTd>@GetRubberName(context.rubber_type_id)</MudTd>
             <MudTd>
-                <MudChip T="string" Color="@(context.difference_kg >= 0 ? Color.Success : Color.Error)" Size="Size.Small">
-                    @(context.difference_kg >= 0 ? "+" : "")@context.difference_kg.ToString("N2") kg
+                <MudChip T="string" Color="Color.Info" Size="Size.Small">@GetBatchNumber(context.batch_id)</MudChip>
+            </MudTd>
+            <MudTd Style="text-align:right;">@context.system_qty.ToString("N2")</MudTd>
+            <MudTd Style="text-align:right;"><b>@context.actual_qty.ToString("N2")</b></MudTd>
+            <MudTd Style="text-align:right;">
+                <MudChip T="string" Color="@(context.difference > 0 ? Color.Success : Color.Error)" Size="Size.Small">
+                    @(context.difference > 0 ? "+" : "")@context.difference.ToString("N2")
                 </MudChip>
             </MudTd>
             <MudTd>@context.reason</MudTd>
-            <MudTd>@context.adjustment_date.ToString("dd/MM/yyyy")</MudTd>
         </RowTemplate>
         <PagerContent>
-            <MudTablePager PageSizeOptions="new int[] { 10, 25, 50 }" />
+            <MudTablePager PageSizeOptions="new int[] { 15, 30, 50 }" />
         </PagerContent>
     </MudTable>
 </MudContainer>
 
 @code {
-    private List<StockAdjustmentModel> _items = new();
+    private bool _isLoading = false;
+    private List<AdjustmentLog> _items = new();
+    private string _weightUnit = "ပိဿာ";
+
+    private Dictionary<string, string> _warehouses = new();
+    private Dictionary<string, string> _rubberTypes = new();
+    private Dictionary<string, string> _batches = new();
 
     protected override async Task OnInitializedAsync()
     {
+        await LoadSettingsAsync();
+        await LoadMappingsAsync();
         await LoadDataAsync();
+    }
+
+    private async Task LoadSettingsAsync()
+    {
+        try
+        {
+            var settings = await Http.GetFromJsonAsync<List<BusinessSettingModel>>("rest/v1/business_settings?select=default_weight_unit");
+            if (settings != null && settings.Any()) _weightUnit = settings.First().default_weight_unit ?? "ပိဿာ";
+        }
+        catch { }
+    }
+
+    private async Task LoadMappingsAsync()
+    {
+        try
+        {
+            var whList = await Http.GetFromJsonAsync<List<DictObj>>("rest/v1/warehouses?select=id,warehouse_name") ?? new();
+            _warehouses = whList.ToDictionary(x => x.id, x => x.warehouse_name);
+
+            var rbList = await Http.GetFromJsonAsync<List<DictObj>>("rest/v1/rubber_types?select=id,name") ?? new();
+            _rubberTypes = rbList.ToDictionary(x => x.id, x => x.name);
+
+            // Batch အမည်များ ပြသနိုင်ရန် ဆွဲယူခြင်း
+            var bList = await Http.GetFromJsonAsync<List<BatchDictObj>>("rest/v1/warehouse_batches?select=id,batch_number") ?? new();
+            _batches = bList.ToDictionary(x => x.id, x => x.batch_number);
+        }
+        catch { }
     }
 
     private async Task LoadDataAsync()
     {
+        _isLoading = true;
         try
         {
-            _items = await Http.GetFromJsonAsync<List<StockAdjustmentModel>>("rest/v1/stock_adjustments?select=*&order=adjustment_date.desc") ?? new();
+            _items = await Http.GetFromJsonAsync<List<AdjustmentLog>>("rest/v1/stock_adjustments?select=*&order=created_at.desc") ?? new();
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+            Snackbar.Add($"Error loading list: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isLoading = false;
         }
     }
 
+    private string GetWarehouseName(string id) => _warehouses.ContainsKey(id) ? _warehouses[id] : "Unknown";
+    private string GetRubberName(string id) => _rubberTypes.ContainsKey(id) ? _rubberTypes[id] : "Unknown";
+    private string GetBatchNumber(string id) => _batches.ContainsKey(id) ? _batches[id] : "Unknown";
+
     private async Task OpenAddDialog()
     {
-        var parameters = new DialogParameters { ["Model"] = new StockAdjustmentModel() };
         var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Medium, FullWidth = true };
-        var dialog = await DialogService.ShowAsync<StockAdjustmentDialog>("New Stock Adjustment", parameters, options);
+        var dialog = await DialogService.ShowAsync<StockAdjustmentDialog>("ကုန်လက်ကျန် ညှိနှိုင်းခြင်း (Stock Adjustment)", options);
         var result = await dialog.Result;
 
         if (result != null && !result.Canceled) await LoadDataAsync();
     }
+
+    private class BusinessSettingModel { public string? default_weight_unit { get; set; } }
+    private class AdjustmentLog { public string adjustment_no { get; set; } = ""; public DateTime adjustment_date { get; set; } public string warehouse_id { get; set; } = ""; public string rubber_type_id { get; set; } = ""; public string batch_id { get; set; } = ""; public decimal system_qty { get; set; } public decimal actual_qty { get; set; } public decimal difference { get; set; } public string reason { get; set; } = ""; }
+    private class DictObj { public string id { get; set; } = ""; public string warehouse_name { get; set; } = ""; public string name { get; set; } = ""; }
+    private class BatchDictObj { public string id { get; set; } = ""; public string batch_number { get; set; } = ""; }
 }

@@ -10,69 +10,128 @@
 <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
     <MudText Typo="Typo.h5" Color="Color.Primary" Class="mb-4">Stock Transfers & Truck Intake</MudText>
 
-    <MudTable Items="@_items" Dense="true" Hover="true" Bordered="true" Striped="true" Elevation="2">
+    <MudTable Items="@_items" Dense="true" Hover="true" Bordered="true" Striped="true" Loading="@_isLoading" Elevation="2">
         <ToolBarContent>
             <MudSpacer />
-            <MudButton Variant="Variant.Filled" Color="Color.Success" StartIcon="@Icons.Material.Filled.Add"
-                       OnClick="OpenAddDialog">
+            <MudButton Variant="Variant.Filled" Color="Color.Success" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenAddDialog">
                 New Transfer / Intake
             </MudButton>
         </ToolBarContent>
         <HeaderContent>
             <MudTh>Voucher No</MudTh>
-            <MudTh>From (Source)</MudTh>
-            <MudTh>To (Destination)</MudTh>
-            <MudTh>Rubber Type</MudTh>
-            <MudTh>Weight (kg)</MudTh>
             <MudTh>Date</MudTh>
-            <MudTh>Note</MudTh>
+            <MudTh>Source Type</MudTh>
+            <MudTh>From</MudTh>
+            <MudTh>To Destination</MudTh>
+            <MudTh>Rubber Type</MudTh>
+            <!-- (kg) အစား Database မှ ရယူထားသော ယူနစ်ကို အသုံးပြုထားပါသည် -->
+            <MudTh Style="text-align:right;">@($"Weight ({_weightUnit})")</MudTh>
         </HeaderContent>
         <RowTemplate>
             <MudTd><b>@context.transfer_no</b></MudTd>
-            <MudTd>
-                <MudChip T="string" Color="Color.Warning" Size="Size.Small">@context.from_location</MudChip>
-            </MudTd>
-            <MudTd>
-                <MudChip T="string" Color="Color.Success" Size="Size.Small">@context.to_location</MudChip>
-            </MudTd>
-            <MudTd>@context.rubber_type</MudTd>
-            <MudTd><b>@context.weight_kg.ToString("N2") kg</b></MudTd>
             <MudTd>@context.transfer_date.ToString("dd/MM/yyyy")</MudTd>
-            <MudTd>@context.note</MudTd>
+            <MudTd>
+                <MudChip T="string" Color="@(context.source_type == "Truck" ? Color.Warning : Color.Info)" Size="Size.Small">@context.source_type</MudChip>
+            </MudTd>
+            <MudTd>@GetSourceName(context.source_type, context.source_id)</MudTd>
+            <MudTd><MudChip T="string" Color="Color.Success" Size="Size.Small">@GetWarehouseName(context.destination_id)</MudChip></MudTd>
+            <MudTd>@GetRubberName(context.rubber_type_id)</MudTd>
+            <!-- တန်ဖိုးပြသရာတွင်လည်း kg အစား ယူနစ်အမှန်ကို ပြသထားပါသည် -->
+            <MudTd Style="text-align:right;"><b>@context.weight_kg.ToString("N2") @_weightUnit</b></MudTd>
         </RowTemplate>
         <PagerContent>
-            <MudTablePager PageSizeOptions="new int[] { 10, 25, 50 }" />
+            <MudTablePager PageSizeOptions="new int[] { 15, 30, 50 }" />
         </PagerContent>
     </MudTable>
 </MudContainer>
 
 @code {
-    private List<StockTransferModel> _items = new();
+    private bool _isLoading = false;
+    private List<TransferLog> _items = new();
+
+    // Default ယူနစ် (Database မှ ပြန်လည်ဆွဲယူပါမည်)
+    private string _weightUnit = "ပိဿာ";
+
+    // Mapping Dictionaries
+    private Dictionary<string, string> _warehouses = new();
+    private Dictionary<string, string> _trucks = new();
+    private Dictionary<string, string> _rubberTypes = new();
 
     protected override async Task OnInitializedAsync()
     {
+        await LoadSettingsAsync();
+        await LoadMappingsAsync();
         await LoadDataAsync();
+    }
+
+    // Setting ဇယားမှ အလေးချိန် ယူနစ်ကို ဆွဲယူမည့် Function
+    private async Task LoadSettingsAsync()
+    {
+        try
+        {
+            var settings = await Http.GetFromJsonAsync<List<BusinessSettingModel>>("rest/v1/business_settings?select=default_weight_unit");
+            if (settings != null && settings.Any())
+            {
+                _weightUnit = settings.First().default_weight_unit ?? "ပိဿာ";
+            }
+        }
+        catch { }
+    }
+
+    private async Task LoadMappingsAsync()
+    {
+        try
+        {
+            var whList = await Http.GetFromJsonAsync<List<DictObj>>("rest/v1/warehouses?select=id,warehouse_name") ?? new();
+            _warehouses = whList.ToDictionary(x => x.id, x => x.warehouse_name);
+
+            var truckList = await Http.GetFromJsonAsync<List<DictObj>>("rest/v1/trucks?select=id,truck_number") ?? new();
+            _trucks = truckList.ToDictionary(x => x.id, x => x.truck_number);
+
+            var rbList = await Http.GetFromJsonAsync<List<DictObj>>("rest/v1/rubber_types?select=id,name") ?? new();
+            _rubberTypes = rbList.ToDictionary(x => x.id, x => x.name);
+        }
+        catch { }
     }
 
     private async Task LoadDataAsync()
     {
+        _isLoading = true;
         try
         {
-            _items = await Http.GetFromJsonAsync<List<StockTransferModel>>("rest/v1/stock_transfers?select=*&order=transfer_date.desc") ?? new();
+            _items = await Http.GetFromJsonAsync<List<TransferLog>>("rest/v1/stock_transfers?select=*&order=created_at.desc") ?? new();
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+            Snackbar.Add($"Error loading list: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isLoading = false;
         }
     }
 
+    private string GetSourceName(string type, string id)
+    {
+        if (type == "TempStock") return "ဆိုင်လက်ကျန် (Shop Pool)";
+        if (type == "Truck") return _trucks.ContainsKey(id) ? _trucks[id] : "Unknown Truck";
+        return _warehouses.ContainsKey(id) ? _warehouses[id] : "Unknown Warehouse";
+    }
+
+    private string GetWarehouseName(string id) => _warehouses.ContainsKey(id) ? _warehouses[id] : "Unknown";
+    private string GetRubberName(string id) => _rubberTypes.ContainsKey(id) ? _rubberTypes[id] : "Unknown";
+
     private async Task OpenAddDialog()
     {
-        var parameters = new DialogParameters { ["Model"] = new StockTransferModel() };
         var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Medium, FullWidth = true };
-        var dialog = await DialogService.ShowAsync<StockTransferDialog>("New Stock Transfer / Intake", parameters, options);
+        var dialog = await DialogService.ShowAsync<StockTransferDialog>("New Stock Transfer / Intake", options);
         var result = await dialog.Result;
 
         if (result != null && !result.Canceled) await LoadDataAsync();
     }
+
+    // API မှ ပြန်လာသော Data များကို လက်ခံရန် Models များ
+    private class BusinessSettingModel { public string? default_weight_unit { get; set; } }
+    private class TransferLog { public string transfer_no { get; set; } = ""; public DateTime transfer_date { get; set; } public string source_type { get; set; } = ""; public string source_id { get; set; } = ""; public string destination_id { get; set; } = ""; public string rubber_type_id { get; set; } = ""; public decimal weight_kg { get; set; } }
+    private class DictObj { public string id { get; set; } = ""; public string warehouse_name { get; set; } = ""; public string truck_number { get; set; } = ""; public string name { get; set; } = ""; }
 }

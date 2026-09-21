@@ -16,59 +16,128 @@
 
         <!-- 1. Warehouse Stocks Tab -->
         <MudTabPanel Text="@LangService.GetString("Tab_Warehouse")" Icon="@Icons.Material.Filled.Warehouse">
-            <MudTable Items="@_warehouseStocks" Dense="true" Hover="true" Bordered="true" Striped="true" Elevation="1">
+            <MudTable Items="@_warehouseStocks" Dense="true" Hover="true" Bordered="true" Striped="false" Elevation="1">
                 <HeaderContent>
-                    <MudTh>@LangService.GetString("Th_WarehouseName")</MudTh>
+                    <MudTh></MudTh> <!-- For Expand Button -->
                     <MudTh>@LangService.GetString("Th_RubberType")</MudTh>
-                    <MudTh>@LangService.GetString("Th_Quantity") (@_weightUnit)</MudTh>
+                    <MudTh Style="text-align: right;">စုစုပေါင်း @LangService.GetString("Th_Quantity") (@_weightUnit)</MudTh>
                 </HeaderContent>
                 <RowTemplate>
-                    <MudTd><b>@context.warehouse_name</b></MudTd>
-                    <MudTd>@context.rubber_type_name</MudTd>
-                    <MudTd>@context.total_weight.ToString("N2") @_weightUnit</MudTd>
+                    <MudTd>
+                        <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="@(() => context.ShowDetails = !context.ShowDetails)" Color="@(context.ShowDetails ? Color.Secondary : Color.Primary)">
+                            @(context.ShowDetails ? "အသေးစိတ်ပိတ်ရန်" : "အသေးစိတ်ပြရန်")
+                        </MudButton>
+                    </MudTd>
+                    <MudTd><b>@context.RubberTypeName</b></MudTd>
+                    <MudTd Style="text-align: right;"><b>@context.TotalWeight.ToString("N2") @_weightUnit</b></MudTd>
                 </RowTemplate>
+                <ChildRowContent>
+                    @if (context.ShowDetails)
+                    {
+                        <MudTr>
+                            <td colspan="3" class="pa-4 bg-light">
+                                <MudTable Items="@context.Details" Context="detailContext" Dense="true" Bordered="true" Elevation="0">
+                                    <HeaderContent>
+                                        <!-- ဂိုဒေါင်အမည် နှင့် Batch အမှတ်စဉ်ကို ပြသမည် -->
+                                        <MudTh>@LangService.GetString("Th_WarehouseName") / အသုတ်အမှတ် (Batch)</MudTh>
+                                        <MudTh Style="text-align: right;">@LangService.GetString("Th_Quantity") (@_weightUnit)</MudTh>
+                                    </HeaderContent>
+                                    <RowTemplate>
+                                        <MudTd>
+                                            @detailContext.warehouse_name
+                                            <MudChip T="string" Color="Color.Info" Size="Size.Small" Class="ml-2">@detailContext.batch_number</MudChip>
+                                        </MudTd>
+                                        <MudTd Style="text-align: right;">@detailContext.total_weight.ToString("N2")</MudTd>
+                                    </RowTemplate>
+                                </MudTable>
+                            </td>
+                        </MudTr>
+                    }
+                </ChildRowContent>
             </MudTable>
         </MudTabPanel>
 
         <!-- 2. Temp Stocks Tab -->
         <MudTabPanel Text="@LangService.GetString("Tab_TempStock")" Icon="@Icons.Material.Filled.Timer">
-            <MudTable Items="@_tempStocks" Dense="true" Hover="true" Bordered="true" Striped="true" Elevation="1">
+            <MudTable Items="@_tempStocks" Dense="true" Hover="true" Bordered="true" Striped="false" Elevation="1">
                 <HeaderContent>
-                    <MudTh>@LangService.GetString("Th_Supplier")</MudTh>
+                    <MudTh></MudTh> <!-- For Expand Button -->
                     <MudTh>@LangService.GetString("Th_RubberType")</MudTh>
-                    <MudTh>@LangService.GetString("Th_Quantity") (@_weightUnit)</MudTh>
-                    <MudTh>အစိုဓာတ် %</MudTh>
-                    <MudTh>@LangService.GetString("Th_Status")</MudTh>
+                    <MudTh Style="text-align: right;">စုစုပေါင်း @LangService.GetString("Th_Quantity") (@_weightUnit)</MudTh>
                 </HeaderContent>
                 <RowTemplate>
-                    <MudTd>@context.contact_name</MudTd>
-                    <MudTd>@context.rubber_type_name</MudTd>
-                    <MudTd>@context.net_weight.ToString("N2") @_weightUnit</MudTd>
-                    <MudTd>@context.moisture_percent %</MudTd>
                     <MudTd>
-                        <MudChip T="string" Color="Color.Warning" Size="Size.Small">@context.status</MudChip>
+                        <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="@(() => context.ShowDetails = !context.ShowDetails)" Color="@(context.ShowDetails ? Color.Secondary : Color.Primary)">
+                            @(context.ShowDetails ? "အသေးစိတ်ပိတ်ရန်" : "အသေးစိတ်ပြရန်")
+                        </MudButton>
                     </MudTd>
+                    <MudTd><b>@context.RubberTypeName</b></MudTd>
+                    <MudTd Style="text-align: right;"><b>@context.TotalWeight.ToString("N2") @_weightUnit</b></MudTd>
                 </RowTemplate>
+                <ChildRowContent>
+                    @if (context.ShowDetails)
+                    {
+                        <MudTr>
+                            <td colspan="3" class="pa-4 bg-light">
+                                <MudTable Items="@context.Details" Context="detailContext" Dense="true" Bordered="true" Elevation="0">
+                                    <HeaderContent>
+                                        <MudTh>@LangService.GetString("Th_Supplier")</MudTh>
+                                        <MudTh>အစိုဓာတ် %</MudTh>
+                                        <MudTh>@LangService.GetString("Th_Status")</MudTh>
+                                        <MudTh Style="text-align: right;">@LangService.GetString("Th_Quantity") (@_weightUnit)</MudTh>
+                                    </HeaderContent>
+                                    <RowTemplate>
+                                        <MudTd>@detailContext.contact_name</MudTd>
+                                        <MudTd>@detailContext.moisture_percent %</MudTd>
+                                        <MudTd><MudChip T="string" Color="Color.Warning" Size="Size.Small">@detailContext.status</MudChip></MudTd>
+                                        <MudTd Style="text-align: right;">@detailContext.net_weight.ToString("N2")</MudTd>
+                                    </RowTemplate>
+                                </MudTable>
+                            </td>
+                        </MudTr>
+                    }
+                </ChildRowContent>
             </MudTable>
         </MudTabPanel>
 
         <!-- 3. Truck Stocks Tab -->
         <MudTabPanel Text="@LangService.GetString("Tab_TruckStock")" Icon="@Icons.Material.Filled.LocalShipping">
-            <MudTable Items="@_truckStocks" Dense="true" Hover="true" Bordered="true" Striped="true" Elevation="1">
+            <MudTable Items="@_truckStocks" Dense="true" Hover="true" Bordered="true" Striped="false" Elevation="1">
                 <HeaderContent>
-                    <MudTh>@LangService.GetString("Th_TruckNumber")</MudTh>
+                    <MudTh></MudTh> <!-- For Expand Button -->
                     <MudTh>@LangService.GetString("Th_RubberType")</MudTh>
-                    <MudTh>@LangService.GetString("Th_Quantity") (@_weightUnit)</MudTh>
-                    <MudTh>@LangService.GetString("Th_Status")</MudTh>
+                    <MudTh Style="text-align: right;">စုစုပေါင်း @LangService.GetString("Th_Quantity") (@_weightUnit)</MudTh>
                 </HeaderContent>
                 <RowTemplate>
-                    <MudTd><b>@context.truck_number</b></MudTd>
-                    <MudTd>@context.rubber_type_name</MudTd>
-                    <MudTd>@context.quantity.ToString("N2") @_weightUnit</MudTd>
                     <MudTd>
-                        <MudChip T="string" Color="Color.Success" Size="Size.Small">@context.status</MudChip>
+                        <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="@(() => context.ShowDetails = !context.ShowDetails)" Color="@(context.ShowDetails ? Color.Secondary : Color.Primary)">
+                            @(context.ShowDetails ? "အသေးစိတ်ပိတ်ရန်" : "အသေးစိတ်ပြရန်")
+                        </MudButton>
                     </MudTd>
+                    <MudTd><b>@context.RubberTypeName</b></MudTd>
+                    <MudTd Style="text-align: right;"><b>@context.TotalWeight.ToString("N2") @_weightUnit</b></MudTd>
                 </RowTemplate>
+                <ChildRowContent>
+                    @if (context.ShowDetails)
+                    {
+                        <MudTr>
+                            <td colspan="3" class="pa-4 bg-light">
+                                <MudTable Items="@context.Details" Context="detailContext" Dense="true" Bordered="true" Elevation="0">
+                                    <HeaderContent>
+                                        <MudTh>@LangService.GetString("Th_TruckNumber")</MudTh>
+                                        <MudTh>@LangService.GetString("Th_Status")</MudTh>
+                                        <MudTh Style="text-align: right;">@LangService.GetString("Th_Quantity") (@_weightUnit)</MudTh>
+                                    </HeaderContent>
+                                    <RowTemplate>
+                                        <MudTd>@detailContext.truck_number</MudTd>
+                                        <MudTd><MudChip T="string" Color="Color.Success" Size="Size.Small">@detailContext.status</MudChip></MudTd>
+                                        <MudTd Style="text-align: right;">@detailContext.quantity.ToString("N2")</MudTd>
+                                    </RowTemplate>
+                                </MudTable>
+                            </td>
+                        </MudTr>
+                    }
+                </ChildRowContent>
             </MudTable>
         </MudTabPanel>
 
@@ -76,10 +145,11 @@
 </MudContainer>
 
 @code {
-    private string _weightUnit = "Vis (ပိဿာ)"; // Default fallback
-    private List<WarehouseStockSummaryModel> _warehouseStocks = new();
-    private List<TempStockBalanceModel> _tempStocks = new();
-    private List<TruckStockBalanceModel> _truckStocks = new();
+    private string _weightUnit = "Vis (ပိဿာ)"; // Fallback if setting fails
+
+    private List<GroupedStockModel<WarehouseStockSummaryModel>> _warehouseStocks = new();
+    private List<GroupedStockModel<TempStockBalanceModel>> _tempStocks = new();
+    private List<GroupedStockModel<TruckStockBalanceModel>> _truckStocks = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -98,14 +168,15 @@
         try
         {
             var settings = await Http.GetFromJsonAsync<List<BusinessSettingModel>>("rest/v1/business_settings?select=default_weight_unit&limit=1");
-            if (settings != null && settings.Any())
+            if (settings != null && settings.Any() && !string.IsNullOrEmpty(settings.First().default_weight_unit))
             {
-                _weightUnit = settings.First().default_weight_unit;
+                // Database မှ တိုက်ရိုက်ရယူမည်
+                _weightUnit = settings.First().default_weight_unit!;
             }
         }
         catch
         {
-            _weightUnit = "Vis (ပိဿာ)";
+            // Error ဖြစ်ပါက Default အတိုင်းထားမည်
         }
     }
 
@@ -113,41 +184,69 @@
     {
         try
         {
-            // 1. Warehouse Batches
-            string whQuery = "rest/v1/warehouse_batches?status=eq.Active&select=total_weight,warehouses(warehouse_name),rubber_types(name,grade)";
+            // 1. Warehouse Batches (batch_number ကိုပါ ထည့်သွင်းဆွဲထုတ်မည်)
+            string whQuery = "rest/v1/warehouse_batches?status=eq.Active&select=total_weight,batch_number,warehouses(warehouse_name),rubber_types(name,grade)";
             var whRawList = await Http.GetFromJsonAsync<List<WhBatchRawModel>>(whQuery) ?? new();
 
-            _warehouseStocks = whRawList.Select(x => new WarehouseStockSummaryModel
-            {
-                warehouse_name = x.warehouses?.warehouse_name ?? "N/A",
-                rubber_type_name = x.rubber_types != null ? $"{x.rubber_types.name} ({x.rubber_types.grade})" : "N/A",
-                total_weight = x.total_weight
-            }).ToList();
+            _warehouseStocks = whRawList
+                .GroupBy(x => x.rubber_types != null ? $"{x.rubber_types.name} ({x.rubber_types.grade})" : "N/A")
+                .Select(g => new GroupedStockModel<WarehouseStockSummaryModel>
+                {
+                    RubberTypeName = g.Key,
+                    TotalWeight = g.Sum(x => x.total_weight),
+                    Details = g.Select(x => new WarehouseStockSummaryModel
+                    {
+                        warehouse_name = x.warehouses?.warehouse_name ?? "N/A",
+                        batch_number = string.IsNullOrEmpty(x.batch_number) ? "Unknown" : x.batch_number,
+                        rubber_type_name = g.Key,
+                        total_weight = x.total_weight
+                    }).ToList()
+                })
+                .OrderBy(x => x.RubberTypeName)
+                .ToList();
 
             // 2. Temp Stocks
             string tempQuery = "rest/v1/temp_stocks?status=eq.Pending&select=net_weight,moisture_percent,status,contacts(name),rubber_types(name,grade)";
             var tempRawList = await Http.GetFromJsonAsync<List<TempRawModel>>(tempQuery) ?? new();
 
-            _tempStocks = tempRawList.Select(x => new TempStockBalanceModel
-            {
-                contact_name = x.contacts?.name ?? "N/A",
-                rubber_type_name = x.rubber_types != null ? $"{x.rubber_types.name} ({x.rubber_types.grade})" : "N/A",
-                net_weight = x.net_weight,
-                moisture_percent = x.moisture_percent,
-                status = x.status
-            }).ToList();
+            _tempStocks = tempRawList
+                .GroupBy(x => x.rubber_types != null ? $"{x.rubber_types.name} ({x.rubber_types.grade})" : "N/A")
+                .Select(g => new GroupedStockModel<TempStockBalanceModel>
+                {
+                    RubberTypeName = g.Key,
+                    TotalWeight = g.Sum(x => x.net_weight),
+                    Details = g.Select(x => new TempStockBalanceModel
+                    {
+                        contact_name = x.contacts?.name ?? "N/A",
+                        rubber_type_name = g.Key,
+                        net_weight = x.net_weight,
+                        moisture_percent = x.moisture_percent,
+                        status = x.status
+                    }).ToList()
+                })
+                .OrderBy(x => x.RubberTypeName)
+                .ToList();
 
             // 3. Truck Stocks
             string truckQuery = "rest/v1/truck_stocks?status=eq.Active&select=quantity,status,trucks(truck_number),rubber_types(name,grade)";
             var truckRawList = await Http.GetFromJsonAsync<List<TruckRawModel>>(truckQuery) ?? new();
 
-            _truckStocks = truckRawList.Select(x => new TruckStockBalanceModel
-            {
-                truck_number = x.trucks?.truck_number ?? "N/A",
-                rubber_type_name = x.rubber_types != null ? $"{x.rubber_types.name} ({x.rubber_types.grade})" : "N/A",
-                quantity = x.quantity,
-                status = x.status
-            }).ToList();
+            _truckStocks = truckRawList
+                .GroupBy(x => x.rubber_types != null ? $"{x.rubber_types.name} ({x.rubber_types.grade})" : "N/A")
+                .Select(g => new GroupedStockModel<TruckStockBalanceModel>
+                {
+                    RubberTypeName = g.Key,
+                    TotalWeight = g.Sum(x => x.quantity),
+                    Details = g.Select(x => new TruckStockBalanceModel
+                    {
+                        truck_number = x.trucks?.truck_number ?? "N/A",
+                        rubber_type_name = g.Key,
+                        quantity = x.quantity,
+                        status = x.status
+                    }).ToList()
+                })
+                .OrderBy(x => x.RubberTypeName)
+                .ToList();
         }
         catch (Exception ex)
         {
@@ -156,12 +255,23 @@
     }
 
     // --- Models ---
-    public class BusinessSettingModel { public string default_weight_unit { get; set; } = "Vis (ပိဿာ)"; }
-    public class WarehouseStockSummaryModel { public string warehouse_name { get; set; } = string.Empty; public string rubber_type_name { get; set; } = string.Empty; public decimal total_weight { get; set; } }
+    public class GroupedStockModel<T>
+    {
+        public string RubberTypeName { get; set; } = string.Empty;
+        public decimal TotalWeight { get; set; }
+        public bool ShowDetails { get; set; } = false;
+        public List<T> Details { get; set; } = new();
+    }
+
+    public class BusinessSettingModel { public string? default_weight_unit { get; set; } }
+
+    // batch_number ကိုပါ ထပ်မံဖြည့်စွက်ထားသည်
+    public class WarehouseStockSummaryModel { public string warehouse_name { get; set; } = string.Empty; public string batch_number { get; set; } = string.Empty; public string rubber_type_name { get; set; } = string.Empty; public decimal total_weight { get; set; } }
     public class TempStockBalanceModel { public string contact_name { get; set; } = string.Empty; public string rubber_type_name { get; set; } = string.Empty; public decimal net_weight { get; set; } public decimal moisture_percent { get; set; } public string status { get; set; } = string.Empty; }
     public class TruckStockBalanceModel { public string truck_number { get; set; } = string.Empty; public string rubber_type_name { get; set; } = string.Empty; public decimal quantity { get; set; } public string status { get; set; } = string.Empty; }
 
-    private class WhBatchRawModel { public decimal total_weight { get; set; } public WhObj? warehouses { get; set; } public RubberObj? rubber_types { get; set; } }
+    // API ပြန်လာမည့် Raw Data
+    private class WhBatchRawModel { public decimal total_weight { get; set; } public string batch_number { get; set; } = string.Empty; public WhObj? warehouses { get; set; } public RubberObj? rubber_types { get; set; } }
     private class TempRawModel { public decimal net_weight { get; set; } public decimal moisture_percent { get; set; } public string status { get; set; } = string.Empty; public ContactObj? contacts { get; set; } public RubberObj? rubber_types { get; set; } }
     private class TruckRawModel { public decimal quantity { get; set; } public string status { get; set; } = string.Empty; public TruckObj? trucks { get; set; } public RubberObj? rubber_types { get; set; } }
 
