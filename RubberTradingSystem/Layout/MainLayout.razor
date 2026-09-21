@@ -182,21 +182,33 @@
 
         if (user.Identity is not null && user.Identity.IsAuthenticated)
         {
-            _userEmail = user.FindFirst(c => c.Type == ClaimTypes.Email)?.Value ?? user.Identity.Name ?? "Unknown";
-            _userId = user.FindFirst(c => c.Type == ClaimTypes.NameIdentifier)?.Value ?? string.Empty;
+            // Supabase JWT တွင် အသုံးပြုသော "email" နှင့် "sub" ကိုပါ စစ်ဆေးရန် ပြင်ဆင်ထားပါသည်
+            _userEmail = user.FindFirst(c => c.Type == ClaimTypes.Email)?.Value
+                         ?? user.FindFirst(c => c.Type == "email")?.Value
+                         ?? user.Identity.Name
+                         ?? "Unknown";
+
+            _userId = user.FindFirst(c => c.Type == ClaimTypes.NameIdentifier)?.Value
+                      ?? user.FindFirst(c => c.Type == "sub")?.Value
+                      ?? string.Empty;
 
             if (!string.IsNullOrEmpty(_userId))
             {
                 try
                 {
+                    // Profiles ဇယားမှ User ၏ Role နှင့် Name ကို ဆွဲထုတ်ခြင်း
                     var profiles = await Http.GetFromJsonAsync<List<StaffModel>>($"rest/v1/profiles?id=eq.{_userId}&select=*");
-                    if (profiles != null && profiles.Count > 0)
+                    if (profiles != null && profiles.Any())
                     {
-                        _userRole = profiles[0].role ?? "Staff";
-                        _fullName = profiles[0].full_name ?? "";
+                        var profile = profiles.First();
+                        _userRole = profile.role ?? "Staff";
+                        _fullName = profile.full_name ?? "";
                     }
                 }
-                catch { _userRole = "Staff"; }
+                catch
+                {
+                    _userRole = "Staff";
+                }
             }
         }
         StateHasChanged();
