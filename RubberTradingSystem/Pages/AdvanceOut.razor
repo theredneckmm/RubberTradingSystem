@@ -3,6 +3,8 @@
 @using MudBlazor
 @using RubberTradingSystem.Models
 @using RubberTradingSystem.Services
+@using RubberTradingSystem.Models.Printing
+@inject PrintService PrintService
 @inject HttpClient Http
 @inject ISnackbar Snackbar
 @inject NavigationManager Navigation
@@ -10,16 +12,27 @@
 @inject UserContextService UserContext
 @implements IDisposable
 
-<MudContainer MaxWidth="MaxWidth.Small" Class="mt-6">
-    <MudPaper Elevation="3" Class="pa-6">
-        <!-- ခေါင်းစဉ်နှင့် ဘောင်ချာနံပါတ် -->
-        <div class="d-flex justify-space-between align-center mb-6">
-            <MudText Typo="Typo.h5" Color="Color.Primary" Class="fw-bold">
-                @(_isEditMode ? Lang.GetString("Btn_Edit") : Lang.GetString("Title_AdvanceOut"))
-            </MudText>
-            <MudChip T="string" Color="Color.Info" Variant="Variant.Outlined" Size="Size.Large"><b>@_voucherNumber</b></MudChip>
-        </div>
+<MudContainer MaxWidth="MaxWidth.Small" Class="mt-6 mb-6">
+    <!-- ခေါင်းစဉ်၊ ရက်စွဲနှင့် ဘောင်ချာအမှတ်စဉ် (Purchase ပုံစံအတိုင်း) -->
+    <div class="d-flex justify-space-between align-center mb-4 flex-wrap gap-3">
+        <MudText Typo="Typo.h5" Color="Color.Primary" Class="fw-bold">
+            @(_isEditMode ? Lang.GetString("Btn_Edit") : Lang.GetString("Title_AdvanceOut"))
+        </MudText>
 
+        <div class="d-flex align-center gap-3 justify-end" style="margin-left: auto;">
+            <MudChip T="string" Color="Color.Primary" Variant="Variant.Filled" Size="Size.Large">
+                <b>Voucher: @_voucherNumber</b>
+            </MudChip>
+
+            <MudDatePicker Label="ရက်စွဲ (Date)" @bind-Date="_selectedDate" DateFormat="dd/MM/yyyy"
+                           Variant="Variant.Outlined" Margin="Margin.Dense"
+                           AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight"
+                           Style="width: 200px; background-color: var(--mud-palette-surface);"
+                           Disabled="_isSuccessCompleted" />
+        </div>
+    </div>
+
+    <MudPaper Elevation="3" Class="pa-6">
         <MudForm @ref="_form" @bind-IsValid="@_success">
             <MudGrid>
                 <!-- ခြံရှင် ရွေးချယ်ခြင်း -->
@@ -52,7 +65,7 @@
                                Disabled="_isSuccessCompleted">
                         @foreach (var wallet in _wallets)
                         {
-                            <MudSelectItem Value="@wallet.Id">@wallet.WalletName (@wallet.WalletType) - လက်ကျန်: @wallet.Balance.ToString("N2")</MudSelectItem>
+                            <MudSelectItem Value="@wallet.Id">@wallet.WalletName (@wallet.WalletType) - လက်ကျန်: @wallet.Balance.ToString("N0")</MudSelectItem>
                         }
                     </MudSelect>
                 </MudItem>
@@ -94,7 +107,7 @@
                     </MudButton>
                 }
 
-                <MudButton Variant="Variant.Outlined" Color="Color.Secondary" OnClick="PrintVoucher"
+                <MudButton Variant="Variant.Outlined" Color="Color.Secondary" OnClick="OpenPrintPreview"
                            Disabled="!_isSuccessCompleted">
                     Print Voucher
                 </MudButton>
@@ -120,6 +133,9 @@
     private bool _isSuccessCompleted = false;
     private string _voucherNumber = string.Empty;
 
+    // ရက်စွဲအတွက် Property
+    private DateTime? _selectedDate = DateTime.Today;
+
     private List<Contact> _suppliers = new();
     private List<WalletModel> _wallets = new();
     private string _selectedContactId = string.Empty;
@@ -129,7 +145,6 @@
     private decimal _amount;
     private string _description = string.Empty;
 
-    // ပြင်ဆင်ရန် (Edit) အတွက် မူလဒေတာများ သိမ်းထားရန်
     private decimal _originalAmount = 0;
     private string _originalContactId = string.Empty;
     private string _originalWalletId = string.Empty;
@@ -178,17 +193,16 @@
             {
                 var tx = txList.First();
                 _voucherNumber = tx.voucher_number ?? "";
+                _selectedDate = tx.created_at ?? DateTime.Today; // API မှ created_at ကို ရက်စွဲအနေဖြင့် ယူမည်
                 _selectedContactId = tx.contact_id ?? "";
                 _selectedWalletId = tx.wallet_id ?? "";
                 _amount = tx.total_amount;
                 _description = tx.description ?? "";
 
-                // မူလတန်ဖိုးများကို သိမ်းထားမည်
                 _originalAmount = tx.total_amount;
                 _originalContactId = tx.contact_id ?? "";
                 _originalWalletId = tx.wallet_id ?? "";
 
-                // ရွေးချယ်ထားသော Contact ၏ လက်ရှိ Advance ကို တွက်ချက်ပြသရန်
                 var selectedParams = new List<string> { _selectedContactId };
                 OnSupplierSelected(selectedParams);
             }
@@ -201,7 +215,7 @@
 
     private async Task<string> GenerateVoucherNumberAsync(string prefix)
     {
-        string dateStr = DateTime.Now.ToString("yyyyMMdd");
+        string dateStr = (_selectedDate ?? DateTime.Today).ToString("yyyyMMdd");
         string searchPattern = $"{prefix}-{dateStr}-";
 
         try
@@ -250,11 +264,11 @@
             string ownerId = await UserContext.GetCurrentOwnerIdAsync();
             string staffId = await UserContext.GetCurrentStaffIdAsync();
 
+            // ရက်စွဲကို created_at Format သို့ပြောင်းခြင်း
+            string isoFormattedDate = (_selectedDate ?? DateTime.Today).ToString("yyyy-MM-ddTHH:mm:ssZ");
+
             if (_isEditMode)
             {
-                // ================== EDIT MODE (Revert Old -> Apply New) ==================
-
-                // ၁။ ယခင် ခြံရှင်စာရင်းမှ မူလပမာဏကို ပြန်နှုတ်မည်
                 if (!string.IsNullOrEmpty(_originalContactId))
                 {
                     var oldContact = await Http.GetFromJsonAsync<List<ContactBalanceModel>>($"rest/v1/contacts?id=eq.{_originalContactId}&select=advance_balance");
@@ -262,7 +276,6 @@
                     await Http.PatchAsJsonAsync($"rest/v1/contacts?id=eq.{_originalContactId}", new { advance_balance = oldBalance - _originalAmount });
                 }
 
-                // ၂။ ယခင် Wallet သို့ မူလပမာဏကို ပြန်ထည့်မည် (ငွေထုတ်တာဖြစ်လို့ ပြန်ပေါင်းထည့်ပေးရမည်)
                 if (!string.IsNullOrEmpty(_originalWalletId))
                 {
                     var oldWallet = await Http.GetFromJsonAsync<List<WalletBalanceModel>>($"rest/v1/wallets?id=eq.{_originalWalletId}&select=balance");
@@ -270,25 +283,24 @@
                     await Http.PatchAsJsonAsync($"rest/v1/wallets?id=eq.{_originalWalletId}", new { balance = oldWalletBal + _originalAmount });
                 }
 
-                // ၃။ အသစ်ရွေးချယ်ထားသော ခြံရှင်စာရင်းသို့ ပမာဏအသစ် ထပ်ပေါင်းမည်
                 var newContact = await Http.GetFromJsonAsync<List<ContactBalanceModel>>($"rest/v1/contacts?id=eq.{_selectedContactId}&select=advance_balance");
                 decimal currentAdvance = newContact?.FirstOrDefault()?.advance_balance ?? 0;
                 decimal updatedAdvance = currentAdvance + _amount;
                 await Http.PatchAsJsonAsync($"rest/v1/contacts?id=eq.{_selectedContactId}", new { advance_balance = updatedAdvance });
 
-                // ၄။ အသစ်ရွေးချယ်ထားသော Wallet မှ ပမာဏအသစ် နှုတ်မည်
                 var newWallet = await Http.GetFromJsonAsync<List<WalletBalanceModel>>($"rest/v1/wallets?id=eq.{_selectedWalletId}&select=balance");
                 decimal currentWalletBal = newWallet?.FirstOrDefault()?.balance ?? 0;
                 await Http.PatchAsJsonAsync($"rest/v1/wallets?id=eq.{_selectedWalletId}", new { balance = currentWalletBal - _amount });
 
-                // ၅။ Transaction နှင့် Ledger များကို Update လုပ်မည်
+                // created_at (ရက်စွဲ) ကိုပါ Update လုပ်မည်
                 await Http.PatchAsJsonAsync($"rest/v1/transactions?id=eq.{EditTransactionId}", new
                 {
                     contact_id = _selectedContactId,
                     wallet_id = _selectedWalletId,
                     total_amount = _amount,
                     paid_amount = _amount,
-                    description = string.IsNullOrEmpty(_description) ? "Advance Out Edit" : _description
+                    description = string.IsNullOrEmpty(_description) ? "Advance Out Edit" : _description,
+                    created_at = isoFormattedDate
                 });
 
                 await Http.PatchAsJsonAsync($"rest/v1/ledgers?transaction_id=eq.{EditTransactionId}", new
@@ -296,15 +308,14 @@
                     contact_id = _selectedContactId,
                     credit_amount = _amount,
                     balance_after = updatedAdvance,
-                    description = string.IsNullOrEmpty(_description) ? "Advance Out Edit" : _description
+                    description = string.IsNullOrEmpty(_description) ? "Advance Out Edit" : _description,
+                    created_at = isoFormattedDate
                 });
 
-                Snackbar.Add("ပြင်ဆင်မှု အောင်မြင်ပါသည်။ ခြံရှင်နှင့် Wallet စာရင်းများကို ညှိပေးပြီးပါပြီ။", Severity.Success);
+                Snackbar.Add("ပြင်ဆင်မှု အောင်မြင်ပါသည်။", Severity.Success);
             }
             else
             {
-                // ================== NEW CREATE MODE ==================
-
                 var transaction = new
                 {
                     owner_id = ownerId,
@@ -315,7 +326,8 @@
                     total_amount = _amount,
                     paid_amount = _amount,
                     wallet_id = _selectedWalletId,
-                    description = string.IsNullOrEmpty(_description) ? "Advance Out (ကြိုတင်ငွေထုတ်ပေးခြင်း)" : _description
+                    description = string.IsNullOrEmpty(_description) ? "Advance Out (ကြိုတင်ငွေထုတ်ပေးခြင်း)" : _description,
+                    created_at = isoFormattedDate // Date ထည့်သွင်းခြင်း
                 };
 
                 var requestMessage = new HttpRequestMessage(HttpMethod.Post, "rest/v1/transactions")
@@ -345,7 +357,8 @@
                         credit_amount = _amount,
                         balance_after = newAdvanceBalance,
                         balance_impact = "AdvanceOut",
-                        description = string.IsNullOrEmpty(_description) ? "Advance Out (ကြိုတင်ငွေထုတ်ပေးခြင်း)" : _description
+                        description = string.IsNullOrEmpty(_description) ? "Advance Out (ကြိုတင်ငွေထုတ်ပေးခြင်း)" : _description,
+                        created_at = isoFormattedDate // Date ထည့်သွင်းခြင်း
                     };
                     await Http.PostAsJsonAsync("rest/v1/ledgers", oldLedgerPayload);
 
@@ -357,7 +370,8 @@
                         staff_id = staffId,
                         voucher_number = _voucherNumber,
                         voucher_type = "AdvanceOut",
-                        reference_id = generatedTransactionId
+                        reference_id = generatedTransactionId,
+                        created_at = isoFormattedDate // Date ထည့်သွင်းခြင်း
                     };
                     await Http.PostAsJsonAsync("rest/v1/vouchers", voucherPayload);
 
@@ -390,9 +404,63 @@
         }
     }
 
-    private void PrintVoucher()
+    // PrintService ကို အသုံးပြု၍ ရိုးရိုးရှင်းရှင်း အထက်အောက်ပုံစံဖြင့် Print ထုတ်ခြင်း
+    private async Task OpenPrintPreview()
     {
-        Navigation.NavigateTo($"/print-voucher/{_voucherNumber}");
+        string paperSize = "A5";
+        int customWidth = 148;
+        int customHeight = 210;
+
+        string headerTitle = "ရာဘာကုန်သွယ်လုပ်ငန်း";
+        string headerAddress = "";
+        string footerNote = "ကျေးဇူးတင်ပါသည်";
+
+        try
+        {
+            var settings = await Http.GetFromJsonAsync<List<PrinterSettingsModel>>("rest/v1/printer_settings?select=*&limit=1");
+            if (settings != null && settings.Any())
+            {
+                var s = settings.First();
+                paperSize = string.IsNullOrWhiteSpace(s.voucher_size) ? "A5" : s.voucher_size;
+                customWidth = s.custom_width > 0 ? s.custom_width : 148;
+                customHeight = s.custom_height > 0 ? s.custom_height : 210;
+                headerTitle = string.IsNullOrWhiteSpace(s.header_title) ? headerTitle : s.header_title;
+                headerAddress = s.header_address ?? "";
+                footerNote = string.IsNullOrWhiteSpace(s.footer_note) ? footerNote : s.footer_note;
+            }
+        }
+        catch { }
+
+        var document = new PrintDocumentModel
+        {
+            Title = "ကြိုတင်ငွေ ထုတ်ပေးသည့် ဘောင်ချာ",
+            PaperSize = paperSize,
+            CustomWidth = customWidth,
+            CustomHeight = customHeight,
+            HeaderTitle = headerTitle,
+            HeaderAddress = headerAddress,
+            FooterNote = footerNote
+        };
+
+        // အခြေခံ အချက်အလက်များ
+        document.Fields.Add(new PrintFieldModel { Label = "ဘောင်ချာအမှတ်", Value = _voucherNumber });
+        document.Fields.Add(new PrintFieldModel { Label = "အမည်", Value = _selectedContact?.Name ?? "Unknown" });
+        document.Fields.Add(new PrintFieldModel { Label = "ရက်စွဲ", Value = _selectedDate.HasValue ? _selectedDate.Value.ToString("dd/MM/yyyy") : "-" });
+
+        string desc = string.IsNullOrEmpty(_description) ? "ကြိုတင်ငွေထုတ်ယူခြင်း" : _description;
+        document.Fields.Add(new PrintFieldModel { IsDivider = true });
+        document.Fields.Add(new PrintFieldModel { Label = "အကြောင်းအရာ", Value="ကြိုတင်ငွေထုတ်ပေးခြင်း" });
+        document.Fields.Add(new PrintFieldModel { Label = "ထုတ်ယူသောပမာဏ", Value = $"{_amount:N0} Ks" });
+        document.Fields.Add(new PrintFieldModel { Label = "ယခင်လက်ကျန်ငွေ", Value = $"{_currentAdvanceBalance:N0} Ks" });
+        document.Fields.Add(new PrintFieldModel { IsDivider = true });
+        document.Fields.Add(new PrintFieldModel { Label = "စုစုပေါင်းပမာဏ", Value = $"{(_currentAdvanceBalance + _amount):N0} Ks" });
+        document.Fields.Add(new PrintFieldModel { IsDivider = true });
+        document.Fields.Add(new PrintFieldModel { Label = "မှတ်ချက်", Value = desc });
+
+        // ဇယား (အရေအတွက်၊ ဈေးနှုန်း) မလိုအပ်သဖြင့် အလွတ်ထားခဲ့မည်
+        document.Rows = new List<PrintRowModel>();
+
+        await PrintService.ShowPrintPreview(document);
     }
 
     private void FinishTransaction()
@@ -400,10 +468,22 @@
         Navigation.NavigateTo("/farm-owner-advances");
     }
 
+    // Models
+    private class PrinterSettingsModel
+    {
+        public string? voucher_size { get; set; }
+        public int custom_width { get; set; }
+        public int custom_height { get; set; }
+        public string? header_title { get; set; }
+        public string? header_address { get; set; }
+        public string? footer_note { get; set; }
+    }
+
     private class TransactionModel
     {
         public string id { get; set; } = string.Empty;
         public string? voucher_number { get; set; }
+        public DateTime? created_at { get; set; } // transaction_date အစား created_at ကိုအသုံးပြုသည်
         public string? contact_id { get; set; }
         public string? wallet_id { get; set; }
         public decimal total_amount { get; set; }

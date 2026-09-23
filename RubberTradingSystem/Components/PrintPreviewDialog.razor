@@ -17,18 +17,26 @@
                         <div class="voucher-header-line"></div>
                     </div>
 
-                    <!-- Meta Information (ဥပမာ- ဘောင်ချာနံပါတ်၊ ရက်စွဲ၊ ခြံရှင်အမည်) -->
+                    <!-- Meta Information (ဥပမာ- ဘောင်ချာနံပါတ်၊ ရက်စွဲ၊ ခြံရှင်အမည် နှင့် မျဉ်းကြောင်းများ) -->
                     <div class="voucher-meta" style="margin-bottom: 12px;">
                         @foreach (var field in Document.Fields)
                         {
-                            <div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 13px;">
-                                <span><strong>@field.Label :</strong></span>
-                                <span>@field.Value</span>
-                            </div>
+                            if (field.IsDivider)
+                            {
+                                <!-- IsDivider True ဖြစ်နေပါက အစမှအဆုံး မျဉ်းကြောင်းတစ်ခု တားပေးမည် -->
+                                <div style="border-bottom: 1px dashed #000; margin: 8px 0; width: 100%;"></div>
+                            }
+                            else
+                            {
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 13px;">
+                                    <span><strong>@field.Label :</strong></span>
+                                    <span>@field.Value</span>
+                                </div>
+                            }
                         }
                     </div>
 
-                    <!-- Items / Rows Table (ဥပမာ- ရော်ဘာအဝယ်၊ ထွက်ငွေ အသေးစိတ်) -->
+                    <!-- Items / Rows Table (ရာဘာအဝယ်ဘောင်ချာအတွက်သာ ပေါ်မည်၊ ကြိုထုတ်ငွေအတွက် မပေါ်ပါ) -->
                     @if (Document.Rows != null && Document.Rows.Any())
                     {
                         <table class="voucher-table" style="width: 100%; border-collapse: collapse; margin-bottom: 15px; font-size: 12px;">
