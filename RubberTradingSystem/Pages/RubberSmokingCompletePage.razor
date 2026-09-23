@@ -8,7 +8,6 @@
 @inject LanguageService LangService
 @inject UserContextService UserContext
 
-
 <MudContainer MaxWidth="MaxWidth.Large" Class="mt-4 mb-6">
     <MudPaper Class="pa-6" Elevation="3">
         <MudText Typo="Typo.h5" Color="Color.Success" Class="mb-4 font-weight-bold">
@@ -45,14 +44,15 @@
                             <MudText Typo="Typo.caption" Color="Color.Secondary">Input: @item.input_weight.ToString("N0") lbs</MudText>
                         </MudItem>
                         <MudItem xs="12" md="2">
-                            <MudNumericField @bind-Value="item.output_weight" Label=@LangService.GetString("Smoking_ColOutput") (lbs)" Variant="Variant.Outlined" Margin="Margin.Dense" Min="0" />
+                            <MudNumericField @bind-Value="item.output_weight" Label="@(LangService.GetString("Smoking_ColOutput") + " (lbs)")" Variant="Variant.Outlined" Margin="Margin.Dense" Min="0" />
                         </MudItem>
                         <MudItem xs="12" md="3">
-                            <MudSelect T="string" @bind-Value="item.rubber_grade" Label="@LangService.GetString("Smoking_GradeLabel")" Variant="Variant.Outlined" Margin="Margin.Dense">
-                                <MudSelectItem Value="@("RSS-1")">RSS-1</MudSelectItem>
-                                <MudSelectItem Value="@("RSS-2")">RSS-2</MudSelectItem>
-                                <MudSelectItem Value="@("RSS-3")">RSS-3</MudSelectItem>
-                                <MudSelectItem Value="@("Low Grade")">Low Grade / Scrap</MudSelectItem>
+                            <!-- Database မှ ရာဘာအမျိုးအစားများကို ရွေးချယ်နိုင်ရန် ပြင်ဆင်ထားသည် -->
+                            <MudSelect T="string" @bind-Value="item.output_rubber_type_id" Label="ထွက်ရှိမည့် ရာဘာအမျိုးအစား" Variant="Variant.Outlined" Margin="Margin.Dense">
+                                @foreach (var rt in _rubberTypes)
+                                {
+                                    <MudSelectItem Value="@rt.id">@rt.name (@rt.grade)</MudSelectItem>
+                                }
                             </MudSelect>
                         </MudItem>
                         <MudItem xs="12" md="2">
@@ -83,8 +83,11 @@
 
     private RubberSmokingBatchModel? _batch;
     private List<SmokingItemDetailModel> _items = new();
-    private Dictionary<string, string> _itemRubberTypeIds = new(); // Item တစ်ခုချင်းစီ၏ rubber_type_id များကို သိမ်းရန်
+    private Dictionary<string, string> _itemRubberTypeIds = new(); // မူလ (အဝင်) rubber_type_id များကို သိမ်းရန်
+    
     private List<WarehouseModel> _warehouses = new();
+    private List<RubberTypeModel> _rubberTypes = new(); // ရာဘာအမျိုးအစားများ ဆွဲယူသိမ်းဆည်းရန်
+    
     private string _targetWarehouseId = string.Empty;
     private DateTime? _endDate = DateTime.Today;
     private bool _isSaving = false;
@@ -97,20 +100,26 @@
 
         try
         {
+            // Database မှ ရာဘာအမျိုးအစားများကို ကြိုတင်ဆွဲယူမည်
+            _rubberTypes = await Http.GetFromJsonAsync<List<RubberTypeModel>>("rest/v1/rubber_types?select=*") ?? new();
+
             var batches = await Http.GetFromJsonAsync<List<RubberSmokingBatchModel>>($"rest/v1/rubber_smoking_batches?id=eq.{BatchId}&select=*");
             _batch = batches?.FirstOrDefault();
 
-            // smoking_items များနှင့်အတူ warehouse_batch မှတစ်ဆင့် rubber_type_id ကိုပါ ဆွဲထုတ်ရန် (သို့မဟုတ် warehouse_batches ဇယားမှ join ၍ယူရန်)
             _items = await Http.GetFromJsonAsync<List<SmokingItemDetailModel>>($"rest/v1/rubber_smoking_items?batch_id=eq.{BatchId}&select=*") ?? new();
 
             _itemRubberTypeIds.Clear();
+            
+            // Default ရွေးချယ်ပေးထားရန် RSS-3 သို့မဟုတ် ပထမဆုံးအမျိုးအစားကို ယူမည်
+            string? defaultOutputTypeId = _rubberTypes.FirstOrDefault(r => r.grade == "RSS-3" || r.name.Contains("RSS"))?.id ?? _rubberTypes.FirstOrDefault()?.id;
+
             foreach (var item in _items)
             {
                 item.output_weight = item.input_weight * 0.7m;
-                item.rubber_grade = "RSS-3";
+                item.output_rubber_type_id = defaultOutputTypeId; // Default ထည့်ပေးခြင်း
                 item.remaining_weight = 0;
 
-                // warehouse_batch_id မှတစ်ဆင့် မူရင်း rubber_type_id ကို warehouse_batches ဇယားမှ လှမ်းယူခြင်း
+                // warehouse_batch_id မှတစ်ဆင့် မူရင်း (အဝင်) rubber_type_id ကို လှမ်းယူခြင်း
                 if (!string.IsNullOrEmpty(item.warehouse_batch_id))
                 {
                     var whBatches = await Http.GetFromJsonAsync<List<WarehouseBatchLookupModel>>($"rest/v1/warehouse_batches?id=eq.{item.warehouse_batch_id}&select=rubber_type_id");
@@ -136,6 +145,12 @@
 
         foreach (var item in _items)
         {
+            if (string.IsNullOrEmpty(item.output_rubber_type_id))
+            {
+                Snackbar.Add("ကျေးဇူးပြု၍ ထွက်ရှိမည့် ရာဘာအမျိုးအစားကို ရွေးချယ်ပါ။", Severity.Warning);
+                return;
+            }
+
             decimal loss = item.input_weight - (item.output_weight + item.remaining_weight);
             if (loss < 0)
             {
@@ -158,19 +173,43 @@
             foreach (var item in _items)
             {
                 decimal itemLoss = item.input_weight - (item.output_weight + item.remaining_weight);
-                await Http.PatchAsync($"rest/v1/rubber_smoking_items?id=eq.{item.id}", JsonContent.Create(new { output_weight = item.output_weight, loss_weight = itemLoss, rubber_grade = item.rubber_grade }));
+                
+                // Save လုပ်မည့် Grade အမည်ကို ရှာယူခြင်း
+                var selectedRubber = _rubberTypes.FirstOrDefault(r => r.id == item.output_rubber_type_id);
+                string gradeName = selectedRubber != null ? selectedRubber.grade : "Unknown";
 
-                string? rTypeId = _itemRubberTypeIds.ContainsKey(item.id) ? _itemRubberTypeIds[item.id] : null;
+                await Http.PatchAsync($"rest/v1/rubber_smoking_items?id=eq.{item.id}", 
+                    JsonContent.Create(new { output_weight = item.output_weight, loss_weight = itemLoss, rubber_grade = gradeName }));
 
-                if (item.output_weight > 0 && !string.IsNullOrEmpty(rTypeId))
+                string? originalRTypeId = _itemRubberTypeIds.ContainsKey(item.id) ? _itemRubberTypeIds[item.id] : null;
+
+                // (၁) ကုန်ချော (အသစ်ရွေးလိုက်သော ရာဘာအမျိုးအစား - ဥပမာ RSS-3) ဖြင့် ဂိုထောင်သို့သွင်းခြင်း
+                if (item.output_weight > 0 && !string.IsNullOrEmpty(item.output_rubber_type_id))
                 {
-                    var fgBatch = new { owner_id = ownerId, staff_id = string.IsNullOrEmpty(staffId) ? null : staffId, warehouse_id = _targetWarehouseId, batch_number = $"{_batch?.batch_number}-{item.rubber_grade}", rubber_type_id = rTypeId, total_weight = item.output_weight, status = "Active" };
+                    var fgBatch = new { 
+                        owner_id = ownerId, 
+                        staff_id = string.IsNullOrEmpty(staffId) ? null : staffId, 
+                        warehouse_id = _targetWarehouseId, 
+                        batch_number = $"{_batch?.batch_number}-{gradeName}", 
+                        rubber_type_id = item.output_rubber_type_id, // ရွေးချယ်ထားသော ID အသစ်ကို ဤနေရာတွင် သုံးထားပါသည်
+                        total_weight = item.output_weight, 
+                        status = "Active" 
+                    };
                     await Http.PostAsJsonAsync("rest/v1/warehouse_batches", fgBatch);
                 }
 
-                if (item.remaining_weight > 0 && !string.IsNullOrEmpty(rTypeId))
+                // (၂) နောက်တစ်ကြိမ်မှိုင်းခံရန် လက်ကျန် (မူလအဝင် ရာဘာအမျိုးအစား - ဥပမာ Raw Rubber) ဖြင့် ဂိုထောင်သို့ပြန်သွင်းခြင်း
+                if (item.remaining_weight > 0 && !string.IsNullOrEmpty(originalRTypeId))
                 {
-                    var returnBatch = new { owner_id = ownerId, staff_id = string.IsNullOrEmpty(staffId) ? null : staffId, warehouse_id = _targetWarehouseId, batch_number = $"{_batch?.batch_number}-RE", rubber_type_id = rTypeId, total_weight = item.remaining_weight, status = "Active" };
+                    var returnBatch = new { 
+                        owner_id = ownerId, 
+                        staff_id = string.IsNullOrEmpty(staffId) ? null : staffId, 
+                        warehouse_id = _targetWarehouseId, 
+                        batch_number = $"{_batch?.batch_number}-RE", 
+                        rubber_type_id = originalRTypeId, // မူလအဝင် ID အဟောင်းကို သုံးထားပါသည်
+                        total_weight = item.remaining_weight, 
+                        status = "Active" 
+                    };
                     await Http.PostAsJsonAsync("rest/v1/warehouse_batches", returnBatch);
                 }
             }
@@ -186,6 +225,8 @@
 
     private class WarehouseModel { public string id { get; set; } = string.Empty; public string warehouse_name { get; set; } = string.Empty; }
     private class WarehouseBatchLookupModel { public string rubber_type_id { get; set; } = string.Empty; }
+    private class RubberTypeModel { public string id { get; set; } = string.Empty; public string name { get; set; } = string.Empty; public string grade { get; set; } = string.Empty; }
+    
     private class SmokingItemDetailModel
     {
         public string id { get; set; } = string.Empty;
@@ -194,6 +235,6 @@
         public decimal input_weight { get; set; }
         public decimal output_weight { get; set; }
         public decimal remaining_weight { get; set; }
-        public string rubber_grade { get; set; } = "RSS-3";
+        public string? output_rubber_type_id { get; set; } // Dropdown မှရွေးချယ်မှုကို သိမ်းရန် အသစ်ထည့်ထားသည်
     }
 }
