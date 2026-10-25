@@ -1,89 +1,93 @@
-﻿@page "/forward-contract/deliver"
+﻿@page "/forward-contract/deliveries"
 @using MudBlazor
 @using RubberTradingSystem.Models
 @using RubberTradingSystem.Services
 @inject HttpClient Http
 @inject ISnackbar Snackbar
-@inject NavigationManager Navigation
-@inject LanguageService Lang
-@inject UserContextService UserContext
+@inject LanguageService LangService
 @implements IDisposable
 
-<MudContainer MaxWidth="MaxWidth.Medium" Class="mt-6">
-    <MudPaper Elevation="3" Class="pa-6">
-        <MudText Typo="Typo.h5" Color="Color.Primary" Class="fw-bold mb-6">@Lang.GetString("Title_ContractDelivery")</MudText>
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4 mb-6">
+    <MudText Typo="Typo.h5" Color="Color.Primary" Class="mb-4 font-weight-bold">
+        ကြိုပွိုင့် ရာဘာပေးသွင်းမှု မှတ်တမ်းများ (Forward Contract Deliveries)
+    </MudText>
 
-        <!-- လက်ရှိ Active ဖြစ်နေသော ကြိုပွိုင့်စာချုပ်များဇယား -->
-        <MudTable Items="@_activeContracts" Hover="true" Breakpoint="Breakpoint.Sm" Loading="@_isLoading">
-            <HeaderContent>
-                <MudTh>@Lang.GetString("Th_MerchantName")</MudTh>
-                <MudTh>@Lang.GetString("Th_DueDate")</MudTh>
-                <MudTh>@Lang.GetString("Th_ContractQty")</MudTh>
-                <MudTh>@Lang.GetString("Th_DeliveredQty")</MudTh>
-                <MudTh>@Lang.GetString("Th_RemainingQty")</MudTh>
-                <MudTh>@Lang.GetString("Th_Action")</MudTh>
-            </HeaderContent>
-            <RowTemplate>
-                <MudTd>@context.MerchantName</MudTd>
-                <MudTd>@context.DueDate?.ToString("yyyy-MM-dd")</MudTd>
-                <MudTd>@context.ContractQuantity.ToString("N0")</MudTd>
-                <MudTd>@context.DeliveredQuantity.ToString("N0")</MudTd>
-                <MudTd><strong>@((context.ContractQuantity - context.DeliveredQuantity).ToString("N0"))</strong></MudTd>
-                <MudTd>
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
-                               OnClick="() => OpenDeliveryDialog(context)">
-                        @Lang.GetString("Btn_AddDelivery")
-                    </MudButton>
-                </MudTd>
-            </RowTemplate>
-        </MudTable>
-    </MudPaper>
+    <MudTable Items="@_deliveries" Dense="true" Hover="true" Bordered="true" Striped="true"
+              Filter="new Func<DeliveryListModel,bool>(FilterFunc)" Loading="@_isLoading">
+        <ToolBarContent>
+            <MudSpacer />
+            <MudTextField @bind-Value="_searchString" Placeholder="ဘောင်ချာ (သို့) ကုန်သည်အမည်ဖြင့် ရှာရန်..."
+                          Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                          IconSize="Size.Medium" Class="mt-0" Immediate="true" />
+        </ToolBarContent>
+        <HeaderContent>
+            <MudTh>ရက်စွဲ</MudTh>
+            <MudTh>ဘောင်ချာအမှတ်</MudTh>
+            <MudTh>ကုန်သည်အမည်</MudTh>
+            <MudTh>ရာဘာအမျိုးအစား</MudTh>
+            <MudTh Style="text-align: right;">ပေးသွင်းပိဿာချိန်</MudTh>
+            <MudTh Style="text-align: right;">သဘောတူဈေး</MudTh>
+            <MudTh Style="text-align: right;">စုစုပေါင်းတန်ဖိုး</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="ရက်စွဲ">@context.CreatedAt.ToString("dd/MM/yyyy hh:mm tt")</MudTd>
+            <MudTd DataLabel="ဘောင်ချာအမှတ်"><b>@context.VoucherNumber</b></MudTd>
+            <MudTd DataLabel="ကုန်သည်အမည်">@context.MerchantName</MudTd>
+            <MudTd DataLabel="ရာဘာအမျိုးအစား">@context.RubberTypeName</MudTd>
+            <MudTd DataLabel="ပေးသွင်းပိဿာချိန်" Style="text-align: right;">@context.Quantity.ToString("N2")</MudTd>
+            <MudTd DataLabel="သဘောတူဈေး" Style="text-align: right;">@context.AgreedPrice.ToString("N0")</MudTd>
+            <MudTd DataLabel="စုစုပေါင်းတန်ဖိုး" Style="text-align: right;">@context.TotalAmount.ToString("N0")</MudTd>
+        </RowTemplate>
+        <PagerContent>
+            <MudTablePager PageSizeOptions="new int[] { 10, 20, 50, 100 }" />
+        </PagerContent>
+    </MudTable>
 </MudContainer>
 
-<!-- ကုန်သွင်းရန် Dialog ပုံစံ -->
-@if (_selectedContract != null)
-{
-    <MudDialog @bind-IsVisible="_isDialogOpen" Options="new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Small }">
-        <TitleContent>
-            <MudText Typo="Typo.h6">@Lang.GetString("Title_RecordDelivery")</MudText>
-        </TitleContent>
-        <DialogContent>
-            <MudNumericField @bind-Value="_deliveryQuantity" Label="@Lang.GetString("Lbl_DeliveryQuantity")"
-                             Variant="Variant.Outlined" Adornment="Adornment.End" AdornmentText="ပိဿာ" Min="0" Class="mb-4" />
-            <MudTextField @bind-Value="_deliveryNote" Label="@Lang.GetString("Lbl_Note")" Variant="Variant.Outlined" Lines="2" />
-        </DialogContent>
-        <DialogActions> <!-- ရှေ့တွင် ထည့်ရန် မမေ့ပါနှင့် -->
-            <MudButton OnClick="CloseDialog">@Lang.GetString("Btn_Cancel")</MudButton>
-            <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SubmitDeliveryAsync">@Lang.GetString("Btn_Confirm")</MudButton>
-        </DialogActions>
-    </MudDialog>
-}
-
 @code {
-    private List<ForwardContractViewModel> _activeContracts = new();
     private bool _isLoading = true;
-    private bool _isDialogOpen = false;
-    private ForwardContractViewModel? _selectedContract;
-    private decimal _deliveryQuantity;
-    private string _deliveryNote = "";
+    private string _searchString = "";
+    private List<DeliveryListModel> _deliveries = new();
 
     protected override async Task OnInitializedAsync()
     {
-        Lang.OnLanguageChanged += StateHasChanged;
-        await LoadContractsAsync();
+        LangService.OnLanguageChanged += StateHasChanged;
+        await LoadDeliveriesAsync();
     }
 
-    private async Task LoadContractsAsync()
+    public void Dispose()
+    {
+        LangService.OnLanguageChanged -= StateHasChanged;
+    }
+
+    private async Task LoadDeliveriesAsync()
     {
         _isLoading = true;
         try
         {
-            // Forward contracts နှင့် contacts များကို Join ၍ ဆွဲထုတ်ခြင်း
-            _activeContracts = await Http.GetFromJsonAsync<List<ForwardContractViewModel>>("rest/v1/forward_contracts?status=eq.Active&select=*,contacts(name)") ?? new();
+            // transaction_type ကို 'ForwardContractSale' အဖြစ် သိမ်းဆည်းခဲ့သော မှတ်တမ်းများကို ဆွဲထုတ်မည်
+            string query = "rest/v1/transactions?transaction_type=eq.ForwardContractSale&select=id,created_at,voucher_number,quantity,agreed_price,total_amount,contacts(name),rubber_types(name,grade)&order=created_at.desc";
+
+            var rawData = await Http.GetFromJsonAsync<List<TransactionRawModel>>(query);
+
+            if (rawData != null)
+            {
+                _deliveries = rawData.Select(x => new DeliveryListModel
+                {
+                    Id = x.id,
+                    CreatedAt = x.created_at,
+                    VoucherNumber = x.voucher_number ?? "-",
+                    MerchantName = x.contacts?.name ?? "N/A",
+                    RubberTypeName = x.rubber_types != null ? $"{x.rubber_types.name} ({x.rubber_types.grade})" : "-",
+                    Quantity = x.quantity,
+                    AgreedPrice = x.agreed_price,
+                    TotalAmount = x.total_amount
+                }).ToList();
+            }
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"အမှားအယွင်း: {ex.Message}", Severity.Error);
+            Snackbar.Add($"မှတ်တမ်းများ ရယူရာတွင် အမှားအယွင်းရှိပါသည်: {ex.Message}", Severity.Error);
         }
         finally
         {
@@ -91,64 +95,47 @@
         }
     }
 
-    private void OpenDeliveryDialog(ForwardContractViewModel contract)
+    private bool FilterFunc(DeliveryListModel element) => FilterFuncLogic(element, _searchString);
+
+    private bool FilterFuncLogic(DeliveryListModel element, string searchString)
     {
-        _selectedContract = contract;
-        _deliveryQuantity = 0;
-        _deliveryNote = "";
-        _isDialogOpen = true;
+        if (string.IsNullOrWhiteSpace(searchString))
+            return true;
+
+        if (element.VoucherNumber.Contains(searchString, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        if (element.MerchantName.Contains(searchString, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        return false;
     }
 
-    private void CloseDialog() => _isDialogOpen = false;
-
-    private async Task SubmitDeliveryAsync()
-    {
-        if (_selectedContract == null || _deliveryQuantity <= 0) return;
-
-        try
-        {
-            decimal newDeliveredQty = _selectedContract.DeliveredQuantity + _deliveryQuantity;
-            string newStatus = newDeliveredQty >= _selectedContract.ContractQuantity ? "Completed" : "Active";
-
-            // Supabase တွင် စာချုပ်၏ သွင်းပြီးပိဿာချိန်ကို Update လုပ်ခြင်း
-            var updatePayload = new
-            {
-                delivered_quantity = newDeliveredQty,
-                status = newStatus
-            };
-
-            var response = await Http.PatchAsJsonAsync($"rest/v1/forward_contracts?id=eq.{_selectedContract.Id}", updatePayload);
-            if (response.IsSuccessStatusCode)
-            {
-                Snackbar.Add(Lang.GetString("Msg_Success"), Severity.Success);
-                _isDialogOpen = false;
-                await LoadContractsAsync();
-            }
-            else
-            {
-                Snackbar.Add("မအောင်မြင်ပါ", Severity.Error);
-            }
-        }
-        catch (Exception ex)
-        {
-            Snackbar.Add($"အမှားအယွင်း: {ex.Message}", Severity.Error);
-        }
-    }
-
-    public class ForwardContractViewModel
+    // --- Models ---
+    private class DeliveryListModel
     {
         public string Id { get; set; } = string.Empty;
-        public string MerchantName => Contacts?.name ?? "Unknown";
-        public DateTime? DueDate { get; set; }
-        public decimal ContractQuantity { get; set; }
-        public decimal DeliveredQuantity { get; set; }
-        public ContactObj? Contacts { get; set; }
+        public DateTime CreatedAt { get; set; }
+        public string VoucherNumber { get; set; } = string.Empty;
+        public string MerchantName { get; set; } = string.Empty;
+        public string RubberTypeName { get; set; } = string.Empty;
+        public decimal Quantity { get; set; }
+        public decimal AgreedPrice { get; set; }
+        public decimal TotalAmount { get; set; }
     }
 
-    public class ContactObj
+    private class TransactionRawModel
     {
-        public string? name { get; set; }
+        public string id { get; set; } = string.Empty;
+        public DateTime created_at { get; set; }
+        public string? voucher_number { get; set; }
+        public decimal quantity { get; set; }
+        public decimal agreed_price { get; set; }
+        public decimal total_amount { get; set; }
+        public ContactObj? contacts { get; set; }
+        public RubberObj? rubber_types { get; set; }
     }
 
-    public void Dispose() => Lang.OnLanguageChanged -= StateHasChanged;
+    private class ContactObj { public string name { get; set; } = string.Empty; }
+    private class RubberObj { public string name { get; set; } = string.Empty; public string grade { get; set; } = string.Empty; }
 }
