@@ -81,17 +81,22 @@
             <MudGrid Spacing="3">
                 <MudItem xs="12" md="6">
                     <div class="d-flex align-center gap-2">
-                        <MudSelect T="string" @bind-Value="_model.contact_id" SelectedValuesChanged="OnFarmerSelected"
-                                   Label="@LangService.GetString("Buy_Farmer")" Variant="Variant.Outlined" Dense="true" Required="true" Clearable="true" Class="flex-grow-1"
-                                   Disabled="_isSuccessCompleted">
-                            @if (_suppliers != null)
-                            {
-                                @foreach (var supplier in _suppliers)
-                                {
-                                    <MudSelectItem Value="@supplier.Id">@supplier.Name (@(string.IsNullOrEmpty(supplier.Phone) ? "No Phone" : supplier.Phone))</MudSelectItem>
-                                }
-                            }
-                        </MudSelect>
+                        <!-- MudAutocomplete ကို အသုံးပြုထားသော ခြံရှင်ရွေးချယ်သည့်နေရာ -->
+                        <MudAutocomplete T="Contact"
+                                         Value="@_selectedSupplierObj"
+                                         ValueChanged="OnAutocompleteSupplierChanged"
+                                         SearchFunc="@SearchSuppliers"
+                                         ToStringFunc="@(c => c == null ? "" : $"{c.Name} ({(string.IsNullOrEmpty(c.Phone) ? "No Phone" : c.Phone)})")"
+                                         Label="@LangService.GetString("Buy_Farmer")"
+                                         Variant="Variant.Outlined"
+                                         Dense="true"
+                                         Required="true"
+                                         Clearable="true"
+                                         Class="flex-grow-1"
+                                         Disabled="_isSuccessCompleted"
+                                         ResetValueOnEmptyText="true"
+                                         AdornmentIcon="@Icons.Material.Filled.ArrowDropDown" />
+
                         <MudIconButton Icon="@Icons.Material.Filled.Add" Color="Color.Primary" Variant="Variant.Filled" Size="Size.Medium" OnClick="GoToAddContact" Disabled="_isSuccessCompleted" />
                     </div>
                 </MudItem>
@@ -184,7 +189,7 @@
                 </MudItem>
             </MudGrid>
 
-            <!-- BUTTONS & ERROR MESSAGES (အောက်ဆုံး Save ခလုတ်၏ ဘယ်ဘက်အစွန်းတွင် အနီရောင် စာသားဖြင့် ပြသရန်) -->
+            <!-- BUTTONS & ERROR MESSAGES -->
             <div class="d-flex justify-space-between align-center mt-6 flex-wrap gap-3">
                 <!-- ဘယ်ဘက်အစွန်းတွင် Error သို့မဟုတ် Dynamic Balance စာသားကို အနီရောင်ဖြင့်ပြရန် -->
                 <div>
@@ -265,6 +270,9 @@
     private List<RubberTypeModel> _rubberTypes = new();
     private List<DailyPriceModel> _dailyPrices = new();
     private List<WalletModel> _wallets = new();
+
+    // Autocomplete အတွက် လက်ရှိရွေးချယ်ထားသော Object ကို သိမ်းထားရန်
+    private Contact? _selectedSupplierObj;
 
     private bool _isWalkInSelected => string.IsNullOrEmpty(_model.contact_id) || _model.contact_id == "00000000-0000-0000-0000-000000000000";
 
@@ -394,6 +402,9 @@
                         _model.advance_amount = contactList.First().AdvanceBalance;
                     }
                 }
+
+                // Set Autocomplete Object for Edit Mode
+                _selectedSupplierObj = _suppliers.FirstOrDefault(s => s.Id == _model.contact_id);
             }
         }
         catch (Exception ex)
@@ -485,14 +496,31 @@
         StateHasChanged();
     }
 
-    private async Task OnFarmerSelected(IEnumerable<string> values)
+    // Autocomplete တွင် စာရိုက်လိုက်တိုင်း ရှာဖွေပေးမည့် Function
+    private async Task<IEnumerable<Contact>> SearchSuppliers(string value, CancellationToken token)
     {
-        var selectedId = values.FirstOrDefault();
+        await Task.Delay(50); // Optional: Smooth loading UI
+
+        if (string.IsNullOrEmpty(value))
+            return _suppliers;
+
+        return _suppliers.Where(x =>
+            (x.Name != null && x.Name.Contains(value, StringComparison.InvariantCultureIgnoreCase)) ||
+            (x.Phone != null && x.Phone.Contains(value, StringComparison.InvariantCultureIgnoreCase))
+        );
+    }
+
+    // ခြံရှင် ရွေးချယ်မှု ပြောင်းလဲသွားချိန်တွင် အလုပ်လုပ်မည့် Function
+    private async Task OnAutocompleteSupplierChanged(Contact? selected)
+    {
+        _selectedSupplierObj = selected;
+        string selectedId = selected?.Id ?? string.Empty;
+
+        _model.contact_id = selectedId;
 
         if (!string.IsNullOrEmpty(selectedId) && selectedId != "00000000-0000-0000-0000-000000000000")
         {
-            var selectedSupplier = _suppliers.FirstOrDefault(s => s.Id == selectedId);
-            _model.advance_amount = selectedSupplier?.AdvanceBalance ?? 0m;
+            _model.advance_amount = selected?.AdvanceBalance ?? 0m;
         }
         else
         {
@@ -796,7 +824,6 @@
         }
         catch { }
 
-        // မှားယွင်းနေသော LocalStorage ကို ဖြုတ်ပြီး အမှန်အတိုင်း ရှာဖွေစေခြင်း
         var selectedSupplier = _suppliers.FirstOrDefault(s => s.Id == _model.contact_id);
         var selectedRubber = _rubberTypes.FirstOrDefault(r => r.id == _model.rubber_type_id);
 
@@ -815,19 +842,6 @@
         document.Fields.Add(new PrintFieldModel { Label = "ဘောင်ချာအမှတ်", Value = _currentVoucherNumber });
         document.Fields.Add(new PrintFieldModel { Label = "ဝယ်ယူသည့်ရက်စွဲ", Value = _selectedDate.HasValue ? _selectedDate.Value.ToString("dd/MM/yyyy") : "-" });
         document.Fields.Add(new PrintFieldModel { Label = "ရောင်းသူအမည်", Value = selectedSupplier?.Name ?? "Walk-in Supplier" });
-        
-        /*
-        document.Fields.Add(new PrintFieldModel { Label = "ဝယ်ယူနေရာ", Value = _model.purchase_location == "Truck" ? "ကားဖြင့် ဆင်းဝယ်သည် (Truck)" : "ဆိုင်တွင် လာသွင်းသည် (Shop)" });
-
-        if (_model.purchase_location == "Truck" && !string.IsNullOrWhiteSpace(_model.truck_id))
-        {
-            var selectedTruck = _trucks.FirstOrDefault(t => t.id == _model.truck_id);
-            if (selectedTruck != null)
-            {
-                document.Fields.Add(new PrintFieldModel { Label = "ကားနံပါတ်", Value = selectedTruck.truck_number });
-            }
-        }
-        */
 
         document.Fields.Add(new PrintFieldModel { IsDivider = true });
 
@@ -835,7 +849,7 @@
         document.Fields.Add(new PrintFieldModel { Label = "ရာဘာအမျိုးအစား", Value = selectedRubber?.name ?? "Standard Rubber" });
         document.Fields.Add(new PrintFieldModel { Label = "အလေးချိန် (Weight)", Value = $"{_model.weight:N2} " });
         document.Fields.Add(new PrintFieldModel { Label = "ဝယ်ယူသည့်ဈေးနှုန်း", Value = $"{_calculatedAgreedPrice:N2} " });
-        
+
         document.Fields.Add(new PrintFieldModel { IsDivider = true });
 
         document.Fields.Add(new PrintFieldModel { Label = "စုစုပေါင်း ကျသင့်ငွေ ", Value = $"{_calculatedTotalAmount:N2} " });
@@ -854,13 +868,12 @@
             document.Fields.Add(new PrintFieldModel { Label = balanceLabel, Value = $"{_displayAbsoluteBalance:N2} " });
         }
 
-        // အဆုံးသတ် ခွဲခြားရန် မျဉ်းတံ
         document.Fields.Add(new PrintFieldModel { IsDivider = true });
         document.Fields.Add(new PrintFieldModel { Label = "မှတ်ချက်", Value = $"ရာဘာဝယ်ယူခြင်း - {_model.purchase_location}" });
 
-        // Print Preview ကို ဖွင့်ပြမည်
         await PrintService.ShowPrintPreview(document);
     }
+
     private class PrinterSettingsModel
     {
         public string? voucher_size { get; set; }
@@ -873,14 +886,7 @@
 
     private void FinishTransaction()
     {
-       // if (_isEditMode)
-       // {
-            Navigation.NavigateTo("/rubber-purchases-list");
-       // }
-       // else
-       // {
-      //      Navigation.NavigateTo("/rubber-purchase", forceLoad: true);
-      //  }
+        Navigation.NavigateTo("/rubber-purchases-list");
     }
 
     private async Task<decimal> GetLatestBalanceForContact(string contactId)
@@ -918,3 +924,4 @@
         public string? voucher_number { get; set; }
     }
 }
+
